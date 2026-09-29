@@ -19,6 +19,7 @@ require("scripts.objects.NetworkController")
 require("scripts.objects.RNSPlayer")
 require("scripts.objects.NetworkCables")
 require("scripts.objects.NetworkCableUnderground")
+require("scripts.objects.ItemStore")
 require("scripts.objects.Itemstack")
 require("scripts.objects.ItemIOV3")
 require("scripts.objects.FluidIO")
@@ -299,6 +300,35 @@ commands.add_command("rns-debug", "RNSRedux: dump network and interface state", 
         end
         table.insert(lines, "player " .. player.name .. " slots=" .. slots .. " filled=" .. filled)
     end
+
+    game.print(table.concat(lines, "\n"))
+end)
+
+--Debug command for M1: exercises ItemStore against a scratch inventory, without
+--touching drives or the network.
+commands.add_command("rns-store-test", "RNSRedux: exercise ItemStore against a scratch inventory", function()
+    local lines = {}
+    local store = ItemStore.new(4000)
+    table.insert(lines, "slots=" .. store.slots)
+
+    local first = store:insert{name = "iron-plate", count = 10}
+    table.insert(lines, "insert 10 normal -> " .. first)
+
+    local storable, why = ItemStore.isStorable{name = "iron-plate", count = 3, quality = "legendary"}
+    table.insert(lines, "legendary storable=" .. tostring(storable) .. " (" .. tostring(why) .. ")")
+
+    local second = store:insert{name = "iron-plate", count = 250}
+    table.insert(lines, "insert 250 normal -> " .. second)
+    table.insert(lines, "count=" .. store:getCount("iron-plate")
+        .. " slots=" .. store:getUsedSlots() .. "/" .. store.slots
+        .. " total=" .. store:getTotalItems()
+        .. " contents=" .. #store:getContents())
+
+    local removed = store:remove("iron-plate", 100)
+    table.insert(lines, "remove 100 -> " .. removed .. " left=" .. store:getCount("iron-plate"))
+
+    store:destroy()
+    table.insert(lines, "after destroy count=" .. store:getCount("iron-plate"))
 
     game.print(table.concat(lines, "\n"))
 end)
