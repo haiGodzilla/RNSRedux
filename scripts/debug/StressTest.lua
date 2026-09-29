@@ -244,6 +244,40 @@ function StressTest.status()
     return table.concat(lines, "\n")
 end
 
+--Removes every mod entity that is marked for deconstruction. Broken stress
+--builds end up in that state: when two cable spines overlap, each controller
+--marks the other for deconstruction, so those builds are dead weight that
+--rns-stress-clear cannot reach (they predate the build record).
+--Bookkeeping entries are dropped directly instead of through obj:remove(),
+--because that would rebuild the arms of every neighbour, which is needlessly
+--expensive for thousands of entities at once. Stale references elsewhere are
+--handled by the existing valid() checks.
+function StressTest.purge()
+    local dead = {}
+    for unit, obj in pairs(storage.entityTable or {}) do
+        if obj.thisEntity ~= nil and obj.thisEntity.valid == true
+            and obj.thisEntity.to_be_deconstructed() == true then
+            dead[#dead + 1] = unit
+        end
+    end
+
+    local removed = 0
+    for _, unit in pairs(dead) do
+        local obj = storage.entityTable[unit]
+        if obj ~= nil then
+            if obj.thisEntity ~= nil and obj.thisEntity.valid == true then
+                obj.thisEntity.destroy()
+                removed = removed + 1
+            end
+            storage.entityTable[unit] = nil
+            storage.updateTable[unit] = nil
+            storage.NetworkControllers[unit] = nil
+        end
+    end
+
+    return "purged " .. removed .. " entities marked for deconstruction"
+end
+
 function StressTest.clear()
     local record = (storage.stressTest and storage.stressTest.entities) or {}
     local wanted = {}

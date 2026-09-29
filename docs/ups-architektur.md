@@ -57,7 +57,26 @@ aufgebaut werden. Der Zähler existiert, wird aber nicht inkrementell gepflegt.
 
 **f) Allokationen.** `Itemstack:new` erzeugt pro Item eine Tabelle, `Util.copy`
 kopiert tief, `get_contents()` allokiert. Bei jedem Transfer und bei jedem
-Refresh.
+Refresh. Gemessen ist der Garbage Collector im Dauerzustand bei 0,013 ms, also
+rund 3 % der Mod-Zeit — kein bestätigter Dauerposten, aber sichtbar bei
+Spitzenlast (21,5 ms Maximum während eines Bauvorgangs).
+
+**g) Beitrittskaskade beim Bau.** Beim Erzeugen einer Entity läuft
+`Event.placed` → `BaseNet.postArms` → `find_entities_filtered` auf allen
+Nachbarn → deren `createArms` → `join_network`. Jede Entity-Erzeugung stößt
+also eine Umgebungssuche und die Neuvernetzung der Nachbarn an. Gemessen:
+rund 60 µs pro Entity bei rund 15.000 Entities in einem Tick, insgesamt
+**892 ms** für einen einzelnen Tick. Das trifft nicht den Dauerbetrieb, sondern
+zwei reale Szenarien: Blueprint einfügen und Baulogistik-Roboter, die ein Netz
+hochziehen. Ein Blueprint mit hundert Drives würde über fünf Sekunden
+einfrieren. Bisher nicht im Plan, gehört als eigener Posten dazu.
+
+**h) Renderkosten der Sprite-Kette.** Gemessen: `Script render preparation`
+6,8 ms im Mittel, also rund 41 % des Frame Cycle. Das ist keine
+Simulationszeit — die `draw_sprite`-Objekte für Kabel, Arme und Drive-Icons
+werden clientseitig aufbereitet. Bei rund 10.000 Kabeln mit je zwei bis drei
+Objekten sind das zehntausende Renderobjekte. Für UPS unerheblich, für die
+Bildrate nicht. Ebenfalls neu im Plan.
 
 ## 3. Zielarchitektur
 

@@ -356,3 +356,8 @@ commands.add_command("rns-stress-status", "RNSRedux: report controller members a
     function()
         game.print(StressTest.status())
     end)
+
+commands.add_command("rns-stress-purge", "RNSRedux: remove every mod entity marked for deconstruction",
+    function()
+        game.print(StressTest.purge())
+    end)
