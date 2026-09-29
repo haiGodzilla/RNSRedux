@@ -137,8 +137,8 @@ playerportI.subgroup = Constants.ItemGroup.Category.subgroup
 playerportI.order = "i"
 playerportI.stack_size = 1
 playerportI.placed_as_equipment_result = Constants.PlayerPort.name
-playerportI.localised_description = {"item-description.RNS_PlayerPort", Constants.Settings.RNS_PlayerPort_Consumption}
-playerportI.localised_description = {"equipment-description.RNS_PlayerPort", Constants.Settings.RNS_PlayerPort_Consumption}
+playerportI.localised_description = {"item-description.RNS_PlayerPort", tostring(Constants.Settings.RNS_PlayerPort_Consumption)}
+playerportI.localised_description = {"equipment-description.RNS_PlayerPort", tostring(Constants.Settings.RNS_PlayerPort_Consumption)}
 data:extend{playerportI}
 
 --[[
@@ -156,8 +156,8 @@ data:extend{playerportR}
 local playerportE = {}
 playerportE.type = "active-defense-equipment"
 playerportE.name = Constants.PlayerPort.name
-playerportE.localised_description = {"item-description.RNS_PlayerPort", Constants.Settings.RNS_PlayerPort_Consumption}
-playerportE.localised_description = {"equipment-description.RNS_PlayerPort", Constants.Settings.RNS_PlayerPort_Consumption}
+playerportE.localised_description = {"item-description.RNS_PlayerPort", tostring(Constants.Settings.RNS_PlayerPort_Consumption)}
+playerportE.localised_description = {"equipment-description.RNS_PlayerPort", tostring(Constants.Settings.RNS_PlayerPort_Consumption)}
 playerportE.sprite = {
     filename = Constants.PlayerPort.itemIcon,
     priority = "medium",
