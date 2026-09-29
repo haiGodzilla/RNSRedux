@@ -97,13 +97,11 @@ function StressTest.build(stationCount, drivesPerStation)
         local source = place(surface, force, player, "electric-energy-interface", {cx - 4, cy + 4}, record)
         if source ~= nil then
             stats.power = stats.power + 1
-            local ok = pcall(function() source.electric_interface_mode = "primary_output" end)
+            --power_production alone is sufficient; the interface does not need
+            --its mode switched, and LuaEntity has no readable mode property.
             source.power_production = 1000000000
             source.power_usage = 0
             powerSources[#powerSources + 1] = source
-            if not ok then
-                notes[#notes + 1] = "station " .. station .. ": could not set electric_interface_mode"
-            end
         else
             stats.failed = stats.failed + 1
         end
@@ -207,10 +205,10 @@ function StressTest.status()
 
     for _, source in pairs((storage.stressTest and storage.stressTest.powerSources) or {}) do
         if source ~= nil and source.valid == true then
-            lines[#lines + 1] = string.format("power mode=%s production=%.0f consumption=%.0f",
-                tostring(source.electric_interface_mode),
+            lines[#lines + 1] = string.format("power production=%.0f consumption=%.0f buffer=%.0f",
                 source.power_production or 0,
-                source.power_usage or 0)
+                source.power_usage or 0,
+                source.electric_buffer_size or 0)
         end
     end
 
