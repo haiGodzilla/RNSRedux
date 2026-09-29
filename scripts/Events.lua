@@ -54,7 +54,7 @@ function Event.removed(event)
 
     if event.buffer ~= nil and event.buffer[1] ~= nil then
         local itemStack = event.buffer[1]
-        itemStack.health = entity.health/entity.prototype.max_health
+        itemStack.health = entity.health/entity.prototype.get_max_health()
     end
 
     if obj.DataConvert_EntityToItem ~= nil and event.buffer ~= nil and event.buffer[1] ~= nil then
