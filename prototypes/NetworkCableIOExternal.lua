@@ -77,10 +77,9 @@ ioE.energy_source =
 ioE.energy_usage = "1J"
 ioE.fluid_boxes = {
     {
-        base_area = 1,
-		hide_connection_info = true,
+        volume = 100,
         pipe_connections = {
-            {type = "output", position = {0, -1}}
+            {flow_direction = "output", direction = defines.direction.north, position = {0, -0.4}, hide_connection_info = true}
         },
 		production_type = "output"
     }

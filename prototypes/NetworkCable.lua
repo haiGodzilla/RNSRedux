@@ -155,10 +155,9 @@ for _, color in pairs(Constants.NetworkCables.Cables) do
     networkCable_E.energy_usage = "1J"
     networkCable_E.fluid_boxes = {
         {
-            base_area = 1,
-            hide_connection_info = true,
+            volume = 100,
             pipe_connections = {
-                {position = {0, -0.5}}
+                {flow_direction = "input-output", direction = defines.direction.north, position = {0, -0.4}, hide_connection_info = true}
             },
             production_type = "output"
         }

@@ -48,12 +48,11 @@ ioE.collision_box = {{-0.40, -0.40}, {0.40, 0.40}}
 ioE.selection_box = {{-0.5, -0.5}, {0.5, 0.5}}
 ioE.window_bounding_box = {{0, 0}, {0, 0}}
 ioE.fluid_box = {
-    base_area = 1, --scales by 100x
+    volume = 100, --scales by 100x
     base_level = 1,
     --filter="rns_empty_fluid",
-    hide_connection_info = true,
     pipe_connections = {
-        {type = "output", position = {0, -1}}
+        {flow_direction = "output", direction = defines.direction.north, position = {0, -0.4}, hide_connection_info = true}
     }
 }
 ioE.fast_replaceable_group = Constants.Settings.RNS_FR_Cable
@@ -183,10 +182,9 @@ ioE.energy_source =
 ioE.energy_usage = "1J"
 ioE.fluid_boxes = {
     {
-        base_area = 1,
-		hide_connection_info = true,
+        volume = 100,
         pipe_connections = {
-            {type = "output", position = {0, -1}}
+            {flow_direction = "output", direction = defines.direction.north, position = {0, -0.4}, hide_connection_info = true}
         },
         pipe_covers = pipecoverspictures(),
         production_type = "output"
