@@ -135,8 +135,9 @@ ioE.open_sound = { filename = "__base__/sound/wooden-chest-open.ogg" }
 ioE.close_sound = { filename = "__base__/sound/wooden-chest-close.ogg" }
 ioE.vehicle_impact_sound =  { filename = "__base__/sound/car-wood-impact.ogg", volume = 1.0 }
 ioE.minable = {mining_time = 0.2, result = Constants.NetworkCables.fluidIO.name}
-ioE.animation =
-    {
+ioE.graphics_set = {
+    animation =
+{
         north = {
 			layers = {
 				{
@@ -164,15 +165,16 @@ ioE.animation =
 			}
 		}
     }
-ioE.animation.east = table.deepcopy(ioE.animation.north)
-ioE.animation.east.layers[1].x = 512
-ioE.animation.east.layers[2].x = 128
-ioE.animation.south = table.deepcopy(ioE.animation.north)
-ioE.animation.south.layers[1].x = 512*2
-ioE.animation.south.layers[2].x = 128*2
-ioE.animation.west = table.deepcopy(ioE.animation.north)
-ioE.animation.west.layers[1].x = 512*3
-ioE.animation.west.layers[2].x = 128*3
+}
+ioE.graphics_set.animation.east = table.deepcopy(ioE.graphics_set.animation.north)
+ioE.graphics_set.animation.east.layers[1].x = 512
+ioE.graphics_set.animation.east.layers[2].x = 128
+ioE.graphics_set.animation.south = table.deepcopy(ioE.graphics_set.animation.north)
+ioE.graphics_set.animation.south.layers[1].x = 512*2
+ioE.graphics_set.animation.south.layers[2].x = 128*2
+ioE.graphics_set.animation.west = table.deepcopy(ioE.graphics_set.animation.north)
+ioE.graphics_set.animation.west.layers[1].x = 512*3
+ioE.graphics_set.animation.west.layers[2].x = 128*3
 ioE.crafting_categories = {"RNS-Nothing"}
 ioE.crafting_speed = 1
 ioE.energy_source =
