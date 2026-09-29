@@ -20,9 +20,9 @@
 
 StressTest = {}
 
-local SPACING = 140         -- tiles between station origins
 local SPINE_START = 2       -- first cable offset east of the controller
 local DRIVE_FIRST = 2       -- first cable index that carries a drive
+local STATION_MARGIN = 40   -- gap between two stations' cable spines
 local PLAYER_CLEARANCE = 20 -- tiles between the player and the first controller
 
 --Filtered against the active prototypes, so mod sets that drop one simply
@@ -78,14 +78,21 @@ function StressTest.build(stationCount, drivesPerStation)
     end
     local cableName = Constants.NetworkCables.Cables.RED.cable.name
 
+    --The footprint grows with the number of drives, so the spacing has to as
+    --well. A fixed gap let two cable spines overlap in an earlier version, and
+    --touching networks make each controller mark the other for deconstruction,
+    --which stops its refresh before it ever fills its member list.
+    local spineLength = DRIVE_FIRST + drivesPerStation * 2
+    local spacing = SPINE_START + spineLength + STATION_MARGIN
+
     for station = 1, stationCount do
-        local cx = baseX + (station - 1) * SPACING
+        local cx = baseX + (station - 1) * spacing
         local cy = baseY
 
         --Power. The substation touches the controller's west side, so the
-        --controller sits well inside the 18x18 supply area. The energy
-        --interface switches mode explicitly: it starts as a consumer, and
-        --power_production alone does nothing.
+        --controller sits well inside the 18x18 supply area. The interface
+        --produces with power_production alone; LuaEntity has no readable mode
+        --property, so nothing else is set here.
         local substation = place(surface, force, player, "substation", {cx - 4, cy}, record)
         if substation ~= nil then
             stats.power = stats.power + 1
@@ -118,7 +125,6 @@ function StressTest.build(stationCount, drivesPerStation)
             stats.failed = stats.failed + 1
         end
 
-        local spineLength = DRIVE_FIRST + drivesPerStation * 2
         for i = 0, spineLength - 1 do
             if place(surface, force, player, cableName, {cx + SPINE_START + i, cy}, record) ~= nil then
                 stats.cables = stats.cables + 1
@@ -138,9 +144,16 @@ function StressTest.build(stationCount, drivesPerStation)
         end
     end
 
+    --Appended across builds, so a later build does not forget the earlier
+    --entities and leave them in the world.
     storage.stressTest = storage.stressTest or {}
-    storage.stressTest.entities = record
-    storage.stressTest.powerSources = powerSources
+    local allEntities = storage.stressTest.entities or {}
+    for _, unit in pairs(record) do allEntities[#allEntities + 1] = unit end
+    storage.stressTest.entities = allEntities
+
+    local allPower = storage.stressTest.powerSources or {}
+    for _, entity in pairs(powerSources) do allPower[#allPower + 1] = entity end
+    storage.stressTest.powerSources = allPower
 
     --Did the mod actually pick the entities up? Anything missing means the
     --placement handler rejected or destroyed it.
@@ -216,11 +229,14 @@ function StressTest.status()
             and obj.thisEntity.name == Constants.NetworkController.main.name then
             local members = 0
             for _ in pairs(obj.network.connectedEntities or {}) do members = members + 1 end
-            lines[#lines + 1] = string.format("NC %d members=%d powerDraw=%s energy=%.0f buffer=%.0f stable=%s",
+            --A controller marked for deconstruction skips its whole refresh, so
+            --this is the first thing to check when members stays at zero.
+            lines[#lines + 1] = string.format("NC %d members=%d powerDraw=%s energy=%.0f buffer=%.0f stable=%s deconstructed=%s",
                 obj.entID, members, tostring(obj.network.powerDraw),
                 obj.thisEntity.energy or 0,
                 obj.thisEntity.electric_buffer_size or 0,
-                tostring(obj.stable))
+                tostring(obj.stable),
+                tostring(obj.thisEntity.to_be_deconstructed()))
         end
     end
 
