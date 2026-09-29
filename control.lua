@@ -351,3 +351,8 @@ commands.add_command("rns-stress-clear", "RNSRedux: remove everything the stress
     function()
         game.print(StressTest.clear())
     end)
+
+commands.add_command("rns-stress-status", "RNSRedux: report controller members and power state",
+    function()
+        game.print(StressTest.status())
+    end)
