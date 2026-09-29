@@ -289,3 +289,10 @@ data:extend({
 		order = "z-z-o"
 	  }
 })
+data.raw["gui-style"].default[Constants.Settings.RNS_Gui.yellow_title] =
+{
+    type = "label_style",
+    parent = "label",
+    font = "default-bold",
+    font_color = {r = 1, g = 1, b = 0}
+}
