@@ -157,6 +157,7 @@ function NII:getTooltips(guiTable, mainFrame, justCreated)
 		GuiApi.add_subtitle(guiTable, "", inventoryFrame, {"gui-description.RNS_NetworkInventory_Items"})
 
 		guiTable.vars.NII = {
+			player = {},
 			cache = {
 				items = {},
 				fluids = {}
@@ -266,22 +267,23 @@ function NII:getTooltips(guiTable, mainFrame, justCreated)
 
     if self.networkController == nil or BaseNet.exists_in_network(self.networkController, self.entID) == false then return end
 
-	--self:createPlayerInventory(guiTable, RNSPlayer, guiTable.vars.PlayerInventoryTable, textField.text)
+	self:createPlayerInventory(guiTable, RNSPlayer, guiTable.vars.PlayerInventoryTable, textField.text)
 	self:createNetworkInventory(guiTable, RNSPlayer, textField.text)
 
 end
 
---[[function NII:createPlayerInventory(guiTable, RNSPlayer, tableList, text)
+function NII:createPlayerInventory(guiTable, RNSPlayer, tableList, text)
 	local inv = {}
 	for i = 1, #RNSPlayer.thisEntity.get_main_inventory() do
 		local item = RNSPlayer.thisEntity.get_main_inventory()[i]
-		if item.count <= 0 then goto continue end
+		if item == nil or item.valid_for_read == false or item.count <= 0 then goto continue end
 		RNSPlayer.thisEntity.request_translation(Util.get_item_name(item.name))
 		if Util.get_item_name(item.name)[1] ~= nil then
 			local locName = Util.get_item_name(item.name)[1]
 			if text ~= nil and text ~= "" and locName ~= nil and string.match(string.lower(locName), string.lower(text)) == nil then goto continue end
 		end
-		Util.item_add_list_into_table(inv, Itemstack:new(item))
+		local converted = Itemstack:new(item)
+		if converted ~= nil then Util.item_add_list_into_table(inv, converted) end
 		::continue::
 	end
 	local itemIndex = 1
@@ -339,7 +341,7 @@ end
 			table.remove(guiTable.vars.NII.player, j)
 		end
 	end
-end]]
+end
 
 function NII:createNetworkInventory(guiTable, RNSPlayer, text)
 	local inv = {}
@@ -780,4 +782,25 @@ function NII.interaction(event, RNSPlayer)
 	end
 
 
+end
+function NII.transfer_player_to_network(RNSPlayer, NII, tags, count)
+    if RNSPlayer.thisEntity == nil or NII == nil then return end
+    local network = NII.networkController ~= nil and NII.networkController.network or nil
+    if network == nil then return end
+    if network:is_full() then return end
+    if tags == nil then return end
+    local itemstack = Itemstack:reload(tags.stack)
+    if itemstack == nil or itemstack.name == nil or itemstack.count <= 0 then return end
+    local proto = prototypes.item[itemstack.name]
+    if proto == nil then return end
+    if count == -1 then count = proto.stack_size end
+    if count == -2 then count = math.max(1, math.ceil(proto.stack_size/2)) end
+    if count == -3 then count = proto.stack_size * 10 end
+    if count == -4 then count = 4294967295 end
+    local amount = math.min(itemstack.count, count)
+    if amount <= 0 then return end
+    BaseNet.transfer_from_inv_to_network(
+        network,
+        {thisEntity = RNSPlayer.thisEntity, inventory = {output = {index = 1, max = 1, values = {defines.inventory.character_main}}}},
+        itemstack, nil, "whitelist", amount, true, false)
 end
