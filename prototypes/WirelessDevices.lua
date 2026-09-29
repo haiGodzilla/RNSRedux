@@ -136,7 +136,7 @@ playerportI.icon_size = 256
 playerportI.subgroup = Constants.ItemGroup.Category.subgroup
 playerportI.order = "i"
 playerportI.stack_size = 1
-playerportI.placed_as_equipment_result = Constants.PlayerPort.name
+playerportI.place_as_equipment_result = Constants.PlayerPort.name
 playerportI.localised_description = {"item-description.RNS_PlayerPort", tostring(Constants.Settings.RNS_PlayerPort_Consumption)}
 playerportI.localised_description = {"equipment-description.RNS_PlayerPort", tostring(Constants.Settings.RNS_PlayerPort_Consumption)}
 data:extend{playerportI}

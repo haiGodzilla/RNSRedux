@@ -1093,7 +1093,7 @@ Constants.Recipies = {
         category = "crafting",
         ingredients = {
             {"satellite", 1},
-            {"logistic-chest-requester", 1},
+            {"requester-chest", 1},
             {"radar", 2},
             {Constants.Intermediates.EngineeringProcessor.name, 4},
         },
@@ -1106,7 +1106,7 @@ Constants.Recipies = {
         category = "crafting",
         ingredients = {
             {"satellite", 1},
-            {"logistic-chest-active-provider", 1},
+            {"active-provider-chest", 1},
             {"radar", 2},
             {Constants.Intermediates.EngineeringProcessor.name, 4},
         },
@@ -1132,8 +1132,8 @@ Constants.Recipies = {
         enabled = false,
         category = "crafting",
         ingredients = {
-            {"logistic-chest-requester", 1},
-            {"logistic-chest-active-provider", 1},
+            {"requester-chest", 1},
+            {"active-provider-chest", 1},
             {"personal-roboport-mk2-equipment", 1},
             {Constants.Intermediates.EngineeringProcessor.name, 1},
             {Constants.Intermediates.LogicProcessor.name, 3},
@@ -1348,7 +1348,7 @@ Constants.Technologies = {
         icon_size = 256,
         prerequisites = {
             "circuit-network",
-            "optics",
+            "lamp",
             "fast-inserter",
             "fluid-handling"
         },
@@ -1491,7 +1491,7 @@ Constants.Technologies = {
         prerequisites = {
             "RNS-advanced-storage-handling",
             "circuit-network",
-            "advanced-electronics",
+            "advanced-circuit",
         },
         effects = {
             {
@@ -1515,7 +1515,7 @@ Constants.Technologies = {
         icon = Constants.MOD_ID .. "/graphics/engineering_processor.png",
         prerequisites = {
             "RNS-advanced-storage-handling",
-            "advanced-electronics-2",
+            "processing-unit",
         },
         effects = {
             {

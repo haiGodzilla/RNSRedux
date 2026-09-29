@@ -15,7 +15,6 @@ for _, tech in pairs(Constants.Technologies) do
     T.effects = tech.effects
     if tech.unit ~= nil then
         T.unit = table.deepcopy(tech.unit)
-        T.unit.ingredients = RNS_normalize_ingredients(T.unit.ingredients)
     end
     T.upgrade = tech.upgrade
     T.order = "a-z"

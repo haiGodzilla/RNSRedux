@@ -22,13 +22,7 @@ data:extend{
 		order = "p",
 		toggleable=true,
 		action = "lua",
-		icon =
-		{
-		  filename = Constants.MOD_ID.."/graphics/playerportIcon.png",
-		  priority = "extra-high-no-scale",
-		  size = 40,
-		  flags = {"gui-icon"}
-		},
+		icon = Constants.MOD_ID.."/graphics/playerportIcon.png", icon_size = 40, small_icon = Constants.MOD_ID.."/graphics/playerportIcon.png", small_icon_size = 40,
 	  }
 }
 

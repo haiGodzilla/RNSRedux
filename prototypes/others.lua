@@ -179,10 +179,9 @@ combinator.selection_box = {{-0.5, -0.5}, {0.5, 0.5}}
 combinator.flags = {'placeable-neutral', 'hidden', 'not-upgradable', 'not-rotatable'}
 combinator.icon = Constants.Settings.RNS_BlankIcon32
 combinator.icon_size = 32
-combinator.item_slot_count = 10
 combinator.name = 'rns_Combinator'
 combinator.type = 'constant-combinator'
-combinator.collision_mask = {}
+combinator.collision_mask = {layers = {}}
 combinator.remove_decoratives = 'false'
 combinator.sprites = {
 	filename = Constants.Settings.RNS_BlankIcon32,
@@ -209,10 +208,9 @@ combinator1.selection_box = {{-0.25, -0.25}, {0.25, 0.25}}
 combinator1.flags = {'placeable-neutral', 'hidden', 'not-upgradable', 'not-rotatable', 'hide-alt-info'}
 combinator1.icon = Constants.Settings.RNS_BlankIcon32
 combinator1.icon_size = 32
-combinator1.item_slot_count = 1
 combinator1.name = 'rns_Combinator_1'
 combinator1.type = 'constant-combinator'
-combinator1.collision_mask = {}
+combinator1.collision_mask = {layers = {}}
 combinator1.remove_decoratives = 'false'
 combinator1.sprites = {
 	filename = Constants.Settings.RNS_BlankIcon32,
@@ -236,10 +234,9 @@ combinator1.selection_box = {{-0.25, -0.25}, {0.25, 0.25}}
 combinator1.flags = {'placeable-neutral', 'hidden', 'not-upgradable', 'not-rotatable', 'hide-alt-info'}
 combinator1.icon = Constants.Settings.RNS_BlankIcon32
 combinator1.icon_size = 32
-combinator1.item_slot_count = 1
 combinator1.name = 'rns_Combinator_2'
 combinator1.type = 'constant-combinator'
-combinator1.collision_mask = {}
+combinator1.collision_mask = {layers = {}}
 combinator1.remove_decoratives = 'false'
 combinator1.sprites = {
 	filename = Constants.Settings.RNS_BlankIcon32,
