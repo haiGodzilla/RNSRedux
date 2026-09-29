@@ -1,22 +1,39 @@
--- Final data stage: runs after every mod has defined and removed its prototypes.
--- Space Age removes items that other mod sets keep (for example "satellite"),
--- which only fails later at assignID. Handle that here.
+-- Last data stage. Space Age deletes prototypes that other mod sets keep,
+-- and every other mod has had its say by this point.
 
 local substitutes = {
     ["satellite"] = "low-density-structure",
+    ["empty-barrel"] = "steel-plate",
 }
 
--- Every prototype name, regardless of bucket. Item prototypes are spread over
--- "item", "item-with-tags", "ammo", "module", "capsule", "armor", "tool",
--- "repair-tool" and more, so looking only at data.raw.item gives false positives.
+-- Only buckets that can satisfy a recipe ingredient belong here. Recipe and
+-- technology names reuse item names, so counting those gives false negatives.
+local item_buckets = {
+    "item", "ammo", "capsule", "module", "armor", "tool", "repair-tool",
+    "item-with-tags", "item-with-entity-data", "item-with-label",
+    "item-with-inventory", "selection-tool", "blueprint", "blueprint-book",
+    "deconstruction-item", "upgrade-item", "copy-paste-tool", "gun",
+    "rail-planner", "spidertron-remote", "fluid",
+}
+
 local known = {}
-local count = 0
-for _, bucket in pairs(data.raw) do
+local known_count = 0
+for _, bucket_name in pairs(item_buckets) do
+    local bucket = data.raw[bucket_name]
     if type(bucket) == "table" then
         for name in pairs(bucket) do
-            known[name] = true
-            count = count + 1
+            if not known[name] then
+                known[name] = true
+                known_count = known_count + 1
+            end
         end
+    end
+end
+log("RNSRedux: item and fluid names available: " .. known_count)
+
+for bucket_name, bucket in pairs(data.raw) do
+    if type(bucket) == "table" and bucket["empty-barrel"] ~= nil then
+        log("RNSRedux: empty-barrel found in bucket " .. bucket_name)
     end
 end
 
@@ -38,9 +55,8 @@ for _, recipe in pairs(data.raw.recipe or {}) do
     end
 end
 
-log("RNSRedux: prototype names collected: " .. count)
 if #missing > 0 then
-    log("RNSRedux: ingredients still missing (" .. #missing .. "):")
+    log("RNSRedux: ingredients without a substitute (" .. #missing .. "):")
     for _, m in pairs(missing) do
         log("RNSRedux:   " .. m)
     end
