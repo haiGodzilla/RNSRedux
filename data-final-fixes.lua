@@ -67,3 +67,35 @@ if #missing > 0 then
         log("RNSRedux:   " .. m)
     end
 end
+
+-- The two selection markers are virtual signals that reuse core sprites.
+-- 2.0 moved those files, so read the path from the game own utility sprites
+-- instead of hardcoding it. That way a future move cannot break us again.
+local utility = data.raw["utility-sprites"] and data.raw["utility-sprites"]["default"]
+
+local function core_sprite_filename(sprite)
+    if type(sprite) ~= "table" then return nil end
+    if sprite.filename then return sprite.filename end
+    local layers = sprite.layers
+    if type(layers) == "table" and type(layers[1]) == "table" then
+        return layers[1].filename
+    end
+    return nil
+end
+
+local select_signals = {
+    ["RNS_select_icon_black"] = "select_icon_black",
+    ["RNS_select_icon_white"] = "select_icon_white",
+}
+
+for signal_name, field in pairs(select_signals) do
+    local signal = data.raw["virtual-signal"] and data.raw["virtual-signal"][signal_name]
+    local file = utility and core_sprite_filename(utility[field])
+    if signal and file then
+        signal.icon = file
+        log("RNSRedux: " .. signal_name .. " icon -> " .. file)
+    elseif signal then
+        signal.icon = Constants.Settings.RNS_BlankIcon32
+        log("RNSRedux: " .. signal_name .. " core sprite missing, blank icon used")
+    end
+end
