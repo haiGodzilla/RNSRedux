@@ -11,3 +11,5 @@ for _, recipe in pairs(Constants.Recipies) do
     R.results = {{type = "item", name = recipe.name, amount = recipe.count}}
     data:extend{R}
 end
+
+log("RNSRedux marker: normalizer=" .. tostring(RNS_normalize_ingredients ~= nil))
