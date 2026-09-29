@@ -334,7 +334,7 @@ end
 		if item.durability ~= nil then
 			table.insert(buttonText, "\n")
 			table.insert(buttonText, {"gui-description.RNS_durability"})
-			table.insert(buttonText, item.durability .. "/" .. prototypes.item[item.name].durability)
+			table.insert(buttonText, item.durability .. "/" .. Util.getMaxDurability(item.name))
 		end
 		if item.connected_entity ~= nil then
 			table.insert(buttonText, "\n")
@@ -342,12 +342,12 @@ end
 			table.insert(buttonText, item.connected_entity.entity_label or Util.get_item_name(item.connected_entity.name))
 		end
 		if guiTable.vars.WG.player[itemIndex] == nil then
-			table.insert(guiTable.vars.WG.player, GuiApi.add_button(guiTable, "RNS_WG_PInv_".. itemIndex, tableList, "item/" .. (item.name), "item/" .. (item.name), "item/" .. (item.name), buttonText, 37, false, true, item.count, ((item.modified or (item.ammo and item.ammo < prototypes.item[item.name].magazine_size) or (item.durability and item.durability < prototypes.item[item.name].durability)) and {Constants.Settings.RNS_Gui.button_2} or {Constants.Settings.RNS_Gui.button_1})[1], {ID=self.thisEntity.unit_number, name=(item.name), stack=item}))
+			table.insert(guiTable.vars.WG.player, GuiApi.add_button(guiTable, "RNS_WG_PInv_".. itemIndex, tableList, "item/" .. (item.name), "item/" .. (item.name), "item/" .. (item.name), buttonText, 37, false, true, item.count, ((item.modified or (item.ammo and item.ammo < prototypes.item[item.name].magazine_size) or (item.durability and item.durability < Util.getMaxDurability(item.name))) and {Constants.Settings.RNS_Gui.button_2} or {Constants.Settings.RNS_Gui.button_1})[1], {ID=self.thisEntity.unit_number, name=(item.name), stack=item}))
 		else
 			local button = guiTable.vars.WG.player[itemIndex]
 			if Itemstack:reload(button.tags.stack):compare_itemstacks(item, true, true) == false then
 				button.destroy()
-				guiTable.vars.WG.player[itemIndex] = GuiApi.add_button(guiTable, "RNS_WG_PInv_".. itemIndex, tableList, "item/" .. (item.name), "item/" .. (item.name), "item/" .. (item.name), buttonText, 37, false, true, item.count, ((item.modified or (item.ammo and item.ammo < prototypes.item[item.name].magazine_size) or (item.durability and item.durability < prototypes.item[item.name].durability)) and {Constants.Settings.RNS_Gui.button_2} or {Constants.Settings.RNS_Gui.button_1})[1], {ID=self.thisEntity.unit_number, name=(item.name), stack=item})
+				guiTable.vars.WG.player[itemIndex] = GuiApi.add_button(guiTable, "RNS_WG_PInv_".. itemIndex, tableList, "item/" .. (item.name), "item/" .. (item.name), "item/" .. (item.name), buttonText, 37, false, true, item.count, ((item.modified or (item.ammo and item.ammo < prototypes.item[item.name].magazine_size) or (item.durability and item.durability < Util.getMaxDurability(item.name))) and {Constants.Settings.RNS_Gui.button_2} or {Constants.Settings.RNS_Gui.button_1})[1], {ID=self.thisEntity.unit_number, name=(item.name), stack=item})
 			end
 			guiTable.vars.WG.player[itemIndex].tooltip = buttonText
 			guiTable.vars.WG.player[itemIndex].number = item.count
@@ -526,7 +526,7 @@ function WG:createNetworkInventory(guiTable, RNSPlayer, text)
 		if item.durability ~= nil then
 			table.insert(buttonText, "\n")
 			table.insert(buttonText, {"gui-description.RNS_durability"})
-			table.insert(buttonText, item.durability .. "/" .. prototypes.item[item.name].durability)
+			table.insert(buttonText, item.durability .. "/" .. Util.getMaxDurability(item.name))
 		end
 		if item.connected_entity ~= nil then
 			table.insert(buttonText, "\n")
@@ -534,15 +534,15 @@ function WG:createNetworkInventory(guiTable, RNSPlayer, text)
 			table.insert(buttonText, item.connected_entity.entity_label or Util.get_item_name(item.connected_entity.name))
 		end
 		if guiTable.vars.WG.cache.items[itemIndex] == nil then
-			table.insert(guiTable.vars.WG.cache.items, GuiApi.add_button(guiTable, "RNS_WG_IDInv_".. itemIndex, guiTable.vars.WirelessGridTableItems, "item/" .. (item.name), "item/" .. (item.name), "item/" .. (item.name), buttonText, 37, false, true, item.count, ((item.modified or (item.ammo and item.ammo < prototypes.item[item.name].magazine_size) or (item.durability and item.durability < prototypes.item[item.name].durability)) and {Constants.Settings.RNS_Gui.button_2} or {Constants.Settings.RNS_Gui.button_1})[1], {ID=self.thisEntity.unit_number, name=(item.name), stack=item}, itemIndex))
+			table.insert(guiTable.vars.WG.cache.items, GuiApi.add_button(guiTable, "RNS_WG_IDInv_".. itemIndex, guiTable.vars.WirelessGridTableItems, "item/" .. (item.name), "item/" .. (item.name), "item/" .. (item.name), buttonText, 37, false, true, item.count, ((item.modified or (item.ammo and item.ammo < prototypes.item[item.name].magazine_size) or (item.durability and item.durability < Util.getMaxDurability(item.name))) and {Constants.Settings.RNS_Gui.button_2} or {Constants.Settings.RNS_Gui.button_1})[1], {ID=self.thisEntity.unit_number, name=(item.name), stack=item}, itemIndex))
 		else
 			local button = guiTable.vars.WG.cache.items[itemIndex]
 			if button.tags.stack == nil or Itemstack:reload(button.tags.stack):compare_itemstacks(item, true, true) == false then
 				button.destroy()
-				guiTable.vars.WG.cache.items[itemIndex] = GuiApi.add_button(guiTable, "RNS_WG_IDInv_".. itemIndex, guiTable.vars.WirelessGridTableItems, "item/" .. (item.name), "item/" .. (item.name), "item/" .. (item.name), buttonText, 37, false, true, item.count, ((item.modified or (item.ammo and item.ammo < prototypes.item[item.name].magazine_size) or (item.durability and item.durability < prototypes.item[item.name].durability)) and {Constants.Settings.RNS_Gui.button_2} or {Constants.Settings.RNS_Gui.button_1})[1], {ID=self.thisEntity.unit_number, name=(item.name), stack=item}, itemIndex)
+				guiTable.vars.WG.cache.items[itemIndex] = GuiApi.add_button(guiTable, "RNS_WG_IDInv_".. itemIndex, guiTable.vars.WirelessGridTableItems, "item/" .. (item.name), "item/" .. (item.name), "item/" .. (item.name), buttonText, 37, false, true, item.count, ((item.modified or (item.ammo and item.ammo < prototypes.item[item.name].magazine_size) or (item.durability and item.durability < Util.getMaxDurability(item.name))) and {Constants.Settings.RNS_Gui.button_2} or {Constants.Settings.RNS_Gui.button_1})[1], {ID=self.thisEntity.unit_number, name=(item.name), stack=item}, itemIndex)
 			--elseif guiTable.vars.NII.item[itemIndex].number ~= item.count then
 			--	button.destroy()
-			--	guiTable.vars.NII.item[itemIndex] = GuiApi.add_button(guiTable, "RNS_NII_IDInv_".. itemIndex, tableList, "item/" .. (item.name), "item/" .. (item.name), "item/" .. (item.name), buttonText, 37, false, true, item.count, ((item.modified or (item.ammo and item.ammo < prototypes.item[item.name].magazine_size) or (item.durability and item.durability < prototypes.item[item.name].durability)) and {Constants.Settings.RNS_Gui.button_2} or {Constants.Settings.RNS_Gui.button_1})[1], {ID=self.thisEntity.unit_number, name=(item.name), stack=item})
+			--	guiTable.vars.NII.item[itemIndex] = GuiApi.add_button(guiTable, "RNS_NII_IDInv_".. itemIndex, tableList, "item/" .. (item.name), "item/" .. (item.name), "item/" .. (item.name), buttonText, 37, false, true, item.count, ((item.modified or (item.ammo and item.ammo < prototypes.item[item.name].magazine_size) or (item.durability and item.durability < Util.getMaxDurability(item.name))) and {Constants.Settings.RNS_Gui.button_2} or {Constants.Settings.RNS_Gui.button_1})[1], {ID=self.thisEntity.unit_number, name=(item.name), stack=item})
 			end
 			guiTable.vars.WG.cache.items[itemIndex].number = item.count
 			guiTable.vars.WG.cache.items[itemIndex].tags = {ID=self.thisEntity.unit_number, name=(item.name), stack=item}

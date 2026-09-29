@@ -170,7 +170,7 @@ function Itemstack.create_template(name)
     --t.prototype = prototype
     t.health = 1
     t.ammo = prototype.type == "ammo" and prototype.magazine_size or nil
-    t.durability = prototype.durability or nil
+    t.durability = Util.getMaxDurability(name)
     t.modified = false
     t.tags = {}
     t.extras = {}
@@ -241,7 +241,7 @@ function Itemstack:split(itemstack_master, amount, exact)
             split.ammo = itemstack_master.ammo
             return split
         end
-        if self.durability ~= nil and self.durability ~= itemstack_master.durability and self.durability ~= prototypes.item[self.name].durability then
+        if self.durability ~= nil and self.durability ~= itemstack_master.durability and self.durability ~= Util.getMaxDurability(self.name) then
             if self.count <= 1 then return nil end
             local newAmount = math.min(self.count - 1, amount)
             split.count = newAmount
@@ -266,7 +266,7 @@ function Itemstack:split(itemstack_master, amount, exact)
         --split.durability = itemstack_master.durability ~= itemstack_master.prototype.durability and self.durability or itemstack_master.prototype.durability
         --self.durability = itemstack_master.durability ~= itemstack_master.prototype.durability and itemstack_master.prototype.durability or self.durability
         split.durability = self.durability
-        self.durability = prototypes.item[self.name].durability
+        self.durability = Util.getMaxDurability(self.name)
     end
 
     return split

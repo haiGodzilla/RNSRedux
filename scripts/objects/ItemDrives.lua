@@ -198,8 +198,8 @@ function ID:add_or_merge_basic_item(itemstack_data, amount)
             data.ammo = a == 0 and prototypes.item[data.name].magazine_size or a
         end
         if data.durability ~= nil then
-            local d = (data.durability+itemstack_data.durability)%prototypes.item[data.name].durability
-            data.durability = d == 0 and prototypes.item[data.name].durability or d
+            local d = (data.durability+itemstack_data.durability)%Util.getMaxDurability(data.name)
+            data.durability = d == 0 and Util.getMaxDurability(data.name) or d
         end
     else
         inv[itemstack_data.name] = itemstack_data

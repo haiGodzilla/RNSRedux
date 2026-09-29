@@ -736,7 +736,7 @@ function EIO.has_item(inv, itemstack_data, getModified)
                     amount = amount + 1
                     goto continue
                 end
-                if itemstack_data.cont.durability and itemstackC.cont.durability and itemstack_data.cont.durability < prototypes.item[itemstackC.cont.name].durability then
+                if itemstack_data.cont.durability and itemstackC.cont.durability and itemstack_data.cont.durability < Util.getMaxDurability(itemstackC.cont.name) then
                     amount = amount + 1
                     goto continue
                 end

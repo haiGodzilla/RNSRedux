@@ -181,7 +181,7 @@ function Util.item_add_list_into_table(tab, list)
 		end
 		return
 	end
-	if list.durability ~= nil and list.count > 1 and list.durability ~= prototypes.item[list.name].durability then
+	if list.durability ~= nil and list.count > 1 and list.durability ~= Util.getMaxDurability(list.name) then
 		Util.item_add_list_into_table(tab, list:split(list, 1, true))
 		if list.count > 0 then
 			Util.item_add_list_into_table(tab, list)
@@ -351,4 +351,13 @@ function Util.getCombinatorSignals(combinator)
     local id = Util.getCombinatorConnectorId(combinator)
     if id == nil then return nil end
     return combinator.get_signals(id)
+end
+
+-- Factorio 2.0 removed LuaItemPrototype::durability. Tool durability is a
+-- method now and only exists on tool items, so every read has to be guarded.
+-- Reading the old field throws instead of returning nil.
+function Util.getMaxDurability(itemName)
+    local prototype = prototypes.item[itemName]
+    if prototype == nil or prototype.type ~= "tool" then return nil end
+    return prototype.get_durability()
 end
