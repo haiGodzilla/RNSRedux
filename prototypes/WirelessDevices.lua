@@ -173,9 +173,7 @@ playerportE.attack_parameters = {
     type = "beam",
     range = 0,
     cooldown = 0,
-    ammo_type = {
-        category = "melee"
-    }
+    ammo_category = "melee"
 }
 playerportE.categories = {"armor"}
 playerportE.energy_source = {
