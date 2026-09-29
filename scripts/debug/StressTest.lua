@@ -255,8 +255,15 @@ end
 function StressTest.purge()
     local dead = {}
     for unit, obj in pairs(storage.entityTable or {}) do
-        if obj.thisEntity ~= nil and obj.thisEntity.valid == true
-            and obj.thisEntity.to_be_deconstructed() == true then
+        --The entity table also holds player objects, whose thisEntity is a
+        --LuaPlayer. Factorio raises on any unknown key access, so a plain
+        --nil check cannot tell the two apart; pcall is the reliable test.
+        local ok, flagged = pcall(function()
+            return obj.thisEntity ~= nil
+                and obj.thisEntity.valid == true
+                and obj.thisEntity.to_be_deconstructed() == true
+        end)
+        if ok and flagged then
             dead[#dead + 1] = unit
         end
     end
