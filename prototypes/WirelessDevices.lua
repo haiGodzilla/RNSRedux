@@ -179,7 +179,7 @@ playerportE.attack_parameters = {
 }
 playerportE.categories = {"armor"}
 playerportE.energy_source = {
-    type = "energy",
+    type = "electric",
     buffer_capacity = tostring(Constants.Settings.RNS_PlayerPort_Consumption*50000) .. "J",
     usage_priority = "secondary-input"
 }
