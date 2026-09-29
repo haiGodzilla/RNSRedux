@@ -173,7 +173,7 @@ function NII:getTooltips(guiTable, mainFrame, justCreated)
 		GuiApi.add_table(guiTable, "NetworkInventoryTableItems", inventoryScrollPaneItems, 8, true)
 
 		-- Create the Player Inventory Frame --
-		--[[local playerInventoryFrame = GuiApi.add_frame(guiTable, "PlayerInventoryFrame", mainFrame, "vertical", true)
+		local playerInventoryFrame = GuiApi.add_frame(guiTable, "PlayerInventoryFrame", mainFrame, "vertical", true)
 		playerInventoryFrame.style = Constants.Settings.RNS_Gui.frame_1
 		playerInventoryFrame.style.vertically_stretchable = true
 		playerInventoryFrame.style.left_padding = 3
@@ -191,7 +191,7 @@ function NII:getTooltips(guiTable, mainFrame, justCreated)
 		playerInventoryScrollPane.style.vertically_stretchable = true
 		playerInventoryScrollPane.style.bottom_margin = 3
 
-		GuiApi.add_table(guiTable, "PlayerInventoryTable", playerInventoryScrollPane, 8, true)]]
+		GuiApi.add_table(guiTable, "PlayerInventoryTable", playerInventoryScrollPane, 8, true)
 
 		-- Create the Information Frame --
 		local informationFrame = GuiApi.add_frame(guiTable, "InformationFrame", mainFrame, "vertical", true)
