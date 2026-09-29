@@ -35,7 +35,7 @@ function FIO:new(object)
     mt.__index = FIO
     t.thisEntity = object
     t.entID = object.unit_number
-    rendering.draw_sprite{sprite=Constants.NetworkCables.Cables[t.color].sprites[5].name, target=t.thisEntity, surface=t.thisEntity.surface, render_layer="lower-object-above-shadow"}
+    Util.newRender(rendering.draw_sprite{sprite=Constants.NetworkCables.Cables[t.color].sprites[5].name, target=t.thisEntity, surface=t.thisEntity.surface, render_layer="lower-object-above-shadow"})
     t:generateModeIcon()
     t.fluidSize = storage.FIOMultiplier
     t.oldDirection = t:getDirection()
@@ -200,15 +200,15 @@ end
 
 function FIO:toggleHoverIcon(hovering)
     if self.ioIcon == nil then return end
-    if hovering and rendering.get_only_in_alt_mode(self.ioIcon) then
-        rendering.set_only_in_alt_mode(self.ioIcon, false)
-    elseif not hovering and not rendering.get_only_in_alt_mode(self.ioIcon) then
-        rendering.set_only_in_alt_mode(self.ioIcon, true)
+    if hovering and Util.getRenderAltMode(self.ioIcon) then
+        Util.setRenderAltMode(self.ioIcon, false)
+    elseif not hovering and not Util.getRenderAltMode(self.ioIcon) then
+        Util.setRenderAltMode(self.ioIcon, true)
     end
 end
 
 function FIO:generateModeIcon()
-    if self.ioIcon ~= nil then rendering.destroy(self.ioIcon) end
+    if self.ioIcon ~= nil then Util.destroyRender(self.ioIcon) end
     local offset = {0, 0}
     if self:getRealDirection() == 1 then
         offset = {0,-0.5}
@@ -219,20 +219,20 @@ function FIO:generateModeIcon()
     elseif self:getRealDirection() == 4 then
         offset = {-0.5,0}
     end
-    self.ioIcon = rendering.draw_sprite{
+    self.ioIcon = Util.newRender(rendering.draw_sprite{
         sprite=Constants.Icons.fluid, 
         target=self.thisEntity, 
         target_offset=offset,
         surface=self.thisEntity.surface,
         only_in_alt_mode=true,
         orientation=self.io == "input" and ((self:getRealDirection()*0.25)+0.25)%1.00 or ((self:getRealDirection()*0.25)-0.25)
-    }
+    })
 end
 
 --[[function FIO:IO()
-    if self.enablerCombinator.get_circuit_network(defines.wire_type.red, defines.circuit_connector_id.constant_combinator) ~= nil or self.enablerCombinator.get_circuit_network(defines.wire_type.green, defines.circuit_connector_id.constant_combinator) ~= nil then
+    if Util.getCombinatorNetwork(self.enablerCombinator) ~= nil then
         if self.enabler.filter == nil then self.processed = true return end
-        local amount = self.enablerCombinator.get_merged_signal({type=self.enabler.filter.type, name=self.enabler.filter.name}, defines.circuit_connector_id.constant_combinator)
+        local amount = Util.getCombinatorSignal(self.enablerCombinator, {type=self.enabler.filter.type, name=self.enabler.filter.name})
         if Util.OperatorFunctions[self.enabler.operator](amount, self.enabler.number) == false then self.processed = true return end
     end
     
@@ -336,8 +336,8 @@ function FIO:target_interactable()
 end
 
 function FIO:IO()
-    if self.circuitCondition2.state and (self.enablerCombinator.get_circuit_network(defines.wire_type.red, defines.circuit_connector_id.constant_combinator) ~= nil or self.enablerCombinator.get_circuit_network(defines.wire_type.green, defines.circuit_connector_id.constant_combinator) ~= nil) then
-        local amount = self.circuitCondition2.filter and self.enablerCombinator.get_merged_signal({type=self.circuitCondition2.filter.type, name=self.circuitCondition2.filter.name}, defines.circuit_connector_id.constant_combinator) or storage.FIOMultiplier
+    if self.circuitCondition2.state and (Util.getCombinatorNetwork(self.enablerCombinator) ~= nil) then
+        local amount = self.circuitCondition2.filter and Util.getCombinatorSignal(self.enablerCombinator, {type=self.circuitCondition2.filter.type, name=self.circuitCondition2.filter.name}) or storage.FIOMultiplier
         self.fluidSize = math.min(math.max(amount, 1), storage.FIOMultiplier)
     end
 
@@ -345,7 +345,7 @@ function FIO:IO()
 
     if transportCapacity <= 0 then self.processed = true return end
     if self.circuitCondition1 == "filter" and (self.enablerCombinator.get_circuit_network(defines.wire_type.red) ~= nil or self.enablerCombinator.get_circuit_network(defines.wire_type.green) ~= nil) then
-        local merged_signals = self.enablerCombinator.get_merged_signals(defines.circuit_connector_id.constant_combinator)
+        local merged_signals = Util.getCombinatorSignals(self.enablerCombinator)
         local s1 = nil
         if merged_signals ~= nil then
             for i = 1, #merged_signals do
@@ -361,9 +361,9 @@ function FIO:IO()
     end
 
     --Make sure that the circuit condition isn't disabling the io bus
-    if self.circuitCondition1 == "enable/disable" and self.enablerCombinator.get_circuit_network(defines.wire_type.red, defines.circuit_connector_id.constant_combinator) ~= nil or self.enablerCombinator.get_circuit_network(defines.wire_type.green, defines.circuit_connector_id.constant_combinator) ~= nil then
+    if self.circuitCondition1 == "enable/disable" and Util.getCombinatorNetwork(self.enablerCombinator) ~= nil then
         if self.enabler.filter == nil then self.processed = true return end
-        local amount = self.enablerCombinator.get_merged_signal({type=self.enabler.filter.type, name=self.enabler.filter.name}, defines.circuit_connector_id.constant_combinator)
+        local amount = Util.getCombinatorSignal(self.enablerCombinator, {type=self.enabler.filter.type, name=self.enabler.filter.name})
         if Util.OperatorFunctions[self.enabler.operator](amount, self.enabler.number) == false then self.processed = true return end
     end
     
@@ -407,7 +407,7 @@ function FIO:resetConnection()
     }
     for _, arm in pairs(self.arms) do
         if arm ~= nil then
-            rendering.destroy(arm)
+            Util.destroyRender(arm)
         end
     end
 end
@@ -500,11 +500,11 @@ function FIO:createArms()
                             --Do nothing
                         else
                             if obj.color == nil then
-                                self.arms[area.direction] = rendering.draw_sprite{sprite=Constants.NetworkCables.Cables[self.color].sprites[area.direction].name, target=self.thisEntity, surface=self.thisEntity.surface, render_layer="lower-object-above-shadow"}
+                                self.arms[area.direction] = Util.newRender(rendering.draw_sprite{sprite=Constants.NetworkCables.Cables[self.color].sprites[area.direction].name, target=self.thisEntity, surface=self.thisEntity.surface, render_layer="lower-object-above-shadow"})
                                 self.connectedObjs[area.direction] = {obj}
                                 enti = enti + 1
                             elseif obj.color ~= "" and obj.color == self.color then
-                                self.arms[area.direction] = rendering.draw_sprite{sprite=Constants.NetworkCables.Cables[self.color].sprites[area.direction].name, target=self.thisEntity, surface=self.thisEntity.surface, render_layer="lower-object-above-shadow"}
+                                self.arms[area.direction] = Util.newRender(rendering.draw_sprite{sprite=Constants.NetworkCables.Cables[self.color].sprites[area.direction].name, target=self.thisEntity, surface=self.thisEntity.surface, render_layer="lower-object-above-shadow"})
                                 self.connectedObjs[area.direction] = {obj}
                                 enti = enti + 1
                             end
@@ -653,7 +653,7 @@ function FIO:getTooltips(guiTable, mainFrame, justCreated)
 
         GuiApi.add_line(guiTable, "", settingsFrame, "horizontal")
 
-        if self.enablerCombinator.get_circuit_network(defines.wire_type.red, defines.circuit_connector_id.constant_combinator) ~= nil or self.enablerCombinator.get_circuit_network(defines.wire_type.green, defines.circuit_connector_id.constant_combinator) ~= nil then
+        if Util.getCombinatorNetwork(self.enablerCombinator) ~= nil then
             local circuitFlow = GuiApi.add_flow(guiTable, "", bottomFrame, "horizontal")
             local circuitFrame = GuiApi.add_frame(guiTable, "", circuitFlow, "vertical")
             circuitFrame.style = Constants.Settings.RNS_Gui.frame_1
@@ -850,7 +850,7 @@ function FIO.interaction(event, RNSPlayer)
         local color = Constants.Settings.RNS_ColorN[event.element.selected_index]
         if color ~= io.color then
             io.color = color
-            rendering.draw_sprite{sprite=Constants.NetworkCables.Cables[io.color].sprites[5].name, target=io.thisEntity, surface=io.thisEntity.surface, render_layer="lower-object-above-shadow"}
+            Util.newRender(rendering.draw_sprite{sprite=Constants.NetworkCables.Cables[io.color].sprites[5].name, target=io.thisEntity, surface=io.thisEntity.surface, render_layer="lower-object-above-shadow"})
             io.processed = false
             io:createArms()
             BaseNet.postArms(io)

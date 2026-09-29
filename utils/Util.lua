@@ -13,6 +13,7 @@ function Util.safeCall(fName, ...)
 	if result == false then
 		-- Display the Error to all Player --
 		game.print(error)
+		log("RNSRedux error: " .. tostring(error))
 		return false
 	end
 end
@@ -291,4 +292,63 @@ function Util.deserialize_inventory(inventory, data)
 	for i = 1, #inventory do
 		inventory[i].set_stack(data[i])
 	end
+end
+-- Factorio 2.0: rendering.draw_* returns a LuaRenderObject, not a numeric id.
+-- Only the id is stored, because LuaObjects do not reliably survive save/load.
+function Util.newRender(obj)
+    if obj == nil then return nil end
+    return obj.id
+end
+
+function Util.destroyRender(id)
+    if id == nil then return end
+    local obj = rendering.get_object_by_id(id)
+    if obj then obj.destroy() end
+end
+
+function Util.setRenderAltMode(id, only_alt_mode)
+    if id == nil then return end
+    local obj = rendering.get_object_by_id(id)
+    if obj then obj.only_in_alt_mode = only_alt_mode end
+end
+
+function Util.getRenderAltMode(id)
+    if id == nil then return nil end
+    local obj = rendering.get_object_by_id(id)
+    if obj then return obj.only_in_alt_mode end
+    return nil
+end
+
+-- Factorio 2.0: wire connectors replaced circuit connector ids, and a single
+-- connector now carries both red and green wires. The enum member is looked up
+-- from the entity itself so a wrong guess cannot break the mod.
+local combinatorConnectors = {}
+
+function Util.getCombinatorConnectorId(combinator)
+    if combinator == nil or combinator.valid == false then return nil end
+    local cached = combinatorConnectors[combinator.name]
+    if cached ~= nil then return cached end
+    for id in pairs(combinator.get_wire_connectors(false)) do
+        combinatorConnectors[combinator.name] = id
+        return id
+    end
+    return nil
+end
+
+function Util.getCombinatorNetwork(combinator)
+    local id = Util.getCombinatorConnectorId(combinator)
+    if id == nil then return nil end
+    return combinator.get_circuit_network(id)
+end
+
+function Util.getCombinatorSignal(combinator, signal)
+    local id = Util.getCombinatorConnectorId(combinator)
+    if id == nil then return 0 end
+    return combinator.get_signal(signal, id)
+end
+
+function Util.getCombinatorSignals(combinator)
+    local id = Util.getCombinatorConnectorId(combinator)
+    if id == nil then return nil end
+    return combinator.get_signals(id)
 end

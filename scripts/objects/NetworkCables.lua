@@ -18,7 +18,7 @@ function NCbl:new(object)
     t.entID = object.unit_number
     for name, color in pairs(Constants.NetworkCables.Cables) do
         if object.name == color.cable.name then
-            rendering.draw_sprite{sprite=color.sprites[5].name, target=t.thisEntity, surface=t.thisEntity.surface, render_layer="lower-object-above-shadow"}
+            Util.newRender(rendering.draw_sprite{sprite=color.sprites[5].name, target=t.thisEntity, surface=t.thisEntity.surface, render_layer="lower-object-above-shadow"})
             t.color = tostring(name)
             break
         end
@@ -59,7 +59,7 @@ end
 function NCbl:remove()
     --[[for _, arm in pairs(self.arms) do
         if arm ~= nil then
-            rendering.destroy(arm)
+            Util.destroyRender(arm)
         end
     end]]
     --global.placedCablesTable[self.thisEntity.surface.index][tostring(self.thisEntity.position)] = nil
@@ -97,7 +97,7 @@ function NCbl:resetConnection()
     }
     for _, arm in pairs(self.arms) do
         if arm ~= nil then
-            rendering.destroy(arm)
+            Util.destroyRender(arm)
         end
     end
 end
@@ -127,10 +127,10 @@ function NCbl:createArms()
                         --Do nothing
                     else
                         if obj.color == nil then
-                            self.arms[area.direction] = rendering.draw_sprite{sprite=Constants.NetworkCables.Cables[self.color].sprites[area.direction].name, target=self.thisEntity, surface=self.thisEntity.surface, render_layer="lower-object-above-shadow"}
+                            self.arms[area.direction] = Util.newRender(rendering.draw_sprite{sprite=Constants.NetworkCables.Cables[self.color].sprites[area.direction].name, target=self.thisEntity, surface=self.thisEntity.surface, render_layer="lower-object-above-shadow"})
                             self.connectedObjs[area.direction] = {obj}
                         elseif obj.color ~= "" and obj.color == self.color then
-                            self.arms[area.direction] = rendering.draw_sprite{sprite=Constants.NetworkCables.Cables[self.color].sprites[area.direction].name, target=self.thisEntity, surface=self.thisEntity.surface, render_layer="lower-object-above-shadow"}
+                            self.arms[area.direction] = Util.newRender(rendering.draw_sprite{sprite=Constants.NetworkCables.Cables[self.color].sprites[area.direction].name, target=self.thisEntity, surface=self.thisEntity.surface, render_layer="lower-object-above-shadow"})
                             self.connectedObjs[area.direction] = {obj}
                         end
                     end

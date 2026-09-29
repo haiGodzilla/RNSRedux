@@ -27,7 +27,7 @@ function DT:new(object)
     mt.__index = DT
     t.thisEntity = object
     t.entID = object.unit_number
-    rendering.draw_sprite{sprite=Constants.NetworkCables.Cables[t.color].sprites[5].name, target=t.thisEntity, surface=t.thisEntity.surface, render_layer="lower-object-above-shadow"}
+    Util.newRender(rendering.draw_sprite{sprite=Constants.NetworkCables.Cables[t.color].sprites[5].name, target=t.thisEntity, surface=t.thisEntity.surface, render_layer="lower-object-above-shadow"})
     t.arms = {
         [1] = nil, --N
         [2] = nil, --E
@@ -145,8 +145,8 @@ function DT:update_signal()
             self.enablerCombinator.get_or_create_control_behavior().set_signal(1, nil)
         end
     elseif self.mode == "connect/disconnect" then
-        if self.readFromNetwork == false and self.filters["virtual"] ~= "" and (self.enablerCombinator.get_circuit_network(defines.wire_type.red, defines.circuit_connector_id.constant_combinator) ~= nil or self.enablerCombinator.get_circuit_network(defines.wire_type.green, defines.circuit_connector_id.constant_combinator) ~= nil) then
-            local amount = self.enablerCombinator.get_merged_signal({type=self.filters["virtual"].type, name=self.filters["virtual"].name}, defines.circuit_connector_id.constant_combinator)
+        if self.readFromNetwork == false and self.filters["virtual"] ~= "" and (Util.getCombinatorNetwork(self.enablerCombinator) ~= nil) then
+            local amount = Util.getCombinatorSignal(self.enablerCombinator, {type=self.filters["virtual"].type, name=self.filters["virtual"].name})
             self.newState = Util.OperatorFunctions[self.enabler.operator](amount, self.enabler.number)
         elseif self.readFromNetwork == true and self.filters["virtual"] ~= "" then
             local amount = self.networkController.network.Contents.item[self.filters["virtual"]] or self.networkController.network.Contents.fluid[self.filters["virtual"]] or 0
@@ -166,82 +166,82 @@ function DT:set_icons(index, name, type)
 end
 
 function DT:toggleHoverIcon(hovering)
-    if self.icons[1] ~= nil and hovering and rendering.get_only_in_alt_mode(self.icons[1]) then
-        rendering.set_only_in_alt_mode(self.icons[1], false)
-    elseif self.icons[1] ~= nil and not hovering and not rendering.get_only_in_alt_mode(self.icons[1]) then
-        rendering.set_only_in_alt_mode(self.icons[1], true)
+    if self.icons[1] ~= nil and hovering and Util.getRenderAltMode(self.icons[1]) then
+        Util.setRenderAltMode(self.icons[1], false)
+    elseif self.icons[1] ~= nil and not hovering and not Util.getRenderAltMode(self.icons[1]) then
+        Util.setRenderAltMode(self.icons[1], true)
     end
 
-    if self.icons[2] ~= nil and hovering and rendering.get_only_in_alt_mode(self.icons[2]) then
-        rendering.set_only_in_alt_mode(self.icons[2], false)
-    elseif self.icons[2] ~= nil and not hovering and not rendering.get_only_in_alt_mode(self.icons[2]) then
-        rendering.set_only_in_alt_mode(self.icons[2], true)
+    if self.icons[2] ~= nil and hovering and Util.getRenderAltMode(self.icons[2]) then
+        Util.setRenderAltMode(self.icons[2], false)
+    elseif self.icons[2] ~= nil and not hovering and not Util.getRenderAltMode(self.icons[2]) then
+        Util.setRenderAltMode(self.icons[2], true)
     end
 
-    if self.icons[3] ~= nil and hovering and rendering.get_only_in_alt_mode(self.icons[3]) then
-        rendering.set_only_in_alt_mode(self.icons[3], false)
-    elseif self.icons[3] ~= nil and not hovering and not rendering.get_only_in_alt_mode(self.icons[3]) then
-        rendering.set_only_in_alt_mode(self.icons[3], true)
+    if self.icons[3] ~= nil and hovering and Util.getRenderAltMode(self.icons[3]) then
+        Util.setRenderAltMode(self.icons[3], false)
+    elseif self.icons[3] ~= nil and not hovering and not Util.getRenderAltMode(self.icons[3]) then
+        Util.setRenderAltMode(self.icons[3], true)
     end
 
-    if self.icons[4] ~= nil and hovering and rendering.get_only_in_alt_mode(self.icons[4]) then
-        rendering.set_only_in_alt_mode(self.icons[4], false)
-    elseif self.icons[4] ~= nil and not hovering and not rendering.get_only_in_alt_mode(self.icons[4]) then
-        rendering.set_only_in_alt_mode(self.icons[4], true)
+    if self.icons[4] ~= nil and hovering and Util.getRenderAltMode(self.icons[4]) then
+        Util.setRenderAltMode(self.icons[4], false)
+    elseif self.icons[4] ~= nil and not hovering and not Util.getRenderAltMode(self.icons[4]) then
+        Util.setRenderAltMode(self.icons[4], true)
     end
 end
 
 function DT:generateModeIcon()
-    if self.icons[1] ~= nil then rendering.destroy(self.icons[1]) end
+    if self.icons[1] ~= nil then Util.destroyRender(self.icons[1]) end
     self.icons[1] = nil
     if self.disconnects[1] == true then
-        self.icons[1] = rendering.draw_sprite{
+        self.icons[1] = Util.newRender(rendering.draw_sprite{
             sprite=Constants.Icons.line,
             target=self.thisEntity,
             target_offset={0,-0.5},
             surface=self.thisEntity.surface,
             only_in_alt_mode=true,
             orientation=0
-        }
+        })
     end
 
-    if self.icons[2] ~= nil then rendering.destroy(self.icons[2]) end
+    if self.icons[2] ~= nil then Util.destroyRender(self.icons[2]) end
     self.icons[2] = nil
     if self.disconnects[2] == true then
-        self.icons[2] = rendering.draw_sprite{
+        self.icons[2] = Util.newRender(rendering.draw_sprite{
             sprite=Constants.Icons.line,
             target=self.thisEntity,
             target_offset={0.5, 0},
             surface=self.thisEntity.surface,
             only_in_alt_mode=true,
             orientation=0.25
-        }
+        })
     end
 
-    if self.icons[3] ~= nil then rendering.destroy(self.icons[3]) end
+    if self.icons[3] ~= nil then Util.destroyRender(self.icons[3]) end
     self.icons[3] = nil
     if self.disconnects[3] == true then
-        self.icons[3] = rendering.draw_sprite{
+        self.icons[3] = Util.newRender(rendering.draw_sprite{
             sprite=Constants.Icons.line,
             target=self.thisEntity,
             target_offset={-0.5,0},
             surface=self.thisEntity.surface,
             only_in_alt_mode=true,
             orientation=0.25
-        }
+        })
     end
 
-    if self.icons[4] ~= nil then rendering.destroy(self.icons[4]) end
+    if self.icons[4] ~= nil then Util.destroyRender(self.icons[4]) end
     self.icons[4] = nil
     if self.disconnects[4] == true then
-        self.icons[4] = rendering.draw_sprite{
+        self.icons[4] = Util.newRender(rendering.draw_sprite{
             sprite=Constants.Icons.line,
             target=self.thisEntity,
             target_offset={0,0.5},
             surface=self.thisEntity.surface,
             only_in_alt_mode=true,
             orientation=0
-        }
+        })
     end
 end
 
@@ -295,7 +295,7 @@ function DT:resetConnection()
     }
     for _, arm in pairs(self.arms) do
         if arm ~= nil then
-            rendering.destroy(arm)
+            Util.destroyRender(arm)
         end
     end
 end
@@ -341,10 +341,10 @@ function DT:createArms()
                             --Do nothing
                         else
                             if obj.color == nil then
-                                self.arms[area.direction] = rendering.draw_sprite{sprite=Constants.NetworkCables.Cables[self.color].sprites[area.direction].name, target=self.thisEntity, surface=self.thisEntity.surface, render_layer="lower-object-above-shadow"}
+                                self.arms[area.direction] = Util.newRender(rendering.draw_sprite{sprite=Constants.NetworkCables.Cables[self.color].sprites[area.direction].name, target=self.thisEntity, surface=self.thisEntity.surface, render_layer="lower-object-above-shadow"})
                                 self.connectedObjs[area.direction] = {obj}
                             elseif obj.color ~= "" and obj.color == self.color then
-                                self.arms[area.direction] = rendering.draw_sprite{sprite=Constants.NetworkCables.Cables[self.color].sprites[area.direction].name, target=self.thisEntity, surface=self.thisEntity.surface, render_layer="lower-object-above-shadow"}
+                                self.arms[area.direction] = Util.newRender(rendering.draw_sprite{sprite=Constants.NetworkCables.Cables[self.color].sprites[area.direction].name, target=self.thisEntity, surface=self.thisEntity.surface, render_layer="lower-object-above-shadow"})
                                 self.connectedObjs[area.direction] = {obj}
                             end
                         end
@@ -367,10 +367,10 @@ function DT:createArms()
                 --Do nothing
             else
                 if obj.color == nil then
-                    self.arms[area.direction] = rendering.draw_sprite{sprite=Constants.NetworkCables.Cables[self.color].sprites[area.direction].name, target=self.thisEntity, surface=self.thisEntity.surface, render_layer="lower-object-above-shadow"}
+                    self.arms[area.direction] = Util.newRender(rendering.draw_sprite{sprite=Constants.NetworkCables.Cables[self.color].sprites[area.direction].name, target=self.thisEntity, surface=self.thisEntity.surface, render_layer="lower-object-above-shadow"})
                     self.connectedObjs[area.direction] = {obj}
                 elseif obj.color ~= "" and obj.color == self.color then
-                    self.arms[area.direction] = rendering.draw_sprite{sprite=Constants.NetworkCables.Cables[self.color].sprites[area.direction].name, target=self.thisEntity, surface=self.thisEntity.surface, render_layer="lower-object-above-shadow"}
+                    self.arms[area.direction] = Util.newRender(rendering.draw_sprite{sprite=Constants.NetworkCables.Cables[self.color].sprites[area.direction].name, target=self.thisEntity, surface=self.thisEntity.surface, render_layer="lower-object-above-shadow"})
                     self.connectedObjs[area.direction] = {obj}
                 end
             end
@@ -528,7 +528,7 @@ function DT.interaction(event, RNSPlayer)
         end
         io.mode = "enable/disable"
         for i, _ in pairs (io.icons) do
-            if io.icons[i] ~= nil then rendering.destroy(io.icons[i]) end
+            if io.icons[i] ~= nil then Util.destroyRender(io.icons[i]) end
             io.icons[i] = nil
         end
         RNSPlayer:push_varTable(id, true)
@@ -542,7 +542,7 @@ function DT.interaction(event, RNSPlayer)
         end
         io.mode = "connect/disconnect"
         for i, _ in pairs (io.icons) do
-            if io.icons[i] ~= nil then rendering.destroy(io.icons[i]) end
+            if io.icons[i] ~= nil then Util.destroyRender(io.icons[i]) end
             io.icons[i] = nil
         end
         RNSPlayer:push_varTable(id, true)
@@ -620,7 +620,7 @@ function DT.interaction(event, RNSPlayer)
         local color = Constants.Settings.RNS_ColorN[event.element.selected_index]
         if color ~= io.color then
             io.color = color
-            rendering.draw_sprite{sprite=Constants.NetworkCables.Cables[io.color].sprites[5].name, target=io.thisEntity, surface=io.thisEntity.surface, render_layer="lower-object-above-shadow"}
+            Util.newRender(rendering.draw_sprite{sprite=Constants.NetworkCables.Cables[io.color].sprites[5].name, target=io.thisEntity, surface=io.thisEntity.surface, render_layer="lower-object-above-shadow"})
             io:createArms()
             BaseNet.postArms(io)
             BaseNet.update_network_controller(io.networkController)

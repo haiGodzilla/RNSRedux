@@ -21,7 +21,7 @@ function NCug:new(object)
     t.entID = object.unit_number
     for name, color in pairs(Constants.NetworkCables.Cables) do
         if object.name == color.underground.name then
-            rendering.draw_sprite{sprite=color.sprites[5].name, target=t.thisEntity, surface=t.thisEntity.surface, render_layer="lower-object-above-shadow"}
+            Util.newRender(rendering.draw_sprite{sprite=color.sprites[5].name, target=t.thisEntity, surface=t.thisEntity.surface, render_layer="lower-object-above-shadow"})
             t.color = tostring(name)
             break
         end
@@ -62,7 +62,7 @@ end
 
 function NCug:remove()
     if self.targetIcon ~= nil then
-        rendering.destroy(self.targetIcon)
+        Util.destroyRender(self.targetIcon)
     end
     UpdateSys.remove_from_entity_table(self)
     BaseNet.postArms(self)
@@ -101,12 +101,12 @@ end
 function NCug:generateModeIcon()
     if self.targetEntity == nil then return end
     if self.targetEntity ~= nil and self.targetEntity.thisEntity ~= nil and self.targetEntity.thisEntity.valid == false then return end
-    rendering.draw_sprite{
+    Util.newRender(rendering.draw_sprite{
         sprite=Constants.Icons.underground.target.name, 
         target=self.targetEntity.thisEntity, 
         surface=self.thisEntity.surface,
         time_to_live=2
-    }
+    })
     local dist = math.floor(Util.distance(self.targetEntity.thisEntity.position, self.thisEntity.position))-1
     local xO = 0
     local yO = 0
@@ -121,7 +121,7 @@ function NCug:generateModeIcon()
     end
     if dist <= 0 then return end
     for i=1, dist do
-        rendering.draw_sprite{
+        Util.newRender(rendering.draw_sprite{
             sprite=Constants.Icons.underground.gap.name, 
             target=self.thisEntity,
             target_offset = {
@@ -131,7 +131,7 @@ function NCug:generateModeIcon()
             surface=self.thisEntity.surface,
             orientation=self:getRealDirection()%2 == 0 and 0.25 or 0,
             time_to_live=2
-        }
+        })
     end
 end
 
@@ -144,7 +144,7 @@ function NCug:resetConnection()
     }
     for _, arm in pairs(self.arms) do
         if arm ~= nil then
-            rendering.destroy(arm)
+            Util.destroyRender(arm)
         end
     end
     self.targetEntity = nil
@@ -189,7 +189,7 @@ function NCug:createArms()
                 --Do nothing
             else
                 if obj.color == nil and self:getDirection() ~= area.direction then
-                    self.arms[area.direction] = rendering.draw_sprite{sprite=Constants.NetworkCables.Cables[self.color].sprites[area.direction].name, target=self.thisEntity, surface=self.thisEntity.surface, render_layer="lower-object-above-shadow"}
+                    self.arms[area.direction] = Util.newRender(rendering.draw_sprite{sprite=Constants.NetworkCables.Cables[self.color].sprites[area.direction].name, target=self.thisEntity, surface=self.thisEntity.surface, render_layer="lower-object-above-shadow"})
                     self.connectedObjs[area.direction] = {obj}
                     BaseNet.join_network(self, obj)
                 elseif obj.color ~= "" and obj.color == self.color then
@@ -201,12 +201,12 @@ function NCug:createArms()
                                 BaseNet.join_network(self, obj)
                             end
                         elseif area.direction ~= obj:getConnectionDirection() then
-                            self.arms[area.direction] = rendering.draw_sprite{sprite=Constants.NetworkCables.Cables[self.color].sprites[area.direction].name, target=self.thisEntity, surface=self.thisEntity.surface, render_layer="lower-object-above-shadow"}
+                            self.arms[area.direction] = Util.newRender(rendering.draw_sprite{sprite=Constants.NetworkCables.Cables[self.color].sprites[area.direction].name, target=self.thisEntity, surface=self.thisEntity.surface, render_layer="lower-object-above-shadow"})
                             self.connectedObjs[area.direction] = {obj}
                             BaseNet.join_network(self, obj)
                         end
                     else
-                        self.arms[area.direction] = rendering.draw_sprite{sprite=Constants.NetworkCables.Cables[self.color].sprites[area.direction].name, target=self.thisEntity, surface=self.thisEntity.surface, render_layer="lower-object-above-shadow"}
+                        self.arms[area.direction] = Util.newRender(rendering.draw_sprite{sprite=Constants.NetworkCables.Cables[self.color].sprites[area.direction].name, target=self.thisEntity, surface=self.thisEntity.surface, render_layer="lower-object-above-shadow"})
                         self.connectedObjs[area.direction] = {obj}
                         BaseNet.join_network(self, obj)
                     end

@@ -39,7 +39,7 @@ function EIO:new(object)
     mt.__index = EIO
     t.thisEntity = object
     t.entID = object.unit_number
-    rendering.draw_sprite{sprite=Constants.NetworkCables.Cables[t.color].sprites[5].name, target=t.thisEntity, surface=t.thisEntity.surface, render_layer="lower-object-above-shadow"}
+    Util.newRender(rendering.draw_sprite{sprite=Constants.NetworkCables.Cables[t.color].sprites[5].name, target=t.thisEntity, surface=t.thisEntity.surface, render_layer="lower-object-above-shadow"})
     t:generateModeIcon()
     t.oldDirection = t:getDirection()
     --Don't really need to initialize the arrays but it makes it easier to see what's supposed to be there
@@ -457,15 +457,15 @@ end
 
 function EIO:toggleHoverIcon(hovering)
     if self.ioIcon == nil then return end
-    if hovering and rendering.get_only_in_alt_mode(self.ioIcon) then
-        rendering.set_only_in_alt_mode(self.ioIcon, false)
-    elseif not hovering and not rendering.get_only_in_alt_mode(self.ioIcon) then
-        rendering.set_only_in_alt_mode(self.ioIcon, true)
+    if hovering and Util.getRenderAltMode(self.ioIcon) then
+        Util.setRenderAltMode(self.ioIcon, false)
+    elseif not hovering and not Util.getRenderAltMode(self.ioIcon) then
+        Util.setRenderAltMode(self.ioIcon, true)
     end
 end
 
 function EIO:generateModeIcon()
-    if self.ioIcon ~= nil then rendering.destroy(self.ioIcon) end
+    if self.ioIcon ~= nil then Util.destroyRender(self.ioIcon) end
     local offset = {0, 0}
     if self:getRealDirection() == 1 then
         offset = {0,-0.5}
@@ -477,23 +477,23 @@ function EIO:generateModeIcon()
         offset = {-0.5,0}
     end
     if self.io ~= "input/output" then
-        self.ioIcon = rendering.draw_sprite{
+        self.ioIcon = Util.newRender(rendering.draw_sprite{
             sprite=Constants.Icons.storage.name, 
             target=self.thisEntity, 
             target_offset=offset,
             surface=self.thisEntity.surface,
             only_in_alt_mode=true,
             orientation=self.io == "input" and (self:getRealDirection()*0.25)+0.25 or ((self:getRealDirection()*0.25)-0.25)%1.00
-        }
+        })
     else
-        self.ioIcon = rendering.draw_sprite{
+        self.ioIcon = Util.newRender(rendering.draw_sprite{
             sprite=Constants.Icons.storage_bothways.name, 
             target=self.thisEntity, 
             target_offset=offset,
             surface=self.thisEntity.surface,
             only_in_alt_mode=true,
             orientation=(self:getRealDirection()*0.25)-0.25
-        }
+        })
     end
     
 end
@@ -507,7 +507,7 @@ function EIO:resetConnection()
     }
     for _, arm in pairs(self.arms) do
         if arm ~= nil then
-            rendering.destroy(arm)
+            Util.destroyRender(arm)
         end
     end
 end
@@ -649,10 +649,10 @@ function EIO:createArms()
                             --Do nothing
                         else
                             if obj.color == nil then
-                                self.arms[area.direction] = rendering.draw_sprite{sprite=Constants.NetworkCables.Cables[self.color].sprites[area.direction].name, target=self.thisEntity, surface=self.thisEntity.surface, render_layer="lower-object-above-shadow"}
+                                self.arms[area.direction] = Util.newRender(rendering.draw_sprite{sprite=Constants.NetworkCables.Cables[self.color].sprites[area.direction].name, target=self.thisEntity, surface=self.thisEntity.surface, render_layer="lower-object-above-shadow"})
                                 self.connectedObjs[area.direction] = {obj}
                             elseif obj.color ~= "" and obj.color == self.color then
-                                self.arms[area.direction] = rendering.draw_sprite{sprite=Constants.NetworkCables.Cables[self.color].sprites[area.direction].name, target=self.thisEntity, surface=self.thisEntity.surface, render_layer="lower-object-above-shadow"}
+                                self.arms[area.direction] = Util.newRender(rendering.draw_sprite{sprite=Constants.NetworkCables.Cables[self.color].sprites[area.direction].name, target=self.thisEntity, surface=self.thisEntity.surface, render_layer="lower-object-above-shadow"})
                                 self.connectedObjs[area.direction] = {obj}
                             end
                         end
@@ -665,9 +665,9 @@ function EIO:createArms()
 end
 
 function EIO:signal_valid()
-    if self.enablerCombinator.get_circuit_network(defines.wire_type.red, defines.circuit_connector_id.constant_combinator) ~= nil or self.enablerCombinator.get_circuit_network(defines.wire_type.green, defines.circuit_connector_id.constant_combinator) ~= nil then
+    if Util.getCombinatorNetwork(self.enablerCombinator) ~= nil then
         if self.enabler.filter == nil then return false end
-        local amount = self.enablerCombinator.get_merged_signal({type=self.enabler.filter.type, name=self.enabler.filter.name}, defines.circuit_connector_id.constant_combinator)
+        local amount = Util.getCombinatorSignal(self.enablerCombinator, {type=self.enabler.filter.type, name=self.enabler.filter.name})
         if Util.OperatorFunctions[self.enabler.operator](amount, self.enabler.number) == false then return false end
     end
     return true
@@ -932,7 +932,7 @@ function EIO.interaction(event, RNSPlayer)
         local color = Constants.Settings.RNS_ColorN[event.element.selected_index]
         if color ~= io.color then
             io.color = color
-            rendering.draw_sprite{sprite=Constants.NetworkCables.Cables[io.color].sprites[5].name, target=io.thisEntity, surface=io.thisEntity.surface, render_layer="lower-object-above-shadow"}  
+            Util.newRender(rendering.draw_sprite{sprite=Constants.NetworkCables.Cables[io.color].sprites[5].name, target=io.thisEntity, surface=io.thisEntity.surface, render_layer="lower-object-above-shadow"})  
             io:createArms()
             BaseNet.postArms(io)
             BaseNet.update_network_controller(io.networkController)

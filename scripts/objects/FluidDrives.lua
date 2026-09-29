@@ -122,10 +122,10 @@ end
 
 function FD:toggleHoverIcon(hovering)
     for _, i in pairs(self.icons) do
-        if i ~= nil and hovering and rendering.get_only_in_alt_mode(i) then
-            rendering.set_only_in_alt_mode(i, false)
-        elseif i ~= nil and not hovering and not rendering.get_only_in_alt_mode(i) then
-            rendering.set_only_in_alt_mode(i, true)
+        if i ~= nil and hovering and Util.getRenderAltMode(i) then
+            Util.setRenderAltMode(i, false)
+        elseif i ~= nil and not hovering and not Util.getRenderAltMode(i) then
+            Util.setRenderAltMode(i, true)
         end
     end
 end
@@ -133,21 +133,21 @@ end
 function FD:regenerate_icons()
     for i, ii in pairs(self.icons) do
         if ii ~= nil then
-            rendering.destroy(ii)
+            Util.destroyRender(ii)
             self.icons[i] = nil
         end
     end
     local i = 0
     for n, _ in pairs(self.filters) do
         i = i + 1
-        table.insert(self.icons, rendering.draw_sprite{
+        table.insert(self.icons, Util.newRender(rendering.draw_sprite{
             sprite = "fluid/"..n,
             target = self.thisEntity,
             surface = self.thisEntity.surface,
             render_layer = "higher-object-under",
             target_offset = Constants.Settings.RNS_DriveSprite_Offset[i],
             only_in_alt_mode = true
-        })
+        }))
     end
 end
 

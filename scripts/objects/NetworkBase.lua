@@ -299,11 +299,11 @@ function BaseNet.generateArms(object)
                             --Do nothing
                         else
                             if obj.color == nil then
-                                object.arms[area.direction] = rendering.draw_sprite{sprite=Constants.NetworkCables.Cables[object.color].sprites[area.direction].name, target=object.thisEntity, surface=object.thisEntity.surface, render_layer="lower-object-above-shadow"}
+                                object.arms[area.direction] = Util.newRender(rendering.draw_sprite{sprite=Constants.NetworkCables.Cables[object.color].sprites[area.direction].name, target=object.thisEntity, surface=object.thisEntity.surface, render_layer="lower-object-above-shadow"})
                                 object.connectedObjs[area.direction] = {obj}
                                 BaseNet.join_network(object, obj)
                             elseif obj.color ~= "" and obj.color == object.color then
-                                object.arms[area.direction] = rendering.draw_sprite{sprite=Constants.NetworkCables.Cables[object.color].sprites[area.direction].name, target=object.thisEntity, surface=object.thisEntity.surface, render_layer="lower-object-above-shadow"}
+                                object.arms[area.direction] = Util.newRender(rendering.draw_sprite{sprite=Constants.NetworkCables.Cables[object.color].sprites[area.direction].name, target=object.thisEntity, surface=object.thisEntity.surface, render_layer="lower-object-above-shadow"})
                                 object.connectedObjs[area.direction] = {obj}
                                 BaseNet.join_network(object, obj)
                             end
@@ -1113,7 +1113,7 @@ function BaseNet.transfer_from_inv_to_network(network, from_inv, itemstack_maste
         end
         for j = o, #inv do
             if transferCapacity <= 0 or inv.is_empty() then goto fin end
-            if itemstack_master ~= nil and inv.get_contents()[itemstack_master.name] == nil then goto fin end
+            if itemstack_master ~= nil and inv.get_item_count(itemstack_master.name) == 0 then goto fin end
             local item = inv[j]
             if item == nil then goto next end
             if item.valid_for_read == false or item.count <= 0 then goto next end

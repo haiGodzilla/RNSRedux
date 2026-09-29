@@ -51,7 +51,7 @@ end
 --Deconstructor
 function NC:remove()
     --self.network:doRefresh(self)
-    if self.state ~= nil then rendering.destroy(self.state) end
+    if self.state ~= nil then Util.destroyRender(self.state) end
     UpdateSys.remove_from_entity_table(self)
     BaseNet.remove_networkcontroller_from_global(self)
     BaseNet.postArms(self)
@@ -67,8 +67,8 @@ function NC:interactable()
 end
 
 function NC:setState(state)
-    if self.state ~= nil then rendering.destroy(self.state) end
-    self.state = rendering.draw_sprite{sprite=state, target=self.thisEntity, surface=self.thisEntity.surface, render_layer="lower-object-above-shadow"}
+    if self.state ~= nil then Util.destroyRender(self.state) end
+    self.state = Util.newRender(rendering.draw_sprite{sprite=state, target=self.thisEntity, surface=self.thisEntity.surface, render_layer="lower-object-above-shadow"})
 end
 
 function NC:setActive(set)

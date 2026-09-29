@@ -54,8 +54,8 @@ function Itemstack:new(item)
     t.extras.blueprint_tiles = item.is_blueprint and Util.copy(item.get_blueprint_tiles() or {}) or nil
     if t.extras.blueprint_tiles then offset = offset + 1 end
 
-    t.extras.blueprint_icons = item.is_blueprint and Util.copy(item.blueprint_icons or {}) or nil
-    if t.extras.blueprint_icons then offset = offset + 1 end
+    t.extras.preview_icons = item.is_blueprint and Util.copy(item.preview_icons or {}) or nil
+    if t.extras.preview_icons then offset = offset + 1 end
 
     t.extras.default_icons = (item.is_blueprint and item.get_blueprint_entity_count() ~= 0) and Util.copy(item.default_icons or {}) or nil
     if t.extras.default_icons then offset = offset + 1 end
@@ -92,7 +92,7 @@ function Itemstack:new(item)
 
     t.extras.construction_filters = item.is_upgrade_item and {} or nil
     if item.is_upgrade_item then
-        for i = 1, item.prototype.mapper_count do
+        for i = 1, item.mapper_count do
             t.extras.construction_filters[i] = {
                 from = item.get_mapper(i, "from"),
                 to = item.get_mapper(i, "to")

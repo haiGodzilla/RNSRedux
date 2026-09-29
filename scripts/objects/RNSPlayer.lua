@@ -99,7 +99,7 @@ function RNSP:process_logistic_slots(network)
                 local min = slot.min
                 local max = slot.max
                 local name = slot.name
-                local amount = (player_inv.get_contents()[name] or 0) + ((self.thisEntity.cursor_stack and self.thisEntity.cursor_stack.valid_for_read and self.thisEntity.cursor_stack.name == name) and self.thisEntity.cursor_stack.count or 0)
+                local amount = (player_inv.get_item_count(name) or 0) + ((self.thisEntity.cursor_stack and self.thisEntity.cursor_stack.valid_for_read and self.thisEntity.cursor_stack.name == name) and self.thisEntity.cursor_stack.count or 0)
                 
                 local add = (amount <= min) and min-amount or 0
                 add = math.min(add*Constants.Settings.RNS_PlayerPort_Consumption, port.energy)/Constants.Settings.RNS_PlayerPort_Consumption
@@ -125,8 +125,9 @@ function RNSP:process_logistic_slots(network)
 
     local player_trash = self.thisEntity.get_inventory(defines.inventory.character_trash)
     if player_trash ~= nil and not player_trash.is_empty() then
-        local player_trash_contents = player_trash.get_contents()
-        for name, count in pairs(player_trash_contents) do
+        for _, entry in pairs(player_trash.get_contents()) do
+            local name = entry.name
+            local count = entry.count
             local itemstack = Itemstack.create_template(name)
             local remove = math.min(count*Constants.Settings.RNS_PlayerPort_Consumption, port.energy)/Constants.Settings.RNS_PlayerPort_Consumption
             local worked = remove - BaseNet.transfer_from_inv_to_network(network, {thisEntity = self.thisEntity,inventory = {output = {index = 1, max = 1, values = {defines.inventory.character_trash}}}}, itemstack, nil, "whitelist", remove, true, false)

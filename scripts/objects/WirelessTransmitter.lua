@@ -19,7 +19,7 @@ function WT:new(object)
     mt.__index = WT
     t.thisEntity = object
     t.entID = object.unit_number
-    rendering.draw_sprite{sprite=Constants.NetworkCables.Cables[t.color].sprites[5].name, target=t.thisEntity, surface=t.thisEntity.surface, render_layer="lower-object-above-shadow"}
+    Util.newRender(rendering.draw_sprite{sprite=Constants.NetworkCables.Cables[t.color].sprites[5].name, target=t.thisEntity, surface=t.thisEntity.surface, render_layer="lower-object-above-shadow"})
     t.arms = {
         [1] = nil, --N
         [2] = nil, --E
@@ -62,7 +62,7 @@ function WT:remove()
         self.networkController.network.shouldRefresh = true
     end]]
     BaseNet.update_network_controller(self.networkController, self.entID)
-    if self.rangeArea ~= nil then rendering.destroy(self.rangeArea) end
+    if self.rangeArea ~= nil then Util.destroyRender(self.rangeArea) end
 end
 
 function WT:valid()
@@ -90,14 +90,14 @@ function WT:update()
                 tl = {-width, -height}
                 br = {width, height}
             end
-			self.rangeArea = rendering.draw_rectangle{
+			self.rangeArea = Util.newRender(rendering.draw_rectangle{
                 color=settings.global[Constants.Settings.RNS_WirelessTransmitter_Color].value, width=5, filled=true,
                 left_top=tl,
                 right_bottom=br,
                 surface=self.thisEntity.surface
-            }
+            })
         elseif self.showArea == false and self.rangeArea ~= nil then
-            rendering.destroy(self.rangeArea)
+            Util.destroyRender(self.rangeArea)
             self.rangeArea = nil
         end
 
@@ -128,7 +128,7 @@ function WT:resetConnection()
     }
     for _, arm in pairs(self.arms) do
         if arm ~= nil then
-            rendering.destroy(arm)
+            Util.destroyRender(arm)
         end
     end
 end
@@ -158,10 +158,10 @@ function WT:createArms()
                         --Do nothing
                     else
                         if obj.color == nil then
-                            self.arms[area.direction] = rendering.draw_sprite{sprite=Constants.NetworkCables.Cables[self.color].sprites[area.direction].name, target=self.thisEntity, surface=self.thisEntity.surface, render_layer="lower-object-above-shadow"}
+                            self.arms[area.direction] = Util.newRender(rendering.draw_sprite{sprite=Constants.NetworkCables.Cables[self.color].sprites[area.direction].name, target=self.thisEntity, surface=self.thisEntity.surface, render_layer="lower-object-above-shadow"})
                             self.connectedObjs[area.direction] = {obj}
                         elseif obj.color ~= "" and obj.color == self.color then
-                            self.arms[area.direction] = rendering.draw_sprite{sprite=Constants.NetworkCables.Cables[self.color].sprites[area.direction].name, target=self.thisEntity, surface=self.thisEntity.surface, render_layer="lower-object-above-shadow"}
+                            self.arms[area.direction] = Util.newRender(rendering.draw_sprite{sprite=Constants.NetworkCables.Cables[self.color].sprites[area.direction].name, target=self.thisEntity, surface=self.thisEntity.surface, render_layer="lower-object-above-shadow"})
                             self.connectedObjs[area.direction] = {obj}
                         end
                     end
@@ -292,7 +292,7 @@ function WT.interaction(event, RNSPlayer)
         local color = Constants.Settings.RNS_ColorN[event.element.selected_index]
         if color ~= io.color then
             io.color = color
-            rendering.draw_sprite{sprite=Constants.NetworkCables.Cables[io.color].sprites[5].name, target=io.thisEntity, surface=io.thisEntity.surface, render_layer="lower-object-above-shadow"}
+            Util.newRender(rendering.draw_sprite{sprite=Constants.NetworkCables.Cables[io.color].sprites[5].name, target=io.thisEntity, surface=io.thisEntity.surface, render_layer="lower-object-above-shadow"})
         end
 		return
 	elseif string.match(event.element.name, "RNS_WT_Checkmark") then
