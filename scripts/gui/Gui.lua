@@ -2,7 +2,9 @@ function GUI.update(force)
     for _, player in pairs(game.connected_players) do
         local RNSPlayer = getRNSPlayer(player.name)
         if RNSPlayer ~= nil then
-            if game.tick % 1--[[Constants.Settings.RNS_Gui_Tick == 0]] or force then
+            --The throttle was commented out, so this ran on every single tick.
+            --GUI.update(true) after an interaction still refreshes immediately.
+            if force or game.tick % Constants.Settings.RNS_Gui_Tick == 0 then
                 for _, guiTable in pairs(RNSPlayer.GUI or {}) do
                     if guiTable.gui ~= nil and guiTable.gui.valid == true and GUI["update_" .. guiTable.gui.name] ~= nil then
                         --if guiTable.vars.currentObject.thisEntity.name == Constants.NetworkInventoryInterface.name then goto continue end
