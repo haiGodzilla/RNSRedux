@@ -204,11 +204,10 @@ function StressTest.status()
     local lines = {}
 
     for _, source in pairs((storage.stressTest and storage.stressTest.powerSources) or {}) do
-        if source ~= nil and source.valid == true then
-            lines[#lines + 1] = string.format("power production=%.0f consumption=%.0f buffer=%.0f",
+        if source ~= nil and source.valid == true and source.type == "electric-energy-interface" then
+            lines[#lines + 1] = string.format("power production=%.0f consumption=%.0f",
                 source.power_production or 0,
-                source.power_usage or 0,
-                source.electric_buffer_size or 0)
+                source.power_usage or 0)
         end
     end
 
