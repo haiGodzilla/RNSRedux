@@ -95,7 +95,7 @@ for signal_name, field in pairs(select_signals) do
         signal.icon = file
         log("RNSRedux: " .. signal_name .. " icon -> " .. file)
     elseif signal then
-        signal.icon = Constants.Settings.RNS_BlankIcon32
+        signal.icon = "__RNSRedux__/graphics/blank32.png"
         log("RNSRedux: " .. signal_name .. " core sprite missing, blank icon used")
     end
 end
