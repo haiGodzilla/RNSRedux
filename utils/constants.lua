@@ -1,5 +1,5 @@
 Constants = {}
-Constants.MOD_ID = "__RefinedNetworkStorage__"
+Constants.MOD_ID = "__RNSRedux__"
 Constants.Settings = {
     RNS_Player_Port_Shortcut = "RNS_Player_Port_Shortcut",
     RNS_Default_Channel = "Default",

@@ -1,13 +1,12 @@
 {
-	"name": "RefinedNetworkStorage",
-	"version": "1.0.43",
-	"title": "Refined Network Storage",
-	"author": "NindyBun",
-	"homepage":"",
-	"description": "Store, access, and transfer items/fluids digitally.",
-	"factorio_version": "1.1",
-	"dependencies": [
-		"base >= 1.0",
-		"? space-exploration >= 0.6.125"
-	]
+    "name": "RNSRedux",
+    "version": "2.0.0",
+    "title": "Refined Network Storage Redux",
+    "author": "4ndrej — basiert auf Refined Network Storage von NindyBun",
+    "homepage": "",
+    "description": "Store, access, and transfer items/fluids digitally. Port of Refined Network Storage to Factorio 2.0.",
+    "factorio_version": "2.0",
+    "dependencies": [
+        "base >= 2.0"
+    ]
 }
