@@ -37,7 +37,7 @@ function FIO:new(object)
     t.entID = object.unit_number
     rendering.draw_sprite{sprite=Constants.NetworkCables.Cables[t.color].sprites[5].name, target=t.thisEntity, surface=t.thisEntity.surface, render_layer="lower-object-above-shadow"}
     t:generateModeIcon()
-    t.fluidSize = global.FIOMultiplier
+    t.fluidSize = storage.FIOMultiplier
     t.oldDirection = t:getDirection()
     t.cardinals = {
         [1] = false, --N
@@ -243,7 +243,7 @@ end
     if self.focusedEntity.thisEntity == nil then self.processed = true return end
 
     local fluid_box = self.focusedEntity.fluid_box
-    local transportCapacity = self.fluidSize * Constants.Settings.RNS_BaseFluidIO_TransferCapacity --*global.FIOMultiplier
+    local transportCapacity = self.fluidSize * Constants.Settings.RNS_BaseFluidIO_TransferCapacity --*storage.FIOMultiplier
     --#tank.fluidbox returns number of pipe connections
     --tank.fluidbox.get_locked_fluid(index) returns filtered fluid at an index
     --tank.fluidbox[index] returns the contents of the fluidbox at an index
@@ -321,7 +321,7 @@ end
         end
         ::exit::
     end
-    self.processed = transportCapacity < self.fluidSize * Constants.Settings.RNS_BaseFluidIO_TransferCapacity --*global.FIOMultiplier
+    self.processed = transportCapacity < self.fluidSize * Constants.Settings.RNS_BaseFluidIO_TransferCapacity --*storage.FIOMultiplier
         or (self.focusedEntity.thisEntity ~= nil and self:checkFullness())
 end]]
 
@@ -337,8 +337,8 @@ end
 
 function FIO:IO()
     if self.circuitCondition2.state and (self.enablerCombinator.get_circuit_network(defines.wire_type.red, defines.circuit_connector_id.constant_combinator) ~= nil or self.enablerCombinator.get_circuit_network(defines.wire_type.green, defines.circuit_connector_id.constant_combinator) ~= nil) then
-        local amount = self.circuitCondition2.filter and self.enablerCombinator.get_merged_signal({type=self.circuitCondition2.filter.type, name=self.circuitCondition2.filter.name}, defines.circuit_connector_id.constant_combinator) or global.FIOMultiplier
-        self.fluidSize = math.min(math.max(amount, 1), global.FIOMultiplier)
+        local amount = self.circuitCondition2.filter and self.enablerCombinator.get_merged_signal({type=self.circuitCondition2.filter.type, name=self.circuitCondition2.filter.name}, defines.circuit_connector_id.constant_combinator) or storage.FIOMultiplier
+        self.fluidSize = math.min(math.max(amount, 1), storage.FIOMultiplier)
     end
 
     local transportCapacity = self.fluidSize * Constants.Settings.RNS_BaseFluidIO_TransferCapacity
@@ -432,7 +432,7 @@ function FIO:reset_focused_entity()
     local nearest = nil
 
     for _, ent in pairs(ents) do
-        if ent ~= nil and ent.valid == true and ent.to_be_deconstructed() == false and string.match(string.upper(ent.name), "RNS_") == nil and ent.operable and global.entityTable[ent.unit_number] == nil then
+        if ent ~= nil and ent.valid == true and ent.to_be_deconstructed() == false and string.match(string.upper(ent.name), "RNS_") == nil and ent.operable and storage.entityTable[ent.unit_number] == nil then
             if (nearest == nil or Util.distance(selfP, ent.position) < Util.distance(selfP, nearest.position)) and #ent.fluidbox ~= 0 then
                 nearest = ent
             end
@@ -493,9 +493,9 @@ function FIO:createArms()
         local ents = self.thisEntity.surface.find_entities_filtered{area={area.startP, area.endP}}
         for _, ent in pairs(ents) do
             if ent ~= nil and ent.valid == true then
-                if ent ~= nil and global.entityTable[ent.unit_number] ~= nil and string.match(ent.name, "RNS_") ~= nil then
+                if ent ~= nil and storage.entityTable[ent.unit_number] ~= nil and string.match(ent.name, "RNS_") ~= nil then
                     if area.direction ~= self:getDirection() then --Prevent cable connection on the IO port
-                        local obj = global.entityTable[ent.unit_number]
+                        local obj = storage.entityTable[ent.unit_number]
                         if (string.match(obj.thisEntity.name, "RNS_NetworkCableIO") ~= nil and obj:getConnectionDirection() == area.direction) or (string.match(obj.thisEntity.name, "RNS_NetworkCableRamp") ~= nil and obj:getConnectionDirection() == area.direction) or obj.thisEntity.name == Constants.WirelessGrid.name then
                             --Do nothing
                         else
@@ -570,7 +570,7 @@ function FIO:getTooltips(guiTable, mainFrame, justCreated)
 		rateFrame.style.right_margin = 3
         GuiApi.add_label(guiTable, "TransferRate", rateFrame, {"gui-description.RNS_FluidTransferRate", self.fluidSize*11*Constants.Settings.RNS_BaseFluidIO_TransferCapacity}, Constants.Settings.RNS_Gui.white, "", true)
 
-        if global.FIOMultiplier > 1 then
+        if storage.FIOMultiplier > 1 then
             local stackFrame = GuiApi.add_frame(guiTable, "", rateFlow, "horizontal")
 		    stackFrame.style = Constants.Settings.RNS_Gui.frame_1
 		    stackFrame.style.vertically_stretchable = true
@@ -583,7 +583,7 @@ function FIO:getTooltips(guiTable, mainFrame, justCreated)
             stackFlow.style.vertical_align = "center"
             local stackOverride = GuiApi.add_checkbox(guiTable, "RNS_NetworkCableIO_Fluid_FluidSizeOverride", stackFlow, {"gui-description.RNS_FluidSizeOverride"}, "", self.override_fluidsize, true, {ID=self.thisEntity.unit_number})
             
-            local slider = GuiApi.add_slider(guiTable, "RNS_NetworkCableIO_Fluid_FluidSizeSlider", stackFlow, 1, global.FIOMultiplier, self.fluidSize, 1, true, "", {ID=self.thisEntity.unit_number})
+            local slider = GuiApi.add_slider(guiTable, "RNS_NetworkCableIO_Fluid_FluidSizeSlider", stackFlow, 1, storage.FIOMultiplier, self.fluidSize, 1, true, "", {ID=self.thisEntity.unit_number})
             slider.style = "notched_slider"
             slider.style.minimal_width = 250
             slider.style.maximal_width = 300
@@ -693,7 +693,7 @@ function FIO:getTooltips(guiTable, mainFrame, justCreated)
                 number.style.minimal_width = 100
             end
             if self.circuitCondition2.state then
-                if global.FIOMultiplier > 1 then
+                if storage.FIOMultiplier > 1 then
                     guiTable.vars["RNS_NetworkCableIO_Fluid_FluidSizeOverride"].enabled = false
                     guiTable.vars["RNS_NetworkCableIO_Fluid_FluidSizeSlider"].enabled = false
                     guiTable.vars["RNS_NetworkCableIO_Fluid_FluidSizeText"].enabled = false
@@ -736,23 +736,23 @@ function FIO.interaction(event, RNSPlayer)
     local guiTable = RNSPlayer.GUI[Constants.Settings.RNS_Gui.tooltip]
     if string.match(event.element.name, "RNS_NetworkCableIO_Fluid_FluidSizeSlider") then
         local id = event.element.tags.ID
-		local io = global.entityTable[id]
+		local io = storage.entityTable[id]
 		if io == nil then return end
         io.fluidSize = math.ceil(event.element.slider_value)
         guiTable.vars["RNS_NetworkCableIO_Fluid_FluidSizeText"].text = tostring(io.fluidSize)
         return
     elseif string.match(event.element.name, "RNS_NetworkCableIO_Fluid_FluidSizeText") then
         local id = event.element.tags.ID
-		local io = global.entityTable[id]
+		local io = storage.entityTable[id]
 		if io == nil then return end
-        --io.fluidSize = math.max(1, math.min(tonumber(event.element.text) or 0, global.FIOMultiplier))
-        io.fluidSize = math.min(tonumber(event.element.text) or 0, global.FIOMultiplier)
+        --io.fluidSize = math.max(1, math.min(tonumber(event.element.text) or 0, storage.FIOMultiplier))
+        io.fluidSize = math.min(tonumber(event.element.text) or 0, storage.FIOMultiplier)
         guiTable.vars["RNS_NetworkCableIO_Fluid_FluidSizeSlider"].slider_value = io.fluidSize
         guiTable.vars["RNS_NetworkCableIO_Fluid_FluidSizeText"].text = tostring(io.fluidSize)
         return
     elseif string.match(event.element.name, "RNS_NetworkCableIO_Fluid_None") then
         local id = event.element.tags.ID
-		local io = global.entityTable[id]
+		local io = storage.entityTable[id]
 		if io == nil then return end
         io.circuitCondition1 = "none"
         RNSPlayer:push_varTable(id, true)
@@ -760,7 +760,7 @@ function FIO.interaction(event, RNSPlayer)
         return
     elseif string.match(event.element.name, "RNS_NetworkCableIO_Fluid_EnableDisable") then
         local id = event.element.tags.ID
-		local io = global.entityTable[id]
+		local io = storage.entityTable[id]
 		if io == nil then return end
         io.circuitCondition1 = "enable/disable"
         RNSPlayer:push_varTable(id, true)
@@ -768,7 +768,7 @@ function FIO.interaction(event, RNSPlayer)
         return
     elseif string.match(event.element.name, "RNS_NetworkCableIO_Fluid_SetFilters") then
         local id = event.element.tags.ID
-		local io = global.entityTable[id]
+		local io = storage.entityTable[id]
 		if io == nil then return end
         io.circuitCondition1 = "filter"
         RNSPlayer:push_varTable(id, true)
@@ -776,7 +776,7 @@ function FIO.interaction(event, RNSPlayer)
         return
     elseif string.match(event.element.name, "RNS_NetworkCableIO_Fluid_SetFluidSize_Filter") then
         local id = event.element.tags.ID
-		local io = global.entityTable[id]
+		local io = storage.entityTable[id]
 		if io == nil then return end
         if event.element.elem_value ~= nil then
             io.circuitCondition2.filter = event.element.elem_value
@@ -786,7 +786,7 @@ function FIO.interaction(event, RNSPlayer)
 		return
     elseif string.match(event.element.name, "RNS_NetworkCableIO_Fluid_SetFluidSize") then
         local id = event.element.tags.ID
-		local io = global.entityTable[id]
+		local io = storage.entityTable[id]
 		if io == nil then return end
         io.circuitCondition2.state = event.element.state
         io.override_fluidsize = true
@@ -795,7 +795,7 @@ function FIO.interaction(event, RNSPlayer)
         return
     elseif string.match(event.element.name, "RNS_NetworkCableIO_Fluid_FluidSizeOverride") then
         local id = event.element.tags.ID
-		local io = global.entityTable[id]
+		local io = storage.entityTable[id]
 		if io == nil then return end
         io.override_fluidsize = event.element.state
         RNSPlayer:push_varTable(id, true)
@@ -803,7 +803,7 @@ function FIO.interaction(event, RNSPlayer)
         return
     elseif string.match(event.element.name, "RNS_NetworkCableIO_Fluid_Number") then
         local id = event.element.tags.ID
-		local io = global.entityTable[id]
+		local io = storage.entityTable[id]
 		if io == nil then return end
         local num = math.min(2^32, tonumber(event.element.text ~= "" and event.element.text or "0"))
         io.enabler.number = num
@@ -811,7 +811,7 @@ function FIO.interaction(event, RNSPlayer)
         return
     elseif string.match(event.element.name, "RNS_NetworkCableIO_Fluid_Operator") then
         local id = event.element.tags.ID
-		local io = global.entityTable[id]
+		local io = storage.entityTable[id]
 		if io == nil then return end
         local operator = Constants.Settings.RNS_OperatorN[event.element.selected_index]
         if operator ~= io.enabler.operator then
@@ -820,7 +820,7 @@ function FIO.interaction(event, RNSPlayer)
 		return
     elseif string.match(event.element.name, "RNS_NetworkCableIO_Fluid_Enabler") then
         local id = event.element.tags.ID
-		local io = global.entityTable[id]
+		local io = storage.entityTable[id]
 		if io == nil then return end
         if event.element.elem_value ~= nil then
             io.enabler.filter = event.element.elem_value
@@ -830,7 +830,7 @@ function FIO.interaction(event, RNSPlayer)
 		return
     elseif string.match(event.element.name, "RNS_NetworkCableIO_Fluid_Filter") then
 		local id = event.element.tags.ID
-		local io = global.entityTable[id]
+		local io = storage.entityTable[id]
 		if io == nil then return end
         if event.element.elem_value ~= nil then
             io.filter = event.element.elem_value
@@ -845,7 +845,7 @@ function FIO.interaction(event, RNSPlayer)
 		return
 	elseif string.match(event.element.name, "RNS_NetworkCableIO_Fluid_Color") then
 		local id = event.element.tags.ID
-		local io = global.entityTable[id]
+		local io = storage.entityTable[id]
 		if io == nil then return end
         local color = Constants.Settings.RNS_ColorN[event.element.selected_index]
         if color ~= io.color then
@@ -859,7 +859,7 @@ function FIO.interaction(event, RNSPlayer)
 		return
 	elseif string.match(event.element.name, "RNS_NetworkCableIO_Fluid_Priority") then
         local id = event.element.tags.ID
-		local io = global.entityTable[id]
+		local io = storage.entityTable[id]
 		if io == nil then return end
         local priority = Constants.Settings.RNS_Priorities[event.element.selected_index]
         if priority ~= io.priority then
@@ -874,7 +874,7 @@ function FIO.interaction(event, RNSPlayer)
 		return
     elseif string.match(event.element.name, "RNS_NetworkCableIO_Fluid_IO") then
         local id = event.element.tags.ID
-		local io = global.entityTable[id]
+		local io = storage.entityTable[id]
 		if io == nil then return end
         local from = io.io
         local to = event.element.switch_state == "left" and "input" or "output"

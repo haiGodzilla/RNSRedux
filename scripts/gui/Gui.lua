@@ -65,7 +65,7 @@ function GUI.open_tooltip_gui(RNSPlayer, player, entity)
 		if cursorStack.name == "green-wire" or cursorStack.name == "red-wire" or cursorStack.type == "repair-tool" then return end
 	end
 
-    local obj = global.entityTable[entity.unit_number]
+    local obj = storage.entityTable[entity.unit_number]
     if valid(obj) == false or obj.getTooltips == nil then return end
 
     local guiTable = GUI.create_tooltip_gui(player, obj)
@@ -81,7 +81,7 @@ function GUI.open_relative_tooltip_gui(RNSPlayer, player, entity, type, position
 		if cursorStack.name == "green-wire" or cursorStack.name == "red-wire" or cursorStack.type == "repair-tool" then return end
 	end
 
-    local obj = global.entityTable[entity.unit_number]
+    local obj = storage.entityTable[entity.unit_number]
     if valid(obj) == false or obj.getTooltips == nil then return end
 
     local guiTable = GUI.create_relative_tooltip_gui(player, obj, type, position)

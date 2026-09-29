@@ -169,8 +169,8 @@ function NCug:createArms()
         local ents = self.thisEntity.surface.find_entities_filtered{area={area.startP, area.endP}}
         local nearest = nil
         for _, ent in pairs(ents) do
-            if ent ~= nil and ent.valid == true and ent.to_be_deconstructed() == false and string.match(ent.name, "RNS_") ~= nil and global.entityTable[ent.unit_number] ~= nil then
-                local obj = global.entityTable[ent.unit_number]
+            if ent ~= nil and ent.valid == true and ent.to_be_deconstructed() == false and string.match(ent.name, "RNS_") ~= nil and storage.entityTable[ent.unit_number] ~= nil then
+                local obj = storage.entityTable[ent.unit_number]
                 if area.direction == self:getDirection() then
                     --obj is indexed as nil for some reason
                     if string.match(ent.name, "RNS_NetworkCableRamp") ~= nil and obj.color == self.color and (nearest == nil or Util.distance(selfP, ent.position) < Util.distance(selfP, nearest.position)) then
@@ -183,8 +183,8 @@ function NCug:createArms()
                 end
             end
         end
-        if nearest ~= nil and global.entityTable[nearest.unit_number] ~= nil then
-            local obj = global.entityTable[nearest.unit_number]
+        if nearest ~= nil and storage.entityTable[nearest.unit_number] ~= nil then
+            local obj = storage.entityTable[nearest.unit_number]
             if (string.match(obj.thisEntity.name, "RNS_NetworkCableIO") ~= nil and obj:getConnectionDirection() == area.direction) or (string.match(obj.thisEntity.name, "RNS_NetworkCableRamp") ~= nil and obj:getConnectionDirection() == area.direction and obj.color ~= self.color) or obj.thisEntity.name == Constants.WirelessGrid.name then
                 --Do nothing
             else

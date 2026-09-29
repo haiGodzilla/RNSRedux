@@ -1,6 +1,6 @@
 --Creates the tables needed to store all the mods custom objects and the corresponding entity
 function createObjectTables()
-    global.objectTables = {}
+    storage.objectTables = {}
     addOrCreateObjectTable{tableName="PlayerTable", tag="RNSP", objName="RNSPlayer"}
 
     addOrCreateObjectTable{tableName="NetworkControllerTable", tag="NC", objName=Constants.NetworkController.main.name}
@@ -47,23 +47,23 @@ end
 --@objName - Name of the entity
 function addOrCreateObjectTable(table)
     --Make the table if it doesn't exist yet
-    if global.objectTables == nil then global.objectTables = {} end
+    if storage.objectTables == nil then storage.objectTables = {} end
     --Create the entity table and insert the table data
-    global.objectTables[table.objName] = table
+    storage.objectTables[table.objName] = table
     --Initialize the entity table if it doesn't exist yet
-    if table.tableName ~= nil and global[table.tableName] == nil then global[table.tableName] = {} end
+    if table.tableName ~= nil and storage[table.tableName] == nil then storage[table.tableName] = {} end
 end
 
 --[[function getNextAvailableNetworkID()
-    if global.networkID == nil then global.networkID = {{id=0, used=false}} end
-    for _, index in pairs(global.networkID) do
+    if storage.networkID == nil then storage.networkID = {{id=0, used=false}} end
+    for _, index in pairs(storage.networkID) do
         if not index.used then
             index.used = true
             return index.id
         end
     end
-    local id = #global.networkID
-    table.insert(global.networkID, {id=id, used=true})
+    local id = #storage.networkID
+    table.insert(storage.networkID, {id=id, used=true})
     return id
 end]]
 
@@ -76,8 +76,8 @@ end
 
 function getRNSPlayer(player)
 	if player == nil then return nil
-	elseif type(player) == "string" then return global.PlayerTable[player]
-	elseif type(player) == "number" then return global.PlayerTable[game.players[player].name]
+	elseif type(player) == "string" then return storage.PlayerTable[player]
+	elseif type(player) == "number" then return storage.PlayerTable[game.players[player].name]
 	else error("bad argument to getRNSPlayer()") end
 end
 

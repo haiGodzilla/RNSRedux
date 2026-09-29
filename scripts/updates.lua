@@ -2,46 +2,46 @@ require("scripts.Functions")
 --Adds object to the update system
 function UpdateSys.addEntity(obj)
     if valid(obj) == false then return end
-    if global.updateTable == nil then global.updateTable = {} end
+    if storage.updateTable == nil then storage.updateTable = {} end
     
     if obj ~= nil and getmetatable(obj) ~= nil then
         if obj:valid() ~= true then
             obj:remove()
         elseif obj.thisEntity ~= nil and obj.thisEntity.valid == true then
-            global.updateTable[obj.entID] = obj
+            storage.updateTable[obj.entID] = obj
         end
     end
 end
 --[[
 function UpdateSys.addItem(obj)
     if valid(obj) == false then return end
-    if global.itemTable == nil then global.itemTable = {} end
+    if storage.itemTable == nil then storage.itemTable = {} end
     
     if obj ~= nil and getmetatable(obj) ~= nil then
         if obj:valid() ~= true then
             obj:remove()
         elseif obj.thisEntity ~= nil and obj.thisEntity.valid == true then
-            global.itemTable[obj.entID] = obj
+            storage.itemTable[obj.entID] = obj
         end
     end
 end
 ]]
 function UpdateSys.remove(obj)
     if obj.entID ~= nil then
-        global.updateTable[obj.entID] = nil
+        storage.updateTable[obj.entID] = nil
     end
 end
 
 --[[
 function UpdateSys.removeItem(obj)
     if obj.entID ~= nil then
-        global.itemTable[obj.entID] = nil
+        storage.itemTable[obj.entID] = nil
     end
 end
 ]]
 
 function UpdateSys.update(event)
-    for _, obj in pairs(global.updateTable) do
+    for _, obj in pairs(storage.updateTable) do
         if valid(obj) == true and obj.update ~= nil then
             if Util.safeCall(obj.update, obj, event) == false then
                 game.print({"gui-description.RNS_UpdateSysEntity_Failed", obj.thisEntity.name})
@@ -49,7 +49,7 @@ function UpdateSys.update(event)
         end
     end
     --[[
-    for _, obj in pairs(global.itemTable) do
+    for _, obj in pairs(storage.itemTable) do
         if valid(obj) == true and obj.update ~= nil then
             if Util.safeCall(obj.update, obj, event) == false then
                 game.print({"gui-description.UpdateSysItem_Failed", obj.thisEntity.name})
@@ -61,19 +61,19 @@ end
 
 function UpdateSys.add_to_entity_table(obj)
     if valid(obj) == false then return end
-    if global.entityTable == nil then global.entityTable = {} end
+    if storage.entityTable == nil then storage.entityTable = {} end
     
     if obj ~= nil and getmetatable(obj) ~= nil then
         if obj:valid() ~= true then
             obj:remove()
         elseif obj.thisEntity ~= nil and obj.thisEntity.valid == true then
-            global.entityTable[obj.entID] = obj
+            storage.entityTable[obj.entID] = obj
         end
     end
 end
 
 function UpdateSys.remove_from_entity_table(obj)
     if obj.entID ~= nil then
-        global.entityTable[obj.entID] = nil
+        storage.entityTable[obj.entID] = nil
     end
 end

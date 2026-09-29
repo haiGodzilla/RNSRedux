@@ -144,38 +144,38 @@ function BaseNet.add_transreciever_to_global(obj)
     if valid(obj) == false then return end
     if obj.thisEntity == nil or obj.thisEntity.valid == false then return end
     if obj.type == "transmitter" then
-        global.TransReceiverChannels.transmitters[obj.thisEntity.unit_number] = obj
+        storage.TransReceiverChannels.transmitters[obj.thisEntity.unit_number] = obj
     elseif obj.type == "receiver" then
-        global.TransReceiverChannels.receivers[obj.thisEntity.unit_number] = obj
+        storage.TransReceiverChannels.receivers[obj.thisEntity.unit_number] = obj
     end
 end
 
 function BaseNet.remove_transreciever_from_global(obj)
     if valid(obj) == false then return end
     if obj.type == "transmitter" then
-        global.TransReceiverChannels.transmitters[obj.thisEntity.unit_number] = nil
+        storage.TransReceiverChannels.transmitters[obj.thisEntity.unit_number] = nil
     elseif obj.type == "receiver" then
-        global.TransReceiverChannels.receivers[obj.thisEntity.unit_number] = nil
+        storage.TransReceiverChannels.receivers[obj.thisEntity.unit_number] = nil
     end
 end
 
 function BaseNet.get_transreciever_from_global(type)
     if type == "transmitter" then
-        return global.TransReceiverChannels.transmitters
+        return storage.TransReceiverChannels.transmitters
     elseif type == "receiver" then
-        return global.TransReceiverChannels.receivers
+        return storage.TransReceiverChannels.receivers
     end
 end
 
 function BaseNet.add_networkcontroller_to_global(obj)
     if valid(obj) == false then return end
     if obj.thisEntity == nil or obj.thisEntity.valid == false then return end
-    global.NetworkControllers[obj.thisEntity.unit_number] = obj
+    storage.NetworkControllers[obj.thisEntity.unit_number] = obj
 end
 
 function BaseNet.remove_networkcontroller_from_global(obj)
     if valid(obj) == false then return end
-    global.NetworkControllers[obj.thisEntity.unit_number] = nil
+    storage.NetworkControllers[obj.thisEntity.unit_number] = nil
 end
 
 function BaseNet.addConnectables(source, connections, master)
@@ -290,8 +290,8 @@ function BaseNet.generateArms(object)
             local ents = object.thisEntity.surface.find_entities_filtered{area={area.startP, area.endP}}
             for _, ent in pairs(ents) do
                 if ent ~= nil and ent.valid == true and ent.to_be_deconstructed() == false then
-                    if ent ~= nil and global.entityTable[ent.unit_number] ~= nil and string.match(ent.name, "RNS_") ~= nil then
-                        local obj = global.entityTable[ent.unit_number]
+                    if ent ~= nil and storage.entityTable[ent.unit_number] ~= nil and string.match(ent.name, "RNS_") ~= nil then
+                        local obj = storage.entityTable[ent.unit_number]
                         if (string.match(obj.thisEntity.name, "RNS_NetworkCableIO") ~= nil and obj:getConnectionDirection() == area.direction)
                             or (string.match(obj.thisEntity.name, "RNS_NetworkCableRamp") ~= nil and obj:getConnectionDirection() == area.direction)
                             or obj.thisEntity.name == Constants.WirelessGrid.name
@@ -318,14 +318,14 @@ function BaseNet.generateArms(object)
 end
 
 function BaseNet.update_network_controller(controller, objectID)
-    if controller == nil or global.entityTable[controller.entID] == nil then return end
+    if controller == nil or storage.entityTable[controller.entID] == nil then return end
     if objectID == nil or controller.network.connectedEntities[objectID] ~= nil then
         controller.network.shouldRefresh = true
     end
 end
 
 function BaseNet.exists_in_network(controller, objectID)
-    if controller == nil or global.entityTable[controller.entID] == nil then return false end
+    if controller == nil or storage.entityTable[controller.entID] == nil then return false end
     --if controller.interactable and controller:interactable() == false then return false end
     return controller.network.connectedEntities[objectID] ~= nil
 end
@@ -352,8 +352,8 @@ function BaseNet.postArms(object)
         --if object.thisEntity.name == Constants.Detector.name and object.disconnects[area.direction] == true and object.newState == true then goto next end
         local ents = object.thisEntity.surface.find_entities_filtered{area={area.startP, area.endP}}
         for _, ent in pairs(ents) do
-            if ent ~= nil and ent.valid == true and global.entityTable[ent.unit_number] ~= nil and string.match(ent.name, "RNS_") ~= nil then
-                local obj = global.entityTable[ent.unit_number]
+            if ent ~= nil and ent.valid == true and storage.entityTable[ent.unit_number] ~= nil and string.match(ent.name, "RNS_") ~= nil then
+                local obj = storage.entityTable[ent.unit_number]
                 --if (string.match(obj.thisEntity.name, "RNS_NetworkCableIO") ~= nil and obj:getConnectionDirection() == area.direction)
                 --    or (string.match(obj.thisEntity.name, "RNS_NetworkCableRamp") ~= nil and obj:getConnectionDirection() == area.direction)
                 --    or obj.thisEntity.name == Constants.WirelessGrid.name
@@ -660,7 +660,7 @@ function BaseNet.transfer_from_network_to_tank(network, to_tank, transportCapaci
     if fluid_box.filter ~= "" and fluid_box.filter ~= filter then return 0 end
     
     if network:has_cache("export", "drive", filter) then
-        local drive = global.entityTable[network:get_cache("export", "drive", filter)]
+        local drive = storage.entityTable[network:get_cache("export", "drive", filter)]
         if drive == nil or drive.valid == false or network:exists(drive.entID) == false then
             network:remove_cache("export", "drive", filter)
         else
@@ -674,7 +674,7 @@ function BaseNet.transfer_from_network_to_tank(network, to_tank, transportCapaci
     end
 
     if network:has_cache("export", "external", filter) then
-        local external = global.entityTable[network:get_cache("export", "external", filter)]
+        local external = storage.entityTable[network:get_cache("export", "external", filter)]
         if external == nil or external.valid == false or network:exists(external.entID) == false then
             network:remove_cache("export", "external", filter)
         else
@@ -799,7 +799,7 @@ function BaseNet.transfer_from_tank_to_network(network, from_tank, transportCapa
     local fluid = from_tank.thisEntity.fluidbox[fluid_box.index]
 
     if network:has_cache("import", "drive", fluid.name) then
-        local drive = global.entityTable[network:get_cache("import", "drive", fluid.name)]
+        local drive = storage.entityTable[network:get_cache("import", "drive", fluid.name)]
         if drive == nil or drive.valid == false or network:exists(drive.entID) == false then
             network:remove_cache("import", "drive", fluid.name)
         else
@@ -813,7 +813,7 @@ function BaseNet.transfer_from_tank_to_network(network, from_tank, transportCapa
     end
     
     if network:has_cache("import", "external", fluid.name) then
-        local external = global.entityTable[network:get_cache("import", "external", fluid.name)]
+        local external = storage.entityTable[network:get_cache("import", "external", fluid.name)]
         if external == nil or external.valid == false or network:exists(external.entID) == false then
             network:remove_cache("import", "external", fluid.name)
         else
@@ -951,10 +951,10 @@ function BaseNet.transfer_from_network_to_inv(network, to_inv, itemstack_master,
         local inv = to_inv.thisEntity.get_inventory(to_inv.inventory.input.values[to_inv.inventory.input.index])
         if BaseNet.inventory_is_sortable(inv) then inv.sort_and_merge() end
 
-        local stacks = math.ceil(inv.get_item_count(itemstack_master.name) / game.item_prototypes[itemstack_master.name].stack_size)
-        local lastStackFillableAmount = game.item_prototypes[itemstack_master.name].stack_size*stacks - inv.get_item_count(itemstack_master.name)
+        local stacks = math.ceil(inv.get_item_count(itemstack_master.name) / prototypes.item[itemstack_master.name].stack_size)
+        local lastStackFillableAmount = prototypes.item[itemstack_master.name].stack_size*stacks - inv.get_item_count(itemstack_master.name)
         local emptyStacks = inv.count_empty_stacks(true, false)
-        local emptyStacksFillableAmount = game.item_prototypes[itemstack_master.name].stack_size*emptyStacks + lastStackFillableAmount
+        local emptyStacksFillableAmount = prototypes.item[itemstack_master.name].stack_size*emptyStacks + lastStackFillableAmount
         
         if inv.can_insert(itemstack_master.name) == false then goto fin end
 
@@ -962,7 +962,7 @@ function BaseNet.transfer_from_network_to_inv(network, to_inv, itemstack_master,
         if transferCapacity <= 0 then goto fin end
 
         if network:has_cache("export", "drive", itemstack_master.name) and itemstack_master.modified == false then
-            local drive = global.entityTable[network:get_cache("export", "drive", itemstack_master.name)]
+            local drive = storage.entityTable[network:get_cache("export", "drive", itemstack_master.name)]
             --ID:rebuild(drive)
             if drive == nil or drive.valid == false or network:exists(drive.entID) == false then
                 network:remove_cache("export", "drive", itemstack_master.name)
@@ -979,7 +979,7 @@ function BaseNet.transfer_from_network_to_inv(network, to_inv, itemstack_master,
         end
 
         if network:has_cache("export", "external", itemstack_master.name) then
-            local external = global.entityTable[network:get_cache("export", "external", itemstack_master.name)]
+            local external = storage.entityTable[network:get_cache("export", "external", itemstack_master.name)]
             if external == nil or external.valid == false or network:exists(external.entID) == false then
                 network:remove_cache("export", "external", itemstack_master.name)
             else
@@ -1063,10 +1063,10 @@ function BaseNet:insert_item_into_external(external, item, inv_item, itemstack_m
         if transferCapacity <= 0 then break end
         local ext_inv = external.focusedEntity.thisEntity.get_inventory(external.focusedEntity.inventory.input.values[external.focusedEntity.inventory.input.index])
         if ext_inv.can_insert(inv_item.name) then
-            local stacks = math.ceil(ext_inv.get_item_count(itemstack_master.name) / game.item_prototypes[itemstack_master.name].stack_size)
-            local lastStackFillableAmount = game.item_prototypes[itemstack_master.name].stack_size*stacks - ext_inv.get_item_count(itemstack_master.name)
+            local stacks = math.ceil(ext_inv.get_item_count(itemstack_master.name) / prototypes.item[itemstack_master.name].stack_size)
+            local lastStackFillableAmount = prototypes.item[itemstack_master.name].stack_size*stacks - ext_inv.get_item_count(itemstack_master.name)
             local emptyStacks = ext_inv.count_empty_stacks(true, false)
-            local emptyStacksFillableAmount = game.item_prototypes[itemstack_master.name].stack_size*emptyStacks + lastStackFillableAmount
+            local emptyStacksFillableAmount = prototypes.item[itemstack_master.name].stack_size*emptyStacks + lastStackFillableAmount
 
             local extractSize = math.min(math.min(transferCapacity, inv_item.count), emptyStacksFillableAmount)
             local splitStack = inv_item:split(itemstack_master, extractSize, exact)
@@ -1126,7 +1126,7 @@ function BaseNet.transfer_from_inv_to_network(network, from_inv, itemstack_maste
                 if inv_item.modified == true and network:is_ItemExternalPartitions_Full() then goto next end
 
                 if network:has_cache("import", "drive", inv_item.name) and inv_item.modified == false then
-                    local drive = global.entityTable[network:get_cache("import", "drive", inv_item.name)]
+                    local drive = storage.entityTable[network:get_cache("import", "drive", inv_item.name)]
                     if drive == nil or drive.valid == false or network:exists(drive.entID) == false then
                         network:remove_cache("import", "drive", inv_item.name)
                     else
@@ -1142,7 +1142,7 @@ function BaseNet.transfer_from_inv_to_network(network, from_inv, itemstack_maste
                     end
                 end
                 if network:has_cache("import", "external", item.name) then
-                    local external = global.entityTable[network:get_cache("import", "external", inv_item.name)]
+                    local external = storage.entityTable[network:get_cache("import", "external", inv_item.name)]
                     if external == nil or external.valid == false or network:exists(external.entID) == false then
                         network:remove_cache("import", "external", inv_item.name)
                     else
@@ -1212,7 +1212,7 @@ function BaseNet.transfer_from_cursor_to_network(network, item, transferCapacity
     local master = inv_item:copy()
     for i = 1, 1 do
         if network:has_cache("import", "drive", inv_item.name) and inv_item.modified == false then
-            local drive = global.entityTable[network:get_cache("import", "drive", inv_item.name)]
+            local drive = storage.entityTable[network:get_cache("import", "drive", inv_item.name)]
             if drive == nil or drive.valid == false or network:exists(drive.entID) == false then
                 network:remove_cache("import", "drive", inv_item.name)
             else
@@ -1228,7 +1228,7 @@ function BaseNet.transfer_from_cursor_to_network(network, item, transferCapacity
             end
         end
         if network:has_cache("import", "external", item.name) then
-            local external = global.entityTable[network:get_cache("import", "external", inv_item.name)]
+            local external = storage.entityTable[network:get_cache("import", "external", inv_item.name)]
             if external == nil or external.valid == false or network:exists(external.entID) == false then
                 network:remove_cache("import", "external", inv_item.name)
             else
@@ -1298,7 +1298,7 @@ function BaseNet.getOperableObjects(array, group)
             }
             for mode, io in pairs(priority) do
                 for _, o in pairs(io) do
-                    o = global.entityTable[o]
+                    o = storage.entityTable[o]
                     if o.thisEntity.valid and o.thisEntity.to_be_deconstructed() == false then
                         objs[p][mode][o.entID] = o
                     end
@@ -1444,9 +1444,9 @@ end
 --Get total powerusage of connected objects
 function BaseNet:getTotalObjects()
     --[[return  BaseNet.get_powerusage(BaseNet.getOperableObjects(self.ItemDriveTable)) + BaseNet.get_powerusage(BaseNet.getOperableObjects(self.FluidDriveTable))
-            + BaseNet.get_powerusage(BaseNet.getOperableObjects(self.ItemIOTable, "io"), true)*global.IIOMultiplier + BaseNet.get_powerusage(BaseNet.getOperableObjects(self.FluidIOTable, "io"), true)*global.FIOMultiplier
+            + BaseNet.get_powerusage(BaseNet.getOperableObjects(self.ItemIOTable, "io"), true)*storage.IIOMultiplier + BaseNet.get_powerusage(BaseNet.getOperableObjects(self.FluidIOTable, "io"), true)*storage.FIOMultiplier
             + BaseNet.get_powerusage(BaseNet.getOperableObjects(self.ExternalIOTable, "eo"), true) + BaseNet.get_powerusage(BaseNet.getOperableObjects(self.NetworkInventoryInterfaceTable))
-            + BaseNet.get_powerusage(BaseNet.getOperableObjects(self.WirelessTransmitterTable))*global.WTRangeMultiplier + BaseNet.get_powerusage(BaseNet.getOperableObjects(self.DetectorTable))
+            + BaseNet.get_powerusage(BaseNet.getOperableObjects(self.WirelessTransmitterTable))*storage.WTRangeMultiplier + BaseNet.get_powerusage(BaseNet.getOperableObjects(self.DetectorTable))
             + BaseNet.get_powerusage(BaseNet.getOperableObjects(self.TransmitterTable)) + BaseNet.get_powerusage(BaseNet.getOperableObjects(self.ReceiverTable))]]
     return self.powerDraw
 end

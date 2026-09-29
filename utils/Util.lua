@@ -2,7 +2,7 @@ Util = Util or {}
 
 function Util.safeCall(fName, ...)
 	-- Dont use pcall() if the game is in Instrument mode --
-	if game.active_mods["debugadapter"] then
+	if script.active_mods["debugadapter"] then
 		fName(...)
 		return
 	end
@@ -129,14 +129,14 @@ function Util.copy(array)
 end
 
 function Util.get_item_name(itemName)
-	if game.item_prototypes[itemName] ~= nil then
-		return game.item_prototypes[itemName].localised_name
+	if prototypes.item[itemName] ~= nil then
+		return prototypes.item[itemName].localised_name
 	end
 end
 
 function Util.get_fluid_name(fluidName)
-	if game.fluid_prototypes[fluidName] ~= nil then
-		return game.fluid_prototypes[fluidName].localised_name
+	if prototypes.fluid[fluidName] ~= nil then
+		return prototypes.fluid[fluidName].localised_name
 	end
 end
 
@@ -173,14 +173,14 @@ function Util.item_add_list_into_table(tab, list)
 			return
 		end
 	end
-	if list.ammo ~= nil and list.count > 1 and list.ammo ~= game.item_prototypes[list.name].magazine_size then
+	if list.ammo ~= nil and list.count > 1 and list.ammo ~= prototypes.item[list.name].magazine_size then
 		Util.item_add_list_into_table(tab, list:split(list, 1, true))
 		if list.count > 0 then
 			Util.item_add_list_into_table(tab, list)
 		end
 		return
 	end
-	if list.durability ~= nil and list.count > 1 and list.durability ~= game.item_prototypes[list.name].durability then
+	if list.durability ~= nil and list.count > 1 and list.durability ~= prototypes.item[list.name].durability then
 		Util.item_add_list_into_table(tab, list:split(list, 1, true))
 		if list.count > 0 then
 			Util.item_add_list_into_table(tab, list)
@@ -199,7 +199,7 @@ function Util.fluid_add_list_into_table(tab, list)
 	for _, v in pairs(tab) do
 		if v.name == list.name then
 			v.amount = v.amount + list.amount
-			v.temperature = (v.temperature * v.amount + list.amount * (list.temperature or game.fluid_prototypes[list.name].default_temperature)) / (v.amount + list.amount)
+			v.temperature = (v.temperature * v.amount + list.amount * (list.temperature or prototypes.fluid[list.name].default_temperature)) / (v.amount + list.amount)
 			return
 		end
 	end

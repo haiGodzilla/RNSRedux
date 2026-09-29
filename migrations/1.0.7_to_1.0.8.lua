@@ -1,17 +1,17 @@
-if global.allowMigration == false then return end
+if storage.allowMigration == false then return end
 
---[[for _, obj in pairs(global.objectTables) do
+--[[for _, obj in pairs(storage.objectTables) do
     if obj.tableName ~= nil and obj.tag ~= nil and _G[obj.tag] ~= nil then
-        for _, entry in pairs(global[obj.tableName] or {}) do
+        for _, entry in pairs(storage[obj.tableName] or {}) do
             _G[obj.tag]:rebuild(entry)
         end
     end
 end]]
 
-for _, obj in pairs(global.objectTables) do
+for _, obj in pairs(storage.objectTables) do
     if obj.tableName ~= nil and obj.tag ~= nil and _G[obj.tag] ~= nil then
         if obj.tag == "NC" then
-            for _, entry in pairs(global[obj.tableName] or {}) do
+            for _, entry in pairs(storage[obj.tableName] or {}) do
                 entry.network.Contents = {
                     item = {},
                     fluid = {}
@@ -25,7 +25,7 @@ for _, obj in pairs(global.objectTables) do
         end
 
         if obj.tag == "ID" then
-            for _, entry in pairs(global[obj.tableName] or {}) do
+            for _, entry in pairs(storage[obj.tableName] or {}) do
                 entry.filters = {}
                 entry.guiFilters = {}
                 for i = 1, 5 do
@@ -39,7 +39,7 @@ for _, obj in pairs(global.objectTables) do
                     setmetatable(t, mt)
                     mt.__index = Itemstack
                     t.name = v.name
-                    t.type = game.item_prototypes[v.name].type
+                    t.type = prototypes.item[v.name].type
                     t.count = v.count
                     t.health = 1.0
                     t.ammo = v.ammo
@@ -51,7 +51,7 @@ for _, obj in pairs(global.objectTables) do
         end
 
         if obj.tag == "FD" then
-            for _, entry in pairs(global[obj.tableName] or {}) do
+            for _, entry in pairs(storage[obj.tableName] or {}) do
                 entry.filters = {}
                 entry.guiFilters = {}
                 for i = 1, 5 do
@@ -68,7 +68,7 @@ for _, obj in pairs(global.objectTables) do
         end
 
         if obj.tag == "EIO" then
-            for _, entry in pairs(global[obj.tableName] or {}) do
+            for _, entry in pairs(storage[obj.tableName] or {}) do
                 entry.whitelistBlacklist = entry.whitelist and "whitelist" or "blacklist"
                 entry.whitelist = nil
                 local oldFilters = entry.filters
@@ -96,7 +96,7 @@ for _, obj in pairs(global.objectTables) do
         end
 
         if obj.tag == "IIO3" then
-            for _, entry in pairs(global[obj.tableName] or {}) do
+            for _, entry in pairs(storage[obj.tableName] or {}) do
                 entry.whitelistBlacklist = entry.whitelist and "whitelist" or "blacklist"
                 entry.supportModified = entry.metadataMode
                 local oldFilters = entry.filters

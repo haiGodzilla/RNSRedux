@@ -73,10 +73,10 @@ function Itemstack:new(item)
     t.extras.allow_manual_label_change = item.is_item_with_label and item.allow_manual_label_change or nil
 
     t.extras.extends_inventory = item.is_item_with_inventory and item.extends_inventory or nil
-    if t.extras.extends_inventory ~= nil and t.extras.extends_inventory ~= game.item_prototypes[item.name].extends_inventory_by_default then offset = offset + 1 end
+    if t.extras.extends_inventory ~= nil and t.extras.extends_inventory ~= prototypes.item[item.name].extends_inventory_by_default then offset = offset + 1 end
 
     t.extras.prioritize_insertion_mode = item.is_item_with_inventory and item.prioritize_insertion_mode or nil
-    if t.extras.prioritize_insertion_mode ~= nil and t.extras.prioritize_insertion_mode ~= game.item_prototypes[item.name].insertion_priority_mode then offset = offset + 1 end
+    if t.extras.prioritize_insertion_mode ~= nil and t.extras.prioritize_insertion_mode ~= prototypes.item[item.name].insertion_priority_mode then offset = offset + 1 end
 
     t.extras.item_inventory = item.is_item_with_inventory and Util.serialize_inventory(item.get_inventory(defines.inventory.item_main)) or nil
     if t.extras.item_inventory then offset = offset + 1 end
@@ -158,8 +158,8 @@ end
 
 
 function Itemstack.create_template(name)
-    if name == nil or game.item_prototypes[name] == nil then return nil end
-    local prototype = game.item_prototypes[name]
+    if name == nil or prototypes.item[name] == nil then return nil end
+    local prototype = prototypes.item[name]
     local t = {}
     local mt = {}
     setmetatable(t, mt)
@@ -232,7 +232,7 @@ function Itemstack:split(itemstack_master, amount, exact)
     local split = self:copy()
 
     if exact then
-        if self.ammo ~= nil and self.ammo ~= itemstack_master.ammo and self.ammo ~= game.item_prototypes[self.name].magazine_size then
+        if self.ammo ~= nil and self.ammo ~= itemstack_master.ammo and self.ammo ~= prototypes.item[self.name].magazine_size then
             if self.count <= 1 then return nil end
             local newAmount = math.min(self.count - 1, amount)
             split.count = newAmount
@@ -241,7 +241,7 @@ function Itemstack:split(itemstack_master, amount, exact)
             split.ammo = itemstack_master.ammo
             return split
         end
-        if self.durability ~= nil and self.durability ~= itemstack_master.durability and self.durability ~= game.item_prototypes[self.name].durability then
+        if self.durability ~= nil and self.durability ~= itemstack_master.durability and self.durability ~= prototypes.item[self.name].durability then
             if self.count <= 1 then return nil end
             local newAmount = math.min(self.count - 1, amount)
             split.count = newAmount
@@ -260,13 +260,13 @@ function Itemstack:split(itemstack_master, amount, exact)
         --split.ammo = itemstack_master.ammo ~= itemstack_master.prototype.magazine_size and self.ammo or itemstack_master.prototype.magazine_size
         --self.ammo = itemstack_master.ammo ~= itemstack_master.prototype.magazine_size and itemstack_master.prototype.magazine_size or self.ammo
         split.ammo = self.ammo
-        self.ammo = game.item_prototypes[self.name].magazine_size
+        self.ammo = prototypes.item[self.name].magazine_size
     end
     if self.durability ~= nil then
         --split.durability = itemstack_master.durability ~= itemstack_master.prototype.durability and self.durability or itemstack_master.prototype.durability
         --self.durability = itemstack_master.durability ~= itemstack_master.prototype.durability and itemstack_master.prototype.durability or self.durability
         split.durability = self.durability
-        self.durability = game.item_prototypes[self.name].durability
+        self.durability = prototypes.item[self.name].durability
     end
 
     return split

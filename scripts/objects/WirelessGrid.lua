@@ -40,7 +40,7 @@ function WG:update()
         self:remove()
         return
     end
-	if self.connected and (global.NetworkControllers[self.connected] == nil or global.NetworkControllers[self.connected].thisEntity == nil or global.NetworkControllers[self.connected].thisEntity.valid == false) then
+	if self.connected and (storage.NetworkControllers[self.connected] == nil or storage.NetworkControllers[self.connected].thisEntity == nil or storage.NetworkControllers[self.connected].thisEntity.valid == false) then
 		--self.connected = nil
 		return
 	end
@@ -70,8 +70,8 @@ end
 
 function WG:DataConvert_EntityToItem(item)
 	local description = {"", item.prototype.localised_description, {"item-description.RNS_WirelessGrid_SortOrder", self.sortOrder}}
-	if self.connected and global.NetworkControllers[self.connected] then
-        Util.add_list_into_table(description, {{"item-description.RNS_TransReceiverConnectionTag"}, global.NetworkControllers[self.connected].nametag})
+	if self.connected and storage.NetworkControllers[self.connected] then
+        Util.add_list_into_table(description, {{"item-description.RNS_TransReceiverConnectionTag"}, storage.NetworkControllers[self.connected].nametag})
     end
     item.set_tag(Constants.Settings.RNS_Tag, {connected=self.connected, sortOrder=self.sortOrder})
     item.custom_description = description
@@ -223,7 +223,7 @@ function WG:getTooltips(guiTable, mainFrame, justCreated)
 		local infoFlow = GuiApi.add_flow(guiTable, "", informationFrame, "vertical")
 
         if self.connected then
-            if global.NetworkControllers[self.connected] == nil or global.NetworkControllers[self.connected].thisEntity == nil or global.NetworkControllers[self.connected].thisEntity.valid == false then
+            if storage.NetworkControllers[self.connected] == nil or storage.NetworkControllers[self.connected].thisEntity == nil or storage.NetworkControllers[self.connected].thisEntity.valid == false then
                 self.connected = nil
             end
         end
@@ -233,7 +233,7 @@ function WG:getTooltips(guiTable, mainFrame, justCreated)
         local selected = 1
         local index = 1
         local values = {""}
-        for id, obj in pairs(global.NetworkControllers) do
+        for id, obj in pairs(storage.NetworkControllers) do
             if obj.thisEntity.valid and obj.nametag then
                 index = index + 1
                 table.insert(values, obj.nametag)
@@ -287,9 +287,9 @@ function WG:getTooltips(guiTable, mainFrame, justCreated)
 	--if self.network_controller_surface == nil or self.thisEntity.surface.index ~= self.network_controller_surface then return end
 	--if self.network_controller_position.x == nil or self.network_controller_position.y == nil then return end
 	--if game.surfaces[self.network_controller_surface].find_entity(Constants.NetworkController.main.name, self.network_controller_position) == nil then return end
-	if self.connected == nil or global.NetworkControllers[self.connected] == nil then return end
+	if self.connected == nil or storage.NetworkControllers[self.connected] == nil then return end
 
-	if self.connected and global.NetworkControllers[self.connected] and global.NetworkControllers[self.connected]:find_wirelessgrid_with_wirelessTransmitter(self.thisEntity.unit_number) == false then
+	if self.connected and storage.NetworkControllers[self.connected] and storage.NetworkControllers[self.connected]:find_wirelessgrid_with_wirelessTransmitter(self.thisEntity.unit_number) == false then
 		if justCreated == true then RNSPlayer.thisEntity.print({"gui-description.RNS_NetworkController_Far"}) end
 		return
 	end
@@ -329,12 +329,12 @@ end
 		if item.ammo ~= nil then
 			table.insert(buttonText, "\n")
 			table.insert(buttonText, {"gui-description.RNS_ammo"})
-			table.insert(buttonText, item.ammo .. "/" .. game.item_prototypes[item.name].magazine_size)
+			table.insert(buttonText, item.ammo .. "/" .. prototypes.item[item.name].magazine_size)
 		end
 		if item.durability ~= nil then
 			table.insert(buttonText, "\n")
 			table.insert(buttonText, {"gui-description.RNS_durability"})
-			table.insert(buttonText, item.durability .. "/" .. game.item_prototypes[item.name].durability)
+			table.insert(buttonText, item.durability .. "/" .. prototypes.item[item.name].durability)
 		end
 		if item.connected_entity ~= nil then
 			table.insert(buttonText, "\n")
@@ -342,12 +342,12 @@ end
 			table.insert(buttonText, item.connected_entity.entity_label or Util.get_item_name(item.connected_entity.name))
 		end
 		if guiTable.vars.WG.player[itemIndex] == nil then
-			table.insert(guiTable.vars.WG.player, GuiApi.add_button(guiTable, "RNS_WG_PInv_".. itemIndex, tableList, "item/" .. (item.name), "item/" .. (item.name), "item/" .. (item.name), buttonText, 37, false, true, item.count, ((item.modified or (item.ammo and item.ammo < game.item_prototypes[item.name].magazine_size) or (item.durability and item.durability < game.item_prototypes[item.name].durability)) and {Constants.Settings.RNS_Gui.button_2} or {Constants.Settings.RNS_Gui.button_1})[1], {ID=self.thisEntity.unit_number, name=(item.name), stack=item}))
+			table.insert(guiTable.vars.WG.player, GuiApi.add_button(guiTable, "RNS_WG_PInv_".. itemIndex, tableList, "item/" .. (item.name), "item/" .. (item.name), "item/" .. (item.name), buttonText, 37, false, true, item.count, ((item.modified or (item.ammo and item.ammo < prototypes.item[item.name].magazine_size) or (item.durability and item.durability < prototypes.item[item.name].durability)) and {Constants.Settings.RNS_Gui.button_2} or {Constants.Settings.RNS_Gui.button_1})[1], {ID=self.thisEntity.unit_number, name=(item.name), stack=item}))
 		else
 			local button = guiTable.vars.WG.player[itemIndex]
 			if Itemstack:reload(button.tags.stack):compare_itemstacks(item, true, true) == false then
 				button.destroy()
-				guiTable.vars.WG.player[itemIndex] = GuiApi.add_button(guiTable, "RNS_WG_PInv_".. itemIndex, tableList, "item/" .. (item.name), "item/" .. (item.name), "item/" .. (item.name), buttonText, 37, false, true, item.count, ((item.modified or (item.ammo and item.ammo < game.item_prototypes[item.name].magazine_size) or (item.durability and item.durability < game.item_prototypes[item.name].durability)) and {Constants.Settings.RNS_Gui.button_2} or {Constants.Settings.RNS_Gui.button_1})[1], {ID=self.thisEntity.unit_number, name=(item.name), stack=item})
+				guiTable.vars.WG.player[itemIndex] = GuiApi.add_button(guiTable, "RNS_WG_PInv_".. itemIndex, tableList, "item/" .. (item.name), "item/" .. (item.name), "item/" .. (item.name), buttonText, 37, false, true, item.count, ((item.modified or (item.ammo and item.ammo < prototypes.item[item.name].magazine_size) or (item.durability and item.durability < prototypes.item[item.name].durability)) and {Constants.Settings.RNS_Gui.button_2} or {Constants.Settings.RNS_Gui.button_1})[1], {ID=self.thisEntity.unit_number, name=(item.name), stack=item})
 			end
 			guiTable.vars.WG.player[itemIndex].tooltip = buttonText
 			guiTable.vars.WG.player[itemIndex].number = item.count
@@ -370,9 +370,9 @@ function WG:createNetworkInventory(guiTable, RNSPlayer, text)
 	local inv = {}
 	local fluid = {}
 
-	local itemDriveStorage = global.NetworkControllers[self.connected].network.StoredPartition.itemDrive.storedAmount
-	local itemDriveCapacity = global.NetworkControllers[self.connected].network.StoredPartition.itemDrive.capacity
-	for _, i in pairs(global.NetworkControllers[self.connected].network.interfaceCache.item) do
+	local itemDriveStorage = storage.NetworkControllers[self.connected].network.StoredPartition.itemDrive.storedAmount
+	local itemDriveCapacity = storage.NetworkControllers[self.connected].network.StoredPartition.itemDrive.capacity
+	for _, i in pairs(storage.NetworkControllers[self.connected].network.interfaceCache.item) do
 		for _, v in pairs(i) do
 			local item = Itemstack:reload(v)
 			RNSPlayer.thisEntity.request_translation(Util.get_item_name(item.name))
@@ -411,9 +411,9 @@ function WG:createNetworkInventory(guiTable, RNSPlayer, text)
 	guiTable.vars.ItemDriveStorageBar.value = itemDriveCapacity ~= 0 and (itemDriveStorage/itemDriveCapacity) or 0
 	guiTable.vars.ItemDriveStorageBar.tooltip = {"gui-description.RNS_ItemDriveStorageBar", Util.toRNumber(itemDriveStorage), Util.toRNumber(itemDriveCapacity)}
 
-	local fluidDriveStorage = global.NetworkControllers[self.connected].network.StoredPartition.fluidDrive.storedAmount
-	local fluidDriveCapacity = global.NetworkControllers[self.connected].network.StoredPartition.fluidDrive.capacity
-	for _, i in pairs(global.NetworkControllers[self.connected].network.interfaceCache.fluid) do
+	local fluidDriveStorage = storage.NetworkControllers[self.connected].network.StoredPartition.fluidDrive.storedAmount
+	local fluidDriveCapacity = storage.NetworkControllers[self.connected].network.StoredPartition.fluidDrive.capacity
+	for _, i in pairs(storage.NetworkControllers[self.connected].network.interfaceCache.fluid) do
 		for _, c in pairs(i) do
 			if c == nil then goto continue end
 			RNSPlayer.thisEntity.request_translation(Util.get_fluid_name(c.name))
@@ -447,10 +447,10 @@ function WG:createNetworkInventory(guiTable, RNSPlayer, text)
 	guiTable.vars.FluidDriveStorageBar.value = fluidDriveCapacity ~= 0 and (fluidDriveStorage/fluidDriveCapacity) or 0
 	guiTable.vars.FluidDriveStorageBar.tooltip = {"gui-description.RNS_FluidDriveStorageBar", Util.toRNumber(fluidDriveStorage), Util.toRNumber(fluidDriveCapacity)}
 
-	local externalItemStorage = global.NetworkControllers[self.connected].network.StoredPartition.itemExternal.storedAmount
-	local externalFluidStorage = global.NetworkControllers[self.connected].network.StoredPartition.fluidExternal.storedAmount
-	local externalItemCapacity = global.NetworkControllers[self.connected].network.StoredPartition.itemExternal.capacity
-	local externalFluidCapacity = global.NetworkControllers[self.connected].network.StoredPartition.fluidExternal.capacity
+	local externalItemStorage = storage.NetworkControllers[self.connected].network.StoredPartition.itemExternal.storedAmount
+	local externalFluidStorage = storage.NetworkControllers[self.connected].network.StoredPartition.fluidExternal.storedAmount
+	local externalItemCapacity = storage.NetworkControllers[self.connected].network.StoredPartition.itemExternal.capacity
+	local externalFluidCapacity = storage.NetworkControllers[self.connected].network.StoredPartition.fluidExternal.capacity
 
 	--[[for _, priority in pairs(self.networkController.network:filter_externalIO_by_valid_signal()) do
 		for _, type in pairs(priority) do
@@ -521,12 +521,12 @@ function WG:createNetworkInventory(guiTable, RNSPlayer, text)
 		if item.ammo ~= nil then
 			table.insert(buttonText, "\n")
 			table.insert(buttonText, {"gui-description.RNS_ammo"})
-			table.insert(buttonText, item.ammo .. "/" .. game.item_prototypes[item.name].magazine_size)
+			table.insert(buttonText, item.ammo .. "/" .. prototypes.item[item.name].magazine_size)
 		end
 		if item.durability ~= nil then
 			table.insert(buttonText, "\n")
 			table.insert(buttonText, {"gui-description.RNS_durability"})
-			table.insert(buttonText, item.durability .. "/" .. game.item_prototypes[item.name].durability)
+			table.insert(buttonText, item.durability .. "/" .. prototypes.item[item.name].durability)
 		end
 		if item.connected_entity ~= nil then
 			table.insert(buttonText, "\n")
@@ -534,15 +534,15 @@ function WG:createNetworkInventory(guiTable, RNSPlayer, text)
 			table.insert(buttonText, item.connected_entity.entity_label or Util.get_item_name(item.connected_entity.name))
 		end
 		if guiTable.vars.WG.cache.items[itemIndex] == nil then
-			table.insert(guiTable.vars.WG.cache.items, GuiApi.add_button(guiTable, "RNS_WG_IDInv_".. itemIndex, guiTable.vars.WirelessGridTableItems, "item/" .. (item.name), "item/" .. (item.name), "item/" .. (item.name), buttonText, 37, false, true, item.count, ((item.modified or (item.ammo and item.ammo < game.item_prototypes[item.name].magazine_size) or (item.durability and item.durability < game.item_prototypes[item.name].durability)) and {Constants.Settings.RNS_Gui.button_2} or {Constants.Settings.RNS_Gui.button_1})[1], {ID=self.thisEntity.unit_number, name=(item.name), stack=item}, itemIndex))
+			table.insert(guiTable.vars.WG.cache.items, GuiApi.add_button(guiTable, "RNS_WG_IDInv_".. itemIndex, guiTable.vars.WirelessGridTableItems, "item/" .. (item.name), "item/" .. (item.name), "item/" .. (item.name), buttonText, 37, false, true, item.count, ((item.modified or (item.ammo and item.ammo < prototypes.item[item.name].magazine_size) or (item.durability and item.durability < prototypes.item[item.name].durability)) and {Constants.Settings.RNS_Gui.button_2} or {Constants.Settings.RNS_Gui.button_1})[1], {ID=self.thisEntity.unit_number, name=(item.name), stack=item}, itemIndex))
 		else
 			local button = guiTable.vars.WG.cache.items[itemIndex]
 			if button.tags.stack == nil or Itemstack:reload(button.tags.stack):compare_itemstacks(item, true, true) == false then
 				button.destroy()
-				guiTable.vars.WG.cache.items[itemIndex] = GuiApi.add_button(guiTable, "RNS_WG_IDInv_".. itemIndex, guiTable.vars.WirelessGridTableItems, "item/" .. (item.name), "item/" .. (item.name), "item/" .. (item.name), buttonText, 37, false, true, item.count, ((item.modified or (item.ammo and item.ammo < game.item_prototypes[item.name].magazine_size) or (item.durability and item.durability < game.item_prototypes[item.name].durability)) and {Constants.Settings.RNS_Gui.button_2} or {Constants.Settings.RNS_Gui.button_1})[1], {ID=self.thisEntity.unit_number, name=(item.name), stack=item}, itemIndex)
+				guiTable.vars.WG.cache.items[itemIndex] = GuiApi.add_button(guiTable, "RNS_WG_IDInv_".. itemIndex, guiTable.vars.WirelessGridTableItems, "item/" .. (item.name), "item/" .. (item.name), "item/" .. (item.name), buttonText, 37, false, true, item.count, ((item.modified or (item.ammo and item.ammo < prototypes.item[item.name].magazine_size) or (item.durability and item.durability < prototypes.item[item.name].durability)) and {Constants.Settings.RNS_Gui.button_2} or {Constants.Settings.RNS_Gui.button_1})[1], {ID=self.thisEntity.unit_number, name=(item.name), stack=item}, itemIndex)
 			--elseif guiTable.vars.NII.item[itemIndex].number ~= item.count then
 			--	button.destroy()
-			--	guiTable.vars.NII.item[itemIndex] = GuiApi.add_button(guiTable, "RNS_NII_IDInv_".. itemIndex, tableList, "item/" .. (item.name), "item/" .. (item.name), "item/" .. (item.name), buttonText, 37, false, true, item.count, ((item.modified or (item.ammo and item.ammo < game.item_prototypes[item.name].magazine_size) or (item.durability and item.durability < game.item_prototypes[item.name].durability)) and {Constants.Settings.RNS_Gui.button_2} or {Constants.Settings.RNS_Gui.button_1})[1], {ID=self.thisEntity.unit_number, name=(item.name), stack=item})
+			--	guiTable.vars.NII.item[itemIndex] = GuiApi.add_button(guiTable, "RNS_NII_IDInv_".. itemIndex, tableList, "item/" .. (item.name), "item/" .. (item.name), "item/" .. (item.name), buttonText, 37, false, true, item.count, ((item.modified or (item.ammo and item.ammo < prototypes.item[item.name].magazine_size) or (item.durability and item.durability < prototypes.item[item.name].durability)) and {Constants.Settings.RNS_Gui.button_2} or {Constants.Settings.RNS_Gui.button_1})[1], {ID=self.thisEntity.unit_number, name=(item.name), stack=item})
 			end
 			guiTable.vars.WG.cache.items[itemIndex].number = item.count
 			guiTable.vars.WG.cache.items[itemIndex].tags = {ID=self.thisEntity.unit_number, name=(item.name), stack=item}
@@ -563,7 +563,7 @@ function WG:createNetworkInventory(guiTable, RNSPlayer, text)
 	Util.merge_sort(fluid, nil, nil, self.sortOrder)
 	for _, c in pairs(fluid) do
 		fluidIndex = fluidIndex + 1
-		local buttonText = {"", "[color=blue]", Util.get_fluid_name(c.name), "[/color]\n", {"gui-description.RNS_count"}, Util.toRNumber(c.amount), "\n", {"gui-description.RNS_Temperature"}, c.temperature or game.fluid_prototypes[c.name].default_temperature}
+		local buttonText = {"", "[color=blue]", Util.get_fluid_name(c.name), "[/color]\n", {"gui-description.RNS_count"}, Util.toRNumber(c.amount), "\n", {"gui-description.RNS_Temperature"}, c.temperature or prototypes.fluid[c.name].default_temperature}
 		if guiTable.vars.WG.cache.fluids[fluidIndex] == nil then
 			table.insert(guiTable.vars.WG.cache.fluids, GuiApi.add_button(guiTable, "RNS_WG_FDInv_".. fluidIndex, guiTable.vars.WirelessGridTableFluids, "fluid/" .. (c.name), "fluid/" .. (c.name), "fluid/" .. (c.name), buttonText, 37, false, true, c.amount, Constants.Settings.RNS_Gui.button_1, {ID=self.entID, name=c.name}, fluidIndex))
 		else
@@ -602,7 +602,7 @@ end
 
 function WG.transfer_from_pinv(RNSPlayer, WG, tags, count)
 	if RNSPlayer.thisEntity == nil or WG == nil then return end
-	local network = WG.connected and global.entityTable[WG.connected].network or nil
+	local network = WG.connected and storage.entityTable[WG.connected].network or nil
 	if network == nil then return end
 	if network:is_full() then return end
 	local itemstack = RNSPlayer.thisEntity.cursor_stack
@@ -610,8 +610,8 @@ function WG.transfer_from_pinv(RNSPlayer, WG, tags, count)
 	
 	local amount = 1
 	if count == -1 and itemstack.count ~= 0 then amount = itemstack.count end
-	if count == -2 and itemstack.count ~= 0 then amount = math.ceil(math.min(itemstack.count, game.item_prototypes[itemstack.name].stack_size/2)) end
-	if count == -3 and itemstack.count ~= 0 then amount = game.item_prototypes[itemstack.name].stack_size*10 end
+	if count == -2 and itemstack.count ~= 0 then amount = math.ceil(math.min(itemstack.count, prototypes.item[itemstack.name].stack_size/2)) end
+	if count == -3 and itemstack.count ~= 0 then amount = prototypes.item[itemstack.name].stack_size*10 end
 	if count == -4 then amount = (2^32) end
 
 	local master = Itemstack:new(itemstack)
@@ -625,15 +625,15 @@ end
 
 function WG.transfer_from_idinv(RNSPlayer, WG, tags, count)
 	if RNSPlayer.thisEntity == nil or WG == nil then return end
-	local network = WG.connected and global.entityTable[WG.connected].network or nil
+	local network = WG.connected and storage.entityTable[WG.connected].network or nil
 	if network == nil then return end
 	if network:is_empty() then return end
 	if tags == nil then return end
 	local itemstack = Itemstack:reload(tags.stack)
 
-	if count == -1 then count = game.item_prototypes[itemstack.name].stack_size end
-	if count == -2 then count = math.max(1, game.item_prototypes[itemstack.name].stack_size/2) end
-	if count == -3 then count = game.item_prototypes[itemstack.name].stack_size*10 end
+	if count == -1 then count = prototypes.item[itemstack.name].stack_size end
+	if count == -2 then count = math.max(1, prototypes.item[itemstack.name].stack_size/2) end
+	if count == -3 then count = prototypes.item[itemstack.name].stack_size*10 end
 	if count == -4 then count = (2^32)-1 end
 
 	--local inv = RNSPlayer.thisEntity.get_main_inventory()
@@ -645,14 +645,14 @@ end
 
 function WG.transfer_from_fdinv(RNSPlayer, WG, tags, count)
 	if RNSPlayer.thisEntity == nil or WG.networkController == nil then return end
-	local network = WG.connected and global.entityTable[WG.connected].network or nil
+	local network = WG.connected and storage.entityTable[WG.connected].network or nil
 	if network == nil then return end
 	if tags == nil then return end
 	local fluid = tags.name
 
-	--if count == -1 then count = game.item_prototypes[itemstack.cont.name].stack_size end
-	--if count == -2 then count = math.max(1, game.item_prototypes[itemstack.cont.name].stack_size/2) end
-	--if count == -3 then count = game.item_prototypes[itemstack.cont.name].stack_size*10 end
+	--if count == -1 then count = prototypes.item[itemstack.cont.name].stack_size end
+	--if count == -2 then count = math.max(1, prototypes.item[itemstack.cont.name].stack_size/2) end
+	--if count == -3 then count = prototypes.item[itemstack.cont.name].stack_size*10 end
 	--if count == -4 then count = (2^32)-1 end
 --
 	--local inv = RNSPlayer.thisEntity.get_main_inventory()
@@ -674,7 +674,7 @@ function WG.interaction(event, RNSPlayer)
 	if string.match(event.element.name, "RNS_SearchTextField") then
 		return
 	elseif string.match(event.element.name, "RNS_WG_Channels") and event.name ~= defines.events.on_gui_click then
-		local obj = global.entityTable[event.element.tags.ID]
+		local obj = storage.entityTable[event.element.tags.ID]
 		if obj == nil then return end
         local selected_index = event.element.selected_index
         local selected = event.element.items[selected_index]
@@ -688,7 +688,7 @@ function WG.interaction(event, RNSPlayer)
 		return
 	elseif string.match(event.element.name, "RNS_WG_SortOrder") then
         local id = event.element.tags.ID
-		local io = global.entityTable[id]
+		local io = storage.entityTable[id]
 		if io == nil then return end
         io.sortOrder = event.element.switch_state == "left" and "HL" or "LH"
 		return
@@ -701,8 +701,8 @@ function WG.interaction(event, RNSPlayer)
 	if event.button == defines.mouse_button_type.right and event.shift == true then count = -3 end --10 Stacks
 	if event.button == defines.mouse_button_type.left and event.control == true then count = -4 end --All Stacks
 
-	local obj = global.entityTable[event.element.tags.ID]
-	if obj.connected and (global.entityTable[obj.connected] == nil or global.entityTable[obj.connected].thisEntity == nil or global.entityTable[obj.connected].thisEntity.valid == false) then
+	local obj = storage.entityTable[event.element.tags.ID]
+	if obj.connected and (storage.entityTable[obj.connected] == nil or storage.entityTable[obj.connected].thisEntity == nil or storage.entityTable[obj.connected].thisEntity.valid == false) then
 		obj.connected = nil
 		return
 	end

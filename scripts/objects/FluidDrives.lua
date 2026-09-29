@@ -177,8 +177,8 @@ function FD:createArms()
     for _, area in pairs(areas) do
         local ents = self.thisEntity.surface.find_entities_filtered{area={area.startP, area.endP}}
         for _, ent in pairs(ents) do
-            if ent ~= nil and ent.valid == true and ent.to_be_deconstructed() == false and string.match(ent.name, "RNS_") ~= nil and global.entityTable[ent.unit_number] ~= nil then
-                local obj = global.entityTable[ent.unit_number]
+            if ent ~= nil and ent.valid == true and ent.to_be_deconstructed() == false and string.match(ent.name, "RNS_") ~= nil and storage.entityTable[ent.unit_number] ~= nil then
+                local obj = storage.entityTable[ent.unit_number]
                 if (string.match(obj.thisEntity.name, "RNS_NetworkCableIO") ~= nil and obj:getConnectionDirection() == area.direction) or (string.match(obj.thisEntity.name, "RNS_NetworkCableRamp") ~= nil and obj:getConnectionDirection() == area.direction) or obj.thisEntity.name == Constants.WirelessGrid.name then
                     --Do nothing
                 else
@@ -192,7 +192,7 @@ end
 
 function FD:validate()
     for k, v in pairs(self.fluidArray) do
-        if game.fluid_prototypes[k] == nil then
+        if prototypes.fluid[k] == nil then
             self.storedAmount = self.storedAmount - v.amount
             self.fluidArray[k] = nil
         end
@@ -205,13 +205,13 @@ function FD:has_fluid(name)
 end
 
 function FD:insert_fluid(name, amount, temperature)
-    temperature = temperature or game.fluid_prototypes[name].default_temperature
+    temperature = temperature or prototypes.fluid[name].default_temperature
     local remaining = self:getRemainingStorageSize()
     if remaining <= 0 then return 0 end
     local min = math.min(amount, remaining)
     if self.fluidArray[name] ~= nil then
         local tank = self.fluidArray[name]
-        tank.temperature = ((tank.temperature or game.fluid_prototypes[name].default_temperature) * tank.amount + min * temperature) / (tank.amount + min)
+        tank.temperature = ((tank.temperature or prototypes.fluid[name].default_temperature) * tank.amount + min * temperature) / (tank.amount + min)
         tank.amount = tank.amount + min
     else
         self.fluidArray[name] = {
@@ -372,7 +372,7 @@ function FD.interaction(event, RNSPlayer)
 
     if string.match(event.element.name, "RNS_FluidDrive_Priority") then
         local id = event.element.tags.ID
-		local io = global.entityTable[id]
+		local io = storage.entityTable[id]
 		if io == nil then return end
         local priority = Constants.Settings.RNS_Priorities[event.element.selected_index]
         if priority ~= io.priority then
@@ -386,7 +386,7 @@ function FD.interaction(event, RNSPlayer)
 		return
     elseif string.match(event.element.name, "RNS_FluidDrive_Filter") then
         local id = event.element.tags.ID
-		local io = global.entityTable[id]
+		local io = storage.entityTable[id]
 		if io == nil then return end
         if event.element.elem_value ~= nil then
             io.guiFilters[event.element.tags.index] = event.element.elem_value
@@ -405,7 +405,7 @@ function FD.interaction(event, RNSPlayer)
 		return
     elseif string.match(event.element.name, "RNS_FluidDrive_WhitelistBlacklist") then
         local id = event.element.tags.ID
-		local io = global.entityTable[id]
+		local io = storage.entityTable[id]
 		if io == nil then return end
         io.whitelistBlacklist = event.element.switch_state == "left" and "whitelist" or "blacklist"
 		return

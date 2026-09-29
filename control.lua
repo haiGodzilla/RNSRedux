@@ -35,29 +35,29 @@ function onInit()
         if freeplay["set_skip_intro"] then remote.call("freeplay", "set_skip_intro", true) end
         if freeplay["set_disable_crashsite"] then remote.call("freeplay", "set_disable_crashsite", true) end
     end]]
-	global.allowMigration = ( next(global) ~= nil )
-    global.migrations = global.migrations or {}
+	storage.allowMigration = ( next(storage) ~= nil )
+    storage.migrations = storage.migrations or {}
 
-	global.entityTable = global.entityTable or {}
-    global.updateTable = global.updateTable or {}
-    global.IIOMultiplier = global.IIOMultiplier or 1
-    global.FIOMultiplier = global.FIOMultiplier or 1
-    global.WTRangeMultiplier = global.WTRangeMultiplier or 1
-    global.TransReceiverChannels = global.TransReceiverChannels or {transmitters = {}, receivers = {}}
-    global.NetworkControllers = global.NetworkControllers or {}
+	storage.entityTable = storage.entityTable or {}
+    storage.updateTable = storage.updateTable or {}
+    storage.IIOMultiplier = storage.IIOMultiplier or 1
+    storage.FIOMultiplier = storage.FIOMultiplier or 1
+    storage.WTRangeMultiplier = storage.WTRangeMultiplier or 1
+    storage.TransReceiverChannels = storage.TransReceiverChannels or {transmitters = {}, receivers = {}}
+    storage.NetworkControllers = storage.NetworkControllers or {}
     
     createObjectTables()
 
-    for _, obj in pairs(global.objectTables) do
+    for _, obj in pairs(storage.objectTables) do
 		if obj.tableName and obj.tag then
 			if _G[obj.tag] ~= nil then
                 if _G[obj.tag].validate then
-                    for _, entry in pairs(global[obj.tableName]) do
+                    for _, entry in pairs(storage[obj.tableName]) do
                         entry:validate()
                     end
                 end
                 if obj.tag == "NC" then
-                    for _, entry in pairs(global[obj.tableName]) do
+                    for _, entry in pairs(storage[obj.tableName]) do
                         entry.network.shouldRefresh = true
                     end
                 end
@@ -65,7 +65,7 @@ function onInit()
 		end
 	end
 
-    if global.playerTable == nil then global.playerTable = {} end
+    if storage.playerTable == nil then storage.playerTable = {} end
 	for _, player in pairs(game.players) do
 		Event.initPlayer({player_index = player.index})
 	end
@@ -75,16 +75,16 @@ end
 
 --When the mod loads up in a save
 function onLoad()
-    for _, obj in pairs(global.objectTables) do
+    for _, obj in pairs(storage.objectTables) do
 		if obj.tableName ~= nil and obj.tag ~= nil and _G[obj.tag] ~= nil then
-			for _, entry in pairs(global[obj.tableName] or {}) do
+			for _, entry in pairs(storage[obj.tableName] or {}) do
 				_G[obj.tag]:rebuild(entry)
 			end
 		end
     end
-    --for id, obj in pairs(global.tempInventoryTable) do
+    --for id, obj in pairs(storage.tempInventoryTable) do
     --    if not obj.itemstack.valid or obj.itemstack == nil then
-    --        global.tempInventoryTable[id] = nil
+    --        storage.tempInventoryTable[id] = nil
     --    end
     --end
 end

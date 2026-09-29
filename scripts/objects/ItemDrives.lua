@@ -164,8 +164,8 @@ function ID:createArms()
     for _, area in pairs(areas) do
         local ents = self.thisEntity.surface.find_entities_filtered{area={area.startP, area.endP}}
         for _, ent in pairs(ents) do
-            if ent ~= nil and ent.valid == true and ent.to_be_deconstructed() == false and string.match(ent.name, "RNS_") ~= nil and global.entityTable[ent.unit_number] ~= nil then
-                local obj = global.entityTable[ent.unit_number]
+            if ent ~= nil and ent.valid == true and ent.to_be_deconstructed() == false and string.match(ent.name, "RNS_") ~= nil and storage.entityTable[ent.unit_number] ~= nil then
+                local obj = storage.entityTable[ent.unit_number]
                 if (string.match(obj.thisEntity.name, "RNS_NetworkCableIO") ~= nil and obj:getConnectionDirection() == area.direction) or (string.match(obj.thisEntity.name, "RNS_NetworkCableRamp") ~= nil and obj:getConnectionDirection() == area.direction) or obj.thisEntity.name == Constants.WirelessGrid.name then
                     --Do nothing
                 else
@@ -179,7 +179,7 @@ end
 
 function ID:validate()
     for k, v in pairs(self.storageArray) do
-        if game.item_prototypes[k] == nil then
+        if prototypes.item[k] == nil then
             self.storedAmount = self.storedAmount - v.amount
             self.storageArray[k] = nil
         end
@@ -194,12 +194,12 @@ function ID:add_or_merge_basic_item(itemstack_data, amount)
         local data = Itemstack:reload(inv[itemstack_data.name])
         data.count = data.count + min
         if data.ammo ~= nil then
-            local a = (data.ammo+itemstack_data.ammo)%game.item_prototypes[data.name].magazine_size
-            data.ammo = a == 0 and game.item_prototypes[data.name].magazine_size or a
+            local a = (data.ammo+itemstack_data.ammo)%prototypes.item[data.name].magazine_size
+            data.ammo = a == 0 and prototypes.item[data.name].magazine_size or a
         end
         if data.durability ~= nil then
-            local d = (data.durability+itemstack_data.durability)%game.item_prototypes[data.name].durability
-            data.durability = d == 0 and game.item_prototypes[data.name].durability or d
+            local d = (data.durability+itemstack_data.durability)%prototypes.item[data.name].durability
+            data.durability = d == 0 and prototypes.item[data.name].durability or d
         end
     else
         inv[itemstack_data.name] = itemstack_data
@@ -233,11 +233,11 @@ end
     local amount = 0
     local list = self.storageArray[itemstack_data.cont.name]
     if list ~= nil and itemstack_data.modified == false then
-        if (list.ammo == itemstack_data.cont.ammo or list.durability == itemstack_data.cont.durability) and (list.ammo == game.item_prototypes[list.name].magazine_size or list.durability == game.item_prototypes[list.name].durability) then
+        if (list.ammo == itemstack_data.cont.ammo or list.durability == itemstack_data.cont.durability) and (list.ammo == prototypes.item[list.name].magazine_size or list.durability == prototypes.item[list.name].durability) then
             amount = amount + list.count
         else
             if getModified == true then
-                if (list.ammo == itemstack_data.cont.ammo or list.durability == itemstack_data.cont.durability) and (list.ammo ~= game.item_prototypes[list.name].magazine_size or list.durability ~= game.item_prototypes[list.name].durability) then
+                if (list.ammo == itemstack_data.cont.ammo or list.durability == itemstack_data.cont.durability) and (list.ammo ~= prototypes.item[list.name].magazine_size or list.durability ~= prototypes.item[list.name].durability) then
                     amount = amount + 1
                 end
             else
@@ -391,7 +391,7 @@ function ID.interaction(event, RNSPlayer)
 
     if string.match(event.element.name, "RNS_ItemDrive_Priority") then
         local id = event.element.tags.ID
-		local io = global.entityTable[id]
+		local io = storage.entityTable[id]
 		if io == nil then return end
         local priority = Constants.Settings.RNS_Priorities[event.element.selected_index]
         if priority ~= io.priority then
@@ -406,7 +406,7 @@ function ID.interaction(event, RNSPlayer)
 		return
     elseif string.match(event.element.name, "RNS_ItemDrive_Filter") then
         local id = event.element.tags.ID
-		local io = global.entityTable[id]
+		local io = storage.entityTable[id]
 		if io == nil then return end
         if event.element.elem_value ~= nil then
             io.guiFilters[event.element.tags.index] = event.element.elem_value
@@ -425,7 +425,7 @@ function ID.interaction(event, RNSPlayer)
 		return
     elseif string.match(event.element.name, "RNS_ItemDrive_WhitelistBlacklist") then
         local id = event.element.tags.ID
-		local io = global.entityTable[id]
+		local io = storage.entityTable[id]
 		if io == nil then return end
         io.whitelistBlacklist = event.element.switch_state == "left" and "whitelist" or "blacklist"
 		return

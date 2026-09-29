@@ -1,6 +1,6 @@
-if global.allowMigration == false then return end
+if storage.allowMigration == false then return end
 
-for id, obj in pairs(global.entityTable) do
+for id, obj in pairs(storage.entityTable) do
     if obj.thisEntity.valid and obj.thisEntity.name == Constants.Detector.name then
         DT:rebuild(obj)
         obj.icons = {

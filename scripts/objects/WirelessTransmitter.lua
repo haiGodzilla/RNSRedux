@@ -82,9 +82,9 @@ function WT:update()
         
         if self.showArea == true and self.rangeArea == nil then
             --Max map size is 2 mil x 2 mil
-            local tl = {self.thisEntity.position.x-0.5-Constants.Settings.RNS_Default_WirelessGrid_Distance*global.WTRangeMultiplier, self.thisEntity.position.y-0.5-Constants.Settings.RNS_Default_WirelessGrid_Distance*global.WTRangeMultiplier}
-            local br = {self.thisEntity.position.x+0.5+Constants.Settings.RNS_Default_WirelessGrid_Distance*global.WTRangeMultiplier, self.thisEntity.position.y+0.5+Constants.Settings.RNS_Default_WirelessGrid_Distance*global.WTRangeMultiplier}
-            if global.WTRangeMultiplier == -1 then
+            local tl = {self.thisEntity.position.x-0.5-Constants.Settings.RNS_Default_WirelessGrid_Distance*storage.WTRangeMultiplier, self.thisEntity.position.y-0.5-Constants.Settings.RNS_Default_WirelessGrid_Distance*storage.WTRangeMultiplier}
+            local br = {self.thisEntity.position.x+0.5+Constants.Settings.RNS_Default_WirelessGrid_Distance*storage.WTRangeMultiplier, self.thisEntity.position.y+0.5+Constants.Settings.RNS_Default_WirelessGrid_Distance*storage.WTRangeMultiplier}
+            if storage.WTRangeMultiplier == -1 then
                 local width = self.thisEntity.surface.map_gen_settings.width/2
                 local height = self.thisEntity.surface.map_gen_settings.height/2
                 tl = {-width, -height}
@@ -151,9 +151,9 @@ function WT:createArms()
     for _, area in pairs(areas) do
         local ents = self.thisEntity.surface.find_entities_filtered{area={area.startP, area.endP}}
         for _, ent in pairs(ents) do
-            if ent ~= nil and ent.valid == true and global.entityTable[ent.unit_number] ~= nil and string.match(ent.name, "RNS_") ~= nil then
+            if ent ~= nil and ent.valid == true and storage.entityTable[ent.unit_number] ~= nil and string.match(ent.name, "RNS_") ~= nil then
                 if area.direction ~= self:getDirection() then --Prevent cable connection on the IO port
-                    local obj = global.entityTable[ent.unit_number]
+                    local obj = storage.entityTable[ent.unit_number]
                     if (string.match(obj.thisEntity.name, "RNS_NetworkCableIO") ~= nil and obj:getConnectionDirection() == area.direction) or (string.match(obj.thisEntity.name, "RNS_NetworkCableRamp") ~= nil and obj:getConnectionDirection() == area.direction) or obj.thisEntity.name == Constants.WirelessGrid.name then
                         --Do nothing
                     else
@@ -199,7 +199,7 @@ function WT:getTooltips(guiTable, mainFrame, justCreated)
 
         GuiApi.add_subtitle(guiTable, "", infoFrame, {"gui-description.RNS_Information"})
 
-        GuiApi.add_label(guiTable, "TransmitterRange", infoFrame, {"gui-description.RNS_WirelessTransmitterRange", Constants.Settings.RNS_Default_WirelessGrid_Distance*global.WTRangeMultiplier}, Constants.Settings.RNS_Gui.white, "", true)
+        GuiApi.add_label(guiTable, "TransmitterRange", infoFrame, {"gui-description.RNS_WirelessTransmitterRange", Constants.Settings.RNS_Default_WirelessGrid_Distance*storage.WTRangeMultiplier}, Constants.Settings.RNS_Gui.white, "", true)
         
         GuiApi.add_label(guiTable, "", infoFrame, {"gui-description.RNS_WirelessTransmitterArea"}, Constants.Settings.RNS_Gui.white)
         GuiApi.add_switch(guiTable, "RNS_WT_RangeAreaSwitch", infoFrame, {"gui-description.RNS_Off"}, {"gui-description.RNS_On"}, "", "", self.showArea == true and "right", false, {ID=self.thisEntity.unit_number})
@@ -234,7 +234,7 @@ function WT:getTooltips(guiTable, mainFrame, justCreated)
         guiTable.vars.WT = {cache={}}
     end
 
-    guiTable.vars.TransmitterRange.caption = {"gui-description.RNS_WirelessTransmitterRange", global.WTRangeMultiplier ~= -1 and Constants.Settings.RNS_Default_WirelessGrid_Distance*global.WTRangeMultiplier or "∞"}
+    guiTable.vars.TransmitterRange.caption = {"gui-description.RNS_WirelessTransmitterRange", storage.WTRangeMultiplier ~= -1 and Constants.Settings.RNS_Default_WirelessGrid_Distance*storage.WTRangeMultiplier or "∞"}
 
     local playerPane = guiTable.vars.PlayerScrollPane
     --playerPane.clear()
@@ -270,14 +270,14 @@ end
 function WT.interaction(event, RNSPlayer)
     if string.match(event.element.name, "RNS_WT_Name_Button") then
         local id = event.element.tags.ID
-		local io = global.entityTable[id]
+		local io = storage.entityTable[id]
 		if io == nil then return end
         local guiTable = RNSPlayer.GUI[Constants.Settings.RNS_Gui.tooltip]
         guiTable.vars["RNS_PlayerField"].text = event.element.tags.name
         return
     elseif string.match(event.element.name, "RNS_WT_RangeAreaSwitch") then
 		local id = event.element.tags.ID
-		local io = global.entityTable[id]
+		local io = storage.entityTable[id]
 		if io == nil then return end
 		if event.element.switch_state == "left" then
 			io.showArea = false
@@ -287,7 +287,7 @@ function WT.interaction(event, RNSPlayer)
 		return
 	elseif string.match(event.element.name, "RNS_WT_Color") then
 		local id = event.element.tags.ID
-		local io = global.entityTable[id]
+		local io = storage.entityTable[id]
 		if io == nil then return end
         local color = Constants.Settings.RNS_ColorN[event.element.selected_index]
         if color ~= io.color then
@@ -297,7 +297,7 @@ function WT.interaction(event, RNSPlayer)
 		return
 	elseif string.match(event.element.name, "RNS_WT_Checkmark") then
         local id = event.element.tags.ID
-		local io = global.entityTable[id]
+		local io = storage.entityTable[id]
 		if io == nil then return end
         for _, guiTable in pairs(RNSPlayer.GUI or {}) do
             if guiTable.gui ~= nil and guiTable.gui.valid == true then
@@ -312,7 +312,7 @@ function WT.interaction(event, RNSPlayer)
         end
     elseif string.match(event.element.name, "RNS_WT_Xmark") then
         local id = event.element.tags.ID
-		local io = global.entityTable[id]
+		local io = storage.entityTable[id]
 		if io == nil then return end
         for _, guiTable in pairs(RNSPlayer.GUI or {}) do
             if guiTable.gui ~= nil and guiTable.gui.valid == true then

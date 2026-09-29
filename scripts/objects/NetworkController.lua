@@ -169,12 +169,12 @@ function NC:find_players_with_wirelessTransmitter()
     for _, transmitter in pairs(self.network.WirelessTransmitterTable[1]) do
         if transmitter.thisEntity ~= nil and transmitter.thisEntity.valid and transmitter.thisEntity.to_be_deconstructed() == false then
             --For Players
-            if global.WTRangeMultiplier ~= -1 then
+            if storage.WTRangeMultiplier ~= -1 then
                 local characters = self.thisEntity.surface.find_entities_filtered{
                     type = "character",
                     area = {
-                        {transmitter.thisEntity.position.x-0.5-Constants.Settings.RNS_Default_WirelessGrid_Distance*global.WTRangeMultiplier, transmitter.thisEntity.position.y-0.5-Constants.Settings.RNS_Default_WirelessGrid_Distance*global.WTRangeMultiplier}, --top left
-                        {transmitter.thisEntity.position.x+0.5+Constants.Settings.RNS_Default_WirelessGrid_Distance*global.WTRangeMultiplier, transmitter.thisEntity.position.y+0.5+Constants.Settings.RNS_Default_WirelessGrid_Distance*global.WTRangeMultiplier} --bottom right
+                        {transmitter.thisEntity.position.x-0.5-Constants.Settings.RNS_Default_WirelessGrid_Distance*storage.WTRangeMultiplier, transmitter.thisEntity.position.y-0.5-Constants.Settings.RNS_Default_WirelessGrid_Distance*storage.WTRangeMultiplier}, --top left
+                        {transmitter.thisEntity.position.x+0.5+Constants.Settings.RNS_Default_WirelessGrid_Distance*storage.WTRangeMultiplier, transmitter.thisEntity.position.y+0.5+Constants.Settings.RNS_Default_WirelessGrid_Distance*storage.WTRangeMultiplier} --bottom right
                     }
                 }
                 for _, character in pairs(characters) do
@@ -187,7 +187,7 @@ function NC:find_players_with_wirelessTransmitter()
                     end
                 end
             else
-                for _, RNSPlayer in pairs(global.PlayerTable) do
+                for _, RNSPlayer in pairs(storage.PlayerTable) do
                     if RNSPlayer ~= nil and RNSPlayer.thisEntity ~= nil and RNSPlayer.thisEntity.valid == true and self.network.PlayerPorts[RNSPlayer.thisEntity.name] ~= nil and processed_players[RNSPlayer.thisEntity.name] == nil then
                         if RNSPlayer.thisEntity.surface.index ~= transmitter.thisEntity.surface.index then goto next end
                         --local RNSPlayer = getRNSPlayer(player.index)
@@ -208,22 +208,22 @@ function NC:find_wirelessgrid_with_wirelessTransmitter(id)
     for _, transmitter in pairs(self.network.WirelessTransmitterTable[1]) do
         if transmitter.thisEntity ~= nil and transmitter.thisEntity.valid and transmitter.thisEntity.to_be_deconstructed() == false then
             --For Portable Wireless Grids
-            if global.WTRangeMultiplier ~= -1 then
+            if storage.WTRangeMultiplier ~= -1 then
                 local interfaces = self.thisEntity.surface.find_entities_filtered{
                         name = Constants.WirelessGrid.name,
                         area = {
-                            {transmitter.thisEntity.position.x-0.5-Constants.Settings.RNS_Default_WirelessGrid_Distance*global.WTRangeMultiplier, transmitter.thisEntity.position.y-0.5-Constants.Settings.RNS_Default_WirelessGrid_Distance*global.WTRangeMultiplier}, --top left
-                            {transmitter.thisEntity.position.x+0.5+Constants.Settings.RNS_Default_WirelessGrid_Distance*global.WTRangeMultiplier, transmitter.thisEntity.position.y+0.5+Constants.Settings.RNS_Default_WirelessGrid_Distance*global.WTRangeMultiplier} --bottom right
+                            {transmitter.thisEntity.position.x-0.5-Constants.Settings.RNS_Default_WirelessGrid_Distance*storage.WTRangeMultiplier, transmitter.thisEntity.position.y-0.5-Constants.Settings.RNS_Default_WirelessGrid_Distance*storage.WTRangeMultiplier}, --top left
+                            {transmitter.thisEntity.position.x+0.5+Constants.Settings.RNS_Default_WirelessGrid_Distance*storage.WTRangeMultiplier, transmitter.thisEntity.position.y+0.5+Constants.Settings.RNS_Default_WirelessGrid_Distance*storage.WTRangeMultiplier} --bottom right
                         }
                     }
                 for _, interface in pairs(interfaces) do
                     if interface.unit_number == id then
-                        local inter = global.entityTable[interface.unit_number]
+                        local inter = storage.entityTable[interface.unit_number]
                         if inter ~= nil and inter.thisEntity ~= nil and inter.thisEntity.valid == true and inter.connected and inter.connected == self.entID then return true end
                     end
                 end
             else
-                local inter = global.entityTable[id]
+                local inter = storage.entityTable[id]
                 if inter ~= nil and inter.thisEntity ~= nil and inter.thisEntity.valid == true and inter.connected and inter.connected == self.entID then return true end
             end
         end
@@ -234,7 +234,7 @@ end
 function NC:import_items()
     for p, priority in pairs(self.network.ItemIOTable) do
         for i, v in pairs(priority.input) do
-            local item = global.entityTable[v]
+            local item = storage.entityTable[v]
             if item ~= nil and item.io == "output" then
                 table.remove(priority.input, i)
                 goto next
@@ -294,7 +294,7 @@ end
 function NC:export_items()
     for p, priority in pairs(self.network.ItemIOTable) do
         for i, v in pairs(priority.output) do
-            local item = global.entityTable[v]
+            local item = storage.entityTable[v]
             if item ~= nil then
                 if item.io == "input" then
                     table.remove(priority.output, i)
@@ -362,7 +362,7 @@ end
 function NC:import_fluids()
     for p, priority in pairs(self.network.FluidIOTable) do
         for i, v in pairs(priority.input) do
-            local fluid = global.entityTable[v]
+            local fluid = storage.entityTable[v]
             if fluid ~= nil then
                 if fluid.io == "output" then
                     table.remove(priority.input, i)
@@ -421,7 +421,7 @@ end
 function NC:export_fluids()
     for p, priority in pairs(self.network.FluidIOTable) do
         for i, v in pairs(priority.output) do
-            local fluid = global.entityTable[v]
+            local fluid = storage.entityTable[v]
             if fluid ~= nil then
                 if fluid.io == "input" then
                     table.remove(priority.output, i)
@@ -509,8 +509,8 @@ function NC:createArms()
         local ents = self.thisEntity.surface.find_entities_filtered{area={area.startP, area.endP}}
         for _, ent in pairs(ents) do
             if ent ~= nil and ent.valid == true and ent.to_be_deconstructed() == false and string.match(ent.name, "RNS_") ~= nil then
-                if global.entityTable[ent.unit_number] ~= nil then
-                    local obj = global.entityTable[ent.unit_number]
+                if storage.entityTable[ent.unit_number] ~= nil then
+                    local obj = storage.entityTable[ent.unit_number]
                     if (string.match(obj.thisEntity.name, "RNS_NetworkCableIO") ~= nil and obj:getConnectionDirection() == area.direction) or (string.match(obj.thisEntity.name, "RNS_NetworkCableRamp") ~= nil and obj:getConnectionDirection() == area.direction) or obj.thisEntity.name == Constants.WirelessGrid.name then
                         --Do nothing
                     else
@@ -606,7 +606,7 @@ function NC:getTooltips(guiTable, mainFrame, justCreated)
             local section = GuiApi.add_frame(guiTable, "", ConnectedStructuresTable, "vertical")
             section.style = Constants.Settings.RNS_Gui.frame_1
             section.style.minimal_width = 200
-            GuiApi.add_label(guiTable, "", section, game.item_prototypes[name].localised_name, Constants.Settings.RNS_Gui.white, "", false, Constants.Settings.RNS_Gui.label_font)
+            GuiApi.add_label(guiTable, "", section, prototypes.item[name].localised_name, Constants.Settings.RNS_Gui.white, "", false, Constants.Settings.RNS_Gui.label_font)
             GuiApi.add_item_frame(guiTable, "", section, t.powerUsage .. " J/t", name, count .. "x", 64, Constants.Settings.RNS_Gui.label_font_2)
         end
     end
@@ -618,7 +618,7 @@ function NC:getTooltips(guiTable, mainFrame, justCreated)
             local section = GuiApi.add_frame(guiTable, "", ConnectedStructuresTable, "vertical")
             section.style = Constants.Settings.RNS_Gui.frame_1
             section.style.minimal_width = 200
-            GuiApi.add_label(guiTable, "", section, game.item_prototypes[name].localised_name, Constants.Settings.RNS_Gui.white, "", false, Constants.Settings.RNS_Gui.label_font)
+            GuiApi.add_label(guiTable, "", section, prototypes.item[name].localised_name, Constants.Settings.RNS_Gui.white, "", false, Constants.Settings.RNS_Gui.label_font)
             GuiApi.add_item_frame(guiTable, "", section, t.powerUsage .. " J/t", name, count .. "x", 64, Constants.Settings.RNS_Gui.label_font_2)
         end
     end
@@ -629,8 +629,8 @@ function NC:getTooltips(guiTable, mainFrame, justCreated)
         local section = GuiApi.add_frame(guiTable, "", ConnectedStructuresTable, "vertical")
         section.style = Constants.Settings.RNS_Gui.frame_1
         section.style.minimal_width = 200
-        GuiApi.add_label(guiTable, "", section, game.item_prototypes[name].localised_name, Constants.Settings.RNS_Gui.white, "", false, Constants.Settings.RNS_Gui.label_font)
-        GuiApi.add_item_frame(guiTable, "", section, _G.IIO3.powerUsage*global.IIOMultiplier .. " J/t", name, itemIOcount .. "x", 64, Constants.Settings.RNS_Gui.label_font_2)
+        GuiApi.add_label(guiTable, "", section, prototypes.item[name].localised_name, Constants.Settings.RNS_Gui.white, "", false, Constants.Settings.RNS_Gui.label_font)
+        GuiApi.add_item_frame(guiTable, "", section, _G.IIO3.powerUsage*storage.IIOMultiplier .. " J/t", name, itemIOcount .. "x", 64, Constants.Settings.RNS_Gui.label_font_2)
     end
 
     --[[local itemIOV2count = BaseNet.get_table_length_in_priority(self.network.getOperableObjects(self.network.ItemIOV2Table))
@@ -639,8 +639,8 @@ function NC:getTooltips(guiTable, mainFrame, justCreated)
         local section = GuiApi.add_frame(guiTable, "", ConnectedStructuresTable, "vertical")
         section.style = Constants.Settings.RNS_Gui.frame_1
         section.style.minimal_width = 200
-        GuiApi.add_label(guiTable, "", section, game.item_prototypes[name].localised_name, Constants.Settings.RNS_Gui.white, "", false, Constants.Settings.RNS_Gui.label_font)
-        GuiApi.add_item_frame(guiTable, "", section, _G.IIO2.powerUsage*global.IIOMultiplier .. "/t", name, itemIOV2count .. "x", 64, Constants.Settings.RNS_Gui.label_font_2)
+        GuiApi.add_label(guiTable, "", section, prototypes.item[name].localised_name, Constants.Settings.RNS_Gui.white, "", false, Constants.Settings.RNS_Gui.label_font)
+        GuiApi.add_item_frame(guiTable, "", section, _G.IIO2.powerUsage*storage.IIOMultiplier .. "/t", name, itemIOV2count .. "x", 64, Constants.Settings.RNS_Gui.label_font_2)
     end]]
 
     local fluidIOcount = BaseNet.get_table_length_in_priority(self.network.getOperableObjects(self.network.FluidIOTable, "io"), true)
@@ -649,8 +649,8 @@ function NC:getTooltips(guiTable, mainFrame, justCreated)
         local section = GuiApi.add_frame(guiTable, "", ConnectedStructuresTable, "vertical")
         section.style = Constants.Settings.RNS_Gui.frame_1
         section.style.minimal_width = 200
-        GuiApi.add_label(guiTable, "", section, game.item_prototypes[name].localised_name, Constants.Settings.RNS_Gui.white, "", false, Constants.Settings.RNS_Gui.label_font)
-        GuiApi.add_item_frame(guiTable, "", section, _G.FIO.powerUsage*global.FIOMultiplier .. " J/t", name, fluidIOcount .. "x", 64, Constants.Settings.RNS_Gui.label_font_2)
+        GuiApi.add_label(guiTable, "", section, prototypes.item[name].localised_name, Constants.Settings.RNS_Gui.white, "", false, Constants.Settings.RNS_Gui.label_font)
+        GuiApi.add_item_frame(guiTable, "", section, _G.FIO.powerUsage*storage.FIOMultiplier .. " J/t", name, fluidIOcount .. "x", 64, Constants.Settings.RNS_Gui.label_font_2)
     end
 
     --[[local fluidIOV2count = BaseNet.get_table_length_in_priority(self.network.getOperableObjects(self.network.FluidIOV2Table))
@@ -659,8 +659,8 @@ function NC:getTooltips(guiTable, mainFrame, justCreated)
         local section = GuiApi.add_frame(guiTable, "", ConnectedStructuresTable, "vertical")
         section.style = Constants.Settings.RNS_Gui.frame_1
         section.style.minimal_width = 200
-        GuiApi.add_label(guiTable, "", section, game.item_prototypes[name].localised_name, Constants.Settings.RNS_Gui.white, "", false, Constants.Settings.RNS_Gui.label_font)
-        GuiApi.add_item_frame(guiTable, "", section, _G.FIO2.powerUsage*global.FIOMultiplier .. "/t", name, fluidIOV2count .. "x", 64, Constants.Settings.RNS_Gui.label_font_2)
+        GuiApi.add_label(guiTable, "", section, prototypes.item[name].localised_name, Constants.Settings.RNS_Gui.white, "", false, Constants.Settings.RNS_Gui.label_font)
+        GuiApi.add_item_frame(guiTable, "", section, _G.FIO2.powerUsage*storage.FIOMultiplier .. "/t", name, fluidIOV2count .. "x", 64, Constants.Settings.RNS_Gui.label_font_2)
     end]]
 
     local externalIOcount = BaseNet.get_table_length_in_priority(self.network.getOperableObjects(self.network.ExternalIOTable, "eo"), true)
@@ -669,7 +669,7 @@ function NC:getTooltips(guiTable, mainFrame, justCreated)
         local section = GuiApi.add_frame(guiTable, "", ConnectedStructuresTable, "vertical")
         section.style = Constants.Settings.RNS_Gui.frame_1
         section.style.minimal_width = 200
-        GuiApi.add_label(guiTable, "", section, game.item_prototypes[name].localised_name, Constants.Settings.RNS_Gui.white, "", false, Constants.Settings.RNS_Gui.label_font)
+        GuiApi.add_label(guiTable, "", section, prototypes.item[name].localised_name, Constants.Settings.RNS_Gui.white, "", false, Constants.Settings.RNS_Gui.label_font)
         GuiApi.add_item_frame(guiTable, "", section, _G.EIO.powerUsage .. " J/t", name, externalIOcount .. "x", 64, Constants.Settings.RNS_Gui.label_font_2)
     end
 
@@ -679,7 +679,7 @@ function NC:getTooltips(guiTable, mainFrame, justCreated)
         local section = GuiApi.add_frame(guiTable, "", ConnectedStructuresTable, "vertical")
         section.style = Constants.Settings.RNS_Gui.frame_1
         section.style.minimal_width = 200
-        GuiApi.add_label(guiTable, "", section, game.item_prototypes[name].localised_name, Constants.Settings.RNS_Gui.white, "", false, Constants.Settings.RNS_Gui.label_font)
+        GuiApi.add_label(guiTable, "", section, prototypes.item[name].localised_name, Constants.Settings.RNS_Gui.white, "", false, Constants.Settings.RNS_Gui.label_font)
         GuiApi.add_item_frame(guiTable, "", section, _G.NII.powerUsage .. " J/t", name, interfacecount .. "x", 64, Constants.Settings.RNS_Gui.label_font_2)
     end
 
@@ -689,8 +689,8 @@ function NC:getTooltips(guiTable, mainFrame, justCreated)
         local section = GuiApi.add_frame(guiTable, "", ConnectedStructuresTable, "vertical")
         section.style = Constants.Settings.RNS_Gui.frame_1
         section.style.minimal_width = 200
-        GuiApi.add_label(guiTable, "", section, game.item_prototypes[name].localised_name, Constants.Settings.RNS_Gui.white, "", false, Constants.Settings.RNS_Gui.label_font)
-        GuiApi.add_item_frame(guiTable, "", section, _G.WT.powerUsage*global.WTRangeMultiplier .. " J/t", name, wirelessTransmittercount .. "x", 64, Constants.Settings.RNS_Gui.label_font_2)
+        GuiApi.add_label(guiTable, "", section, prototypes.item[name].localised_name, Constants.Settings.RNS_Gui.white, "", false, Constants.Settings.RNS_Gui.label_font)
+        GuiApi.add_item_frame(guiTable, "", section, _G.WT.powerUsage*storage.WTRangeMultiplier .. " J/t", name, wirelessTransmittercount .. "x", 64, Constants.Settings.RNS_Gui.label_font_2)
     end
 
     local detectorcount = BaseNet.get_table_length_in_priority(self.network.getOperableObjects(self.network.DetectorTable, "dt"))
@@ -699,7 +699,7 @@ function NC:getTooltips(guiTable, mainFrame, justCreated)
         local section = GuiApi.add_frame(guiTable, "", ConnectedStructuresTable, "vertical")
         section.style = Constants.Settings.RNS_Gui.frame_1
         section.style.minimal_width = 200
-        GuiApi.add_label(guiTable, "", section, game.item_prototypes[name].localised_name, Constants.Settings.RNS_Gui.white, "", false, Constants.Settings.RNS_Gui.label_font)
+        GuiApi.add_label(guiTable, "", section, prototypes.item[name].localised_name, Constants.Settings.RNS_Gui.white, "", false, Constants.Settings.RNS_Gui.label_font)
         GuiApi.add_item_frame(guiTable, "", section, _G.DT.powerUsage .. " J/t", name, detectorcount .. "x", 64, Constants.Settings.RNS_Gui.label_font_2)
     end
 
@@ -709,7 +709,7 @@ function NC:getTooltips(guiTable, mainFrame, justCreated)
         local section = GuiApi.add_frame(guiTable, "", ConnectedStructuresTable, "vertical")
         section.style = Constants.Settings.RNS_Gui.frame_1
         section.style.minimal_width = 200
-        GuiApi.add_label(guiTable, "", section, game.item_prototypes[name].localised_name, Constants.Settings.RNS_Gui.white, "", false, Constants.Settings.RNS_Gui.label_font)
+        GuiApi.add_label(guiTable, "", section, prototypes.item[name].localised_name, Constants.Settings.RNS_Gui.white, "", false, Constants.Settings.RNS_Gui.label_font)
         GuiApi.add_item_frame(guiTable, "", section, _G.TR.powerUsage .. " J/t", name, transmittercount .. "x", 64, Constants.Settings.RNS_Gui.label_font_2)
     end
 
@@ -719,7 +719,7 @@ function NC:getTooltips(guiTable, mainFrame, justCreated)
         local section = GuiApi.add_frame(guiTable, "", ConnectedStructuresTable, "vertical")
         section.style = Constants.Settings.RNS_Gui.frame_1
         section.style.minimal_width = 200
-        GuiApi.add_label(guiTable, "", section, game.item_prototypes[name].localised_name, Constants.Settings.RNS_Gui.white, "", false, Constants.Settings.RNS_Gui.label_font)
+        GuiApi.add_label(guiTable, "", section, prototypes.item[name].localised_name, Constants.Settings.RNS_Gui.white, "", false, Constants.Settings.RNS_Gui.label_font)
         GuiApi.add_item_frame(guiTable, "", section, "0 J/t", name, receivercount .. "x", 64, Constants.Settings.RNS_Gui.label_font_2)
     end
 
@@ -758,12 +758,12 @@ end
 function NC.interaction(event, RNSPlayer)
     local guiTable = RNSPlayer.GUI[Constants.Settings.RNS_Gui.tooltip]
     if string.match(event.element.name, "RNS_NC_Name_Button") then
-		local obj = global.entityTable[event.element.tags.ID]
+		local obj = storage.entityTable[event.element.tags.ID]
 		if obj == nil then return end
             obj:make_name_change(guiTable, guiTable.vars["nameFlow"])
 		return
 	elseif string.match(event.element.name, "RNS_NC_Element_Button") and event.name ~= defines.events.on_gui_click then
-		local obj = global.entityTable[event.element.tags.ID]
+		local obj = storage.entityTable[event.element.tags.ID]
 		if obj == nil then return end
             guiTable.vars["RNS_NC_Name_Text"].text = guiTable.vars["RNS_NC_Name_Text"].text .. Util.signal_to_rich_text(event.element.elem_value)
             guiTable.vars["RNS_NC_Name_Text"].focus()
@@ -773,7 +773,7 @@ function NC.interaction(event, RNSPlayer)
               }
 		return
 	elseif string.match(event.element.name, "RNS_NC_Checkmark") then
-		local obj = global.entityTable[event.element.tags.ID]
+		local obj = storage.entityTable[event.element.tags.ID]
 		if obj == nil then return end
         if guiTable.vars["RNS_NC_Name_Text"].text == "" then
             obj.nametag = {"gui-description.RNS_TransReceiver_ID", obj.thisEntity.unit_number, obj.thisEntity.surface.name, tostring(serpent.line(obj.thisEntity.position))}

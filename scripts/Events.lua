@@ -3,7 +3,7 @@ function Event.initPlayer(event)
 	if player == nil then return end
 	if player.controller_type == defines.controllers.cutscene then return end
 	if getRNSPlayer(player.name) == nil then
-		global.PlayerTable[player.name] = RNSP:new(player)
+		storage.PlayerTable[player.name] = RNSP:new(player)
 	end
 end
 
@@ -19,14 +19,14 @@ function Event.placed(event)
     local type = entity.type
     local entName = type == "entity-ghost" and entity.ghost_name or entity.name
 
-    local objInfo = global.objectTables[entName]
+    local objInfo = storage.objectTables[entName]
 
     if type == "entity-ghost" then return end
 
     if objInfo ~= nil and objInfo.tag ~= nil then
         local obj = _G[objInfo.tag]:new(entity)
         if objInfo.tableName ~= nil then
-            global[objInfo.tableName][entity.unit_number] = obj
+            storage[objInfo.tableName][entity.unit_number] = obj
         end
         if event.tags and obj.deserialize_settings then
 			obj:deserialize_settings(event.tags)
@@ -49,7 +49,7 @@ function Event.removed(event)
     local entity = event.entity
     if entity == nil or entity.valid == false then return end
     
-    local obj = global.entityTable[entity.unit_number]
+    local obj = storage.entityTable[entity.unit_number]
     if obj == nil then return end
 
     if event.buffer ~= nil and event.buffer[1] ~= nil then
@@ -63,15 +63,15 @@ function Event.removed(event)
     
     obj:remove()
     
-    local objInfo = global.objectTables[entity.name]
+    local objInfo = storage.objectTables[entity.name]
     if objInfo == nil or objInfo.tableName == nil then return end
-    global[objInfo.tableName][entity.unit_number] = nil
+    storage[objInfo.tableName][entity.unit_number] = nil
 
 end
 
 function Event.rotated(event)
-    if global.entityTable[event.entity.unit_number] == nil then return end
-    local obj = global.entityTable[event.entity.unit_number]
+    if storage.entityTable[event.entity.unit_number] == nil then return end
+    local obj = storage.entityTable[event.entity.unit_number]
     if obj.generateModeIcon then
         obj:generateModeIcon()
     end
@@ -91,8 +91,8 @@ end
 
 function Event.changed_selection(event)
     if event.last_entity == nil then return end
-    if global.entityTable[event.last_entity.unit_number] == nil then return end
-    local obj = global.entityTable[event.last_entity.unit_number]
+    if storage.entityTable[event.last_entity.unit_number] == nil then return end
+    local obj = storage.entityTable[event.last_entity.unit_number]
     if obj.toggleHoverIcon then
         obj:toggleHoverIcon(false)
     end
@@ -124,7 +124,7 @@ function Event.onBlueprintSetup(event)
 
 	for index, ent in pairs(mapping) do
 		if ent == nil or ent.unit_number == nil then goto continue end
-		local tags = ((global.entityTable[ent.unit_number] ~= nil and global.entityTable[ent.unit_number].serialize_settings ~= nil) and {global.entityTable[ent.unit_number]:serialize_settings()} or {nil})[1]
+		local tags = ((storage.entityTable[ent.unit_number] ~= nil and storage.entityTable[ent.unit_number].serialize_settings ~= nil) and {storage.entityTable[ent.unit_number]:serialize_settings()} or {nil})[1]
         if tags ~= nil then
             getRNSPlayer(event.player_index):push_varTable("BlueprintTags", tags)
 			for tag, value in pairs(tags) do
@@ -149,7 +149,7 @@ function Event.onBlueprintConfigured(event)
 
 	for index, ent in pairs(getRNSPlayer(event.player_index):pull_varTable("BlueprintTags") or {}) do
 		if ent == nil or type(ent) ~= "number" then goto continue end
-		local tags = ((global.entityTable[ent] ~= nil and global.entityTable[ent].serialize_settings ~= nil) and {global.entityTable[ent]:serialize_settings()} or {nil})[1]
+		local tags = ((storage.entityTable[ent] ~= nil and storage.entityTable[ent].serialize_settings ~= nil) and {storage.entityTable[ent]:serialize_settings()} or {nil})[1]
         if tags ~= nil then
 			for tag, value in pairs(tags) do
 				blueprint.set_blueprint_entity_tag(index, tag, value)
@@ -164,8 +164,8 @@ function Event.onSettingsPasted(event)
     if event.source == nil or event.source.valid == false then return end
 	if event.destination == nil or event.destination.valid == false then return end
 
-	local o1 = global.entityTable[event.source.unit_number]
-	local o2 = global.entityTable[event.destination.unit_number]
+	local o1 = storage.entityTable[event.source.unit_number]
+	local o2 = storage.entityTable[event.destination.unit_number]
 
 	if o1 == nil then return end
 	if o2 == nil then return end
@@ -178,11 +178,11 @@ end
 
 function printResearchBonus(type)
 	if type == "item" then
-		game.print({"gui-description.RNS_ItemTransferBonus", Constants.Settings.RNS_BaseItemIO_TransferCapacity*15*global.IIOMultiplier})
+		game.print({"gui-description.RNS_ItemTransferBonus", Constants.Settings.RNS_BaseItemIO_TransferCapacity*15*storage.IIOMultiplier})
 	elseif type == "fluid" then
-		game.print({"gui-description.RNS_FluidTransferBonus", Constants.Settings.RNS_BaseFluidIO_TransferCapacity*12*global.FIOMultiplier})
+		game.print({"gui-description.RNS_FluidTransferBonus", Constants.Settings.RNS_BaseFluidIO_TransferCapacity*12*storage.FIOMultiplier})
 	elseif type == "wireless" then
-		game.print({"gui-description.RNS_WirelessRangeBonus", global.WTRangeMultiplier ~= -1 and Constants.Settings.RNS_Default_WirelessGrid_Distance*global.WTRangeMultiplier or "infinite"})
+		game.print({"gui-description.RNS_WirelessRangeBonus", storage.WTRangeMultiplier ~= -1 and Constants.Settings.RNS_Default_WirelessGrid_Distance*storage.WTRangeMultiplier or "infinite"})
 	end
 end
 
@@ -191,29 +191,29 @@ function Event.finished_research(event)
 	local name, _ = string.gsub(event.research.name, "%-", "_")
 	local level = event.research.level
 	if string.match(name, "RNS_item_transfer_bonus") ~= nil then
-		--local old = global.IIOMultiplier
-		global.IIOMultiplier = string.match(name, "infinite") == nil and Constants.Settings.Multipliers.IIO[level] or (Constants.Settings.Multipliers.IIO[8] + 2*level)
-		for _, obj in pairs(global["ItemIOTable"]) do
+		--local old = storage.IIOMultiplier
+		storage.IIOMultiplier = string.match(name, "infinite") == nil and Constants.Settings.Multipliers.IIO[level] or (Constants.Settings.Multipliers.IIO[8] + 2*level)
+		for _, obj in pairs(storage["ItemIOTable"]) do
 			if obj.override_stacksize == false then
-				obj.stackSize = global.IIOMultiplier
+				obj.stackSize = storage.IIOMultiplier
 			end
 		end
 		--printResearchBonus("item")
 		return
 	end
 	if string.match(name, "RNS_fluid_transfer_bonus") ~= nil then
-		--local old = global.FIOMultiplier
-		global.FIOMultiplier = string.match(name, "infinite") == nil and Constants.Settings.Multipliers.FIO[level] or (Constants.Settings.Multipliers.FIO[8] + 2*level)
-		for _, obj in pairs(global["FluidIOTable"]) do
+		--local old = storage.FIOMultiplier
+		storage.FIOMultiplier = string.match(name, "infinite") == nil and Constants.Settings.Multipliers.FIO[level] or (Constants.Settings.Multipliers.FIO[8] + 2*level)
+		for _, obj in pairs(storage["FluidIOTable"]) do
 			if obj.override_fluidsize == false then
-				obj.fluidSize = global.FIOMultiplier
+				obj.fluidSize = storage.FIOMultiplier
 			end
 		end
 		--printResearchBonus("fluid")
 		return
 	end
 	if string.match(name, "RNS_wireless_range_bonus") ~= nil then
-		global.WTRangeMultiplier = string.match(name, "inf") == nil and Constants.Settings.Multipliers.WT[level] or -1
+		storage.WTRangeMultiplier = string.match(name, "inf") == nil and Constants.Settings.Multipliers.WT[level] or -1
 		--printResearchBonus("wireless")
 		return
 	end
@@ -224,27 +224,27 @@ function Event.reversed_research(event)
 	local name, _ = string.gsub(event.research.name, "%-", "_")
 	local level = event.research.level
 	if string.match(name, "RNS_item_transfer_bonus") ~= nil then
-		global.IIOMultiplier = string.match(name, "infinite") == nil and (Constants.Settings.Multipliers.IIO[level-1] or 1) or (Constants.Settings.Multipliers.IIO[8] + (2*(level-1) == 0 and 0 or 2*(level-1)))
+		storage.IIOMultiplier = string.match(name, "infinite") == nil and (Constants.Settings.Multipliers.IIO[level-1] or 1) or (Constants.Settings.Multipliers.IIO[8] + (2*(level-1) == 0 and 0 or 2*(level-1)))
 		--printResearchBonus("item")
-		for _, obj in pairs(global.entityTable) do
+		for _, obj in pairs(storage.entityTable) do
 			if obj.stackSize then
-				obj.stackSize = math.min(obj.stackSize, global.IIOMultiplier)
+				obj.stackSize = math.min(obj.stackSize, storage.IIOMultiplier)
 			end
 		end
 		return
 	end
 	if string.match(name, "RNS_fluid_transfer_bonus") ~= nil then
-		global.FIOMultiplier = string.match(name, "infinite") == nil and (Constants.Settings.Multipliers.FIO[level-1] or 1) or (Constants.Settings.Multipliers.FIO[8] + (2*(level-1) == 0 and 0 or 2*(level-1)))
+		storage.FIOMultiplier = string.match(name, "infinite") == nil and (Constants.Settings.Multipliers.FIO[level-1] or 1) or (Constants.Settings.Multipliers.FIO[8] + (2*(level-1) == 0 and 0 or 2*(level-1)))
 		--printResearchBonus("fluid")
-		for _, obj in pairs(global.entityTable) do
+		for _, obj in pairs(storage.entityTable) do
 			if obj.fluidSize then
-				obj.fluidSize = math.min(obj.fluidSize, global.FIOMultiplier)
+				obj.fluidSize = math.min(obj.fluidSize, storage.FIOMultiplier)
 			end
 		end
 		return
 	end
 	if string.match(name, "RNS_wireless_range_bonus") ~= nil then
-		global.WTRangeMultiplier = string.match(name, "inf") == nil and Constants.Settings.Multipliers.WT[level-1] or 1
+		storage.WTRangeMultiplier = string.match(name, "inf") == nil and Constants.Settings.Multipliers.WT[level-1] or 1
 		--printResearchBonus("wireless")
 		return
 	end
@@ -256,8 +256,8 @@ function Event.on_marked_for_deconstruction(event)
     local type = entity.type
     if type == "entity-ghost" then return end
 
-	if global.entityTable[entity.unit_number] ~= nil and global.entityTable[entity.unit_number].createArms then
-		local obj = global.entityTable[entity.unit_number]
+	if storage.entityTable[entity.unit_number] ~= nil and storage.entityTable[entity.unit_number].createArms then
+		local obj = storage.entityTable[entity.unit_number]
 		obj:createArms()
     	BaseNet.postArms(obj)
     	BaseNet.update_network_controller(obj.network and obj or obj.networkController)
@@ -269,8 +269,8 @@ function Event.on_cancelled_deconstruction(event)
     local type = entity.type
     if type == "entity-ghost" then return end
 
-	if global.entityTable[entity.unit_number] ~= nil then
-		local obj = global.entityTable[entity.unit_number]
+	if storage.entityTable[entity.unit_number] ~= nil then
+		local obj = storage.entityTable[entity.unit_number]
 		obj:createArms()
     	BaseNet.postArms(obj)
     	BaseNet.update_network_controller(obj.network and obj or obj.networkController)

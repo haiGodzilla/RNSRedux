@@ -1,8 +1,8 @@
-if global.allowMigration == false then return end
-for _, obj in pairs(global.objectTables) do
+if storage.allowMigration == false then return end
+for _, obj in pairs(storage.objectTables) do
     if obj.tableName ~= nil and obj.tag ~= nil and _G[obj.tag] ~= nil then
         if obj.tag == "ID" then
-            for _, entry in pairs(global[obj.tableName] or {}) do
+            for _, entry in pairs(storage[obj.tableName] or {}) do
                 entry.storedAmount = nil
                 if entry.storedAmount == nil then
                     entry.storedAmount = 0
@@ -16,7 +16,7 @@ for _, obj in pairs(global.objectTables) do
         end
 
         if obj.tag == "FD" then
-            for _, entry in pairs(global[obj.tableName] or {}) do
+            for _, entry in pairs(storage[obj.tableName] or {}) do
                 entry.storedAmount = nil
                 if entry.storedAmount == nil then
                     entry.storedAmount = 0

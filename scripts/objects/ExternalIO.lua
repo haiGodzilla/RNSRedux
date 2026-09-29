@@ -378,10 +378,10 @@ end
 function EIO:validate()
     if self.cache == nil then return end
     for k, v in pairs(self.cache) do
-        if self.type == "fluid" and game.fluid_prototypes[v.name] == nil then
+        if self.type == "fluid" and prototypes.fluid[v.name] == nil then
             self.storedAmount = self.storedAmount - v.amount
             self.cache[k] = nil
-        elseif self.type == "item" and game.item_prototypes[v.name] == nil then
+        elseif self.type == "item" and prototypes.item[v.name] == nil then
             self.storedAmount = self.storedAmount - v.count
             self.cache[k] = nil
         end
@@ -546,7 +546,7 @@ function EIO:reset_focused_entity()
     local nearest = nil
 
     for _, ent in pairs(ents) do
-        if ent ~= nil and ent.valid == true and ent.to_be_deconstructed() == false and string.match(string.upper(ent.name), "RNS_") == nil and global.entityTable[ent.unit_number] == nil then
+        if ent ~= nil and ent.valid == true and ent.to_be_deconstructed() == false and string.match(string.upper(ent.name), "RNS_") == nil and storage.entityTable[ent.unit_number] == nil then
             if (nearest == nil or Util.distance(selfP, ent.position) < Util.distance(selfP, nearest.position)) and
             ((self.type == "item" and Constants.Settings.RNS_TypesWithContainer[ent.type] == true) or (self.type == "fluid" and #ent.fluidbox ~= 0)) then
                 nearest = ent
@@ -642,9 +642,9 @@ function EIO:createArms()
         local ents = self.thisEntity.surface.find_entities_filtered{area={area.startP, area.endP}}
         for _, ent in pairs(ents) do
             if ent ~= nil and ent.valid == true then
-                if ent ~= nil and global.entityTable[ent.unit_number] ~= nil and string.match(ent.name, "RNS_") ~= nil then
+                if ent ~= nil and storage.entityTable[ent.unit_number] ~= nil and string.match(ent.name, "RNS_") ~= nil then
                     if area.direction ~= self:getDirection() then --Prevent cable connection on the IO port
-                        local obj = global.entityTable[ent.unit_number]
+                        local obj = storage.entityTable[ent.unit_number]
                         if (string.match(obj.thisEntity.name, "RNS_NetworkCableIO") ~= nil and obj:getConnectionDirection() == area.direction) or (string.match(obj.thisEntity.name, "RNS_NetworkCableRamp") ~= nil and obj:getConnectionDirection() == area.direction) or obj.thisEntity.name == Constants.WirelessGrid.name then
                             --Do nothing
                         else
@@ -731,18 +731,18 @@ function EIO.has_item(inv, itemstack_data, getModified)
         if itemstack.count <= 0 then break end
         local itemstackC = Util.itemstack_convert(itemstack)
         if Util.itemstack_matches(itemstack_data, itemstackC, getModified) then
-            if game.item_prototypes[itemstack_data.cont.name] == game.item_prototypes[itemstackC.cont.name] then
-                if itemstack_data.cont.ammo and itemstackC.cont.ammo and itemstack_data.cont.ammo < game.item_prototypes[itemstackC.cont.name].magazine_size then
+            if prototypes.item[itemstack_data.cont.name] == prototypes.item[itemstackC.cont.name] then
+                if itemstack_data.cont.ammo and itemstackC.cont.ammo and itemstack_data.cont.ammo < prototypes.item[itemstackC.cont.name].magazine_size then
                     amount = amount + 1
                     goto continue
                 end
-                if itemstack_data.cont.durability and itemstackC.cont.durability and itemstack_data.cont.durability < game.item_prototypes[itemstackC.cont.name].durability then
+                if itemstack_data.cont.durability and itemstackC.cont.durability and itemstack_data.cont.durability < prototypes.item[itemstackC.cont.name].durability then
                     amount = amount + 1
                     goto continue
                 end
             end
             amount = amount + itemstackC.cont.count
-        elseif game.item_prototypes[itemstack_data.cont.name] == game.item_prototypes[itemstackC.cont.name] then
+        elseif prototypes.item[itemstack_data.cont.name] == prototypes.item[itemstackC.cont.name] then
             if itemstack_data.cont.ammo and itemstackC.cont.ammo and itemstack_data.cont.ammo > itemstackC.cont.ammo and itemstackC.cont.count > 1 then
                 amount = amount + itemstack.count - 1
             end
@@ -877,7 +877,7 @@ function EIO.interaction(event, RNSPlayer)
 
     if string.match(event.element.name, "RNS_NetworkCableIO_External_Number") then
         local id = event.element.tags.ID
-		local io = global.entityTable[id]
+		local io = storage.entityTable[id]
 		if io == nil then return end
         local num = math.min(2^32, tonumber(event.element.text ~= "" and event.element.text or "0"))
         io.enabler.number = num
@@ -885,7 +885,7 @@ function EIO.interaction(event, RNSPlayer)
         return
     elseif string.match(event.element.name, "RNS_NetworkCableIO_External_Operator") then
         local id = event.element.tags.ID
-		local io = global.entityTable[id]
+		local io = storage.entityTable[id]
 		if io == nil then return end
         local operator = Constants.Settings.RNS_OperatorN[event.element.selected_index]
         if operator ~= io.enabler.operator then
@@ -894,7 +894,7 @@ function EIO.interaction(event, RNSPlayer)
 		return
     elseif string.match(event.element.name, "RNS_NetworkCableIO_External_Enabler") then
         local id = event.element.tags.ID
-		local io = global.entityTable[id]
+		local io = storage.entityTable[id]
 		if io == nil then return end
         if event.element.elem_value ~= nil then
             io.enabler.filter = event.element.elem_value
@@ -904,7 +904,7 @@ function EIO.interaction(event, RNSPlayer)
 		return
     elseif string.match(event.element.name, "RNS_NetworkCableIO_External_Filter") then
         local id = event.element.tags.ID
-		local io = global.entityTable[id]
+		local io = storage.entityTable[id]
 		if io == nil then return end
         if event.element.elem_value ~= nil then
             io.guiFilters[event.element.tags.type][event.element.tags.index] = event.element.elem_value
@@ -927,7 +927,7 @@ function EIO.interaction(event, RNSPlayer)
 		return
     elseif string.match(event.element.name, "RNS_NetworkCableIO_External_Color") then
 		local id = event.element.tags.ID
-		local io = global.entityTable[id]
+		local io = storage.entityTable[id]
 		if io == nil then return end
         local color = Constants.Settings.RNS_ColorN[event.element.selected_index]
         if color ~= io.color then
@@ -940,7 +940,7 @@ function EIO.interaction(event, RNSPlayer)
 		return
 	elseif string.match(event.element.name, "RNS_NetworkCableIO_External_Mode") then
         local id = event.element.tags.ID
-		local io = global.entityTable[id]
+		local io = storage.entityTable[id]
 		if io == nil then return end
         local mode = Constants.Settings.RNS_ModeN[event.element.selected_index]
         if mode ~= io.io then
@@ -955,7 +955,7 @@ function EIO.interaction(event, RNSPlayer)
 		return
     elseif string.match(event.element.name, "RNS_NetworkCableIO_External_Type") then
         local id = event.element.tags.ID
-		local io = global.entityTable[id]
+		local io = storage.entityTable[id]
 		if io == nil then return end
         local type = Constants.Settings.RNS_TypeN[event.element.selected_index]
         if type ~= io.type then
@@ -971,7 +971,7 @@ function EIO.interaction(event, RNSPlayer)
 		return
     elseif string.match(event.element.name, "RNS_NetworkCableIO_External_Priority") then
         local id = event.element.tags.ID
-		local io = global.entityTable[id]
+		local io = storage.entityTable[id]
 		if io == nil then return end
         local priority = Constants.Settings.RNS_Priorities[event.element.selected_index]
         if priority ~= io.priority then
@@ -985,13 +985,13 @@ function EIO.interaction(event, RNSPlayer)
 		return
     elseif string.match(event.element.name, "RNS_NetworkCableIO_External_WhitelistBlacklist") then
         local id = event.element.tags.ID
-		local io = global.entityTable[id]
+		local io = storage.entityTable[id]
 		if io == nil then return end
         io.whitelistBlacklist = event.element.switch_state == "left" and "whitelist" or "blacklist"
 		return
     elseif string.match(event.element.name, "RNS_NetworkCableIO_External_Modified") then
         local id = event.element.tags.ID
-		local io = global.entityTable[id]
+		local io = storage.entityTable[id]
 		if io == nil then return end
         io.onlyModified = event.element.state
 		return

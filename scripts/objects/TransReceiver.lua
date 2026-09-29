@@ -108,8 +108,8 @@ function TR:createArms()
     for _, area in pairs(areas) do
         local ents = self.thisEntity.surface.find_entities_filtered{area={area.startP, area.endP}}
         for _, ent in pairs(ents) do
-            if ent ~= nil and ent.valid == true and ent.to_be_deconstructed() == false and string.match(ent.name, "RNS_") ~= nil and global.entityTable[ent.unit_number] ~= nil then
-                local obj = global.entityTable[ent.unit_number]
+            if ent ~= nil and ent.valid == true and ent.to_be_deconstructed() == false and string.match(ent.name, "RNS_") ~= nil and storage.entityTable[ent.unit_number] ~= nil then
+                local obj = storage.entityTable[ent.unit_number]
                 if (string.match(obj.thisEntity.name, "RNS_NetworkCableIO") ~= nil and obj:getConnectionDirection() == area.direction) or (string.match(obj.thisEntity.name, "RNS_NetworkCableRamp") ~= nil and obj:getConnectionDirection() == area.direction) or obj.thisEntity.name == Constants.WirelessGrid.name then
                     --Do nothing
                 else
@@ -120,9 +120,9 @@ function TR:createArms()
         end
     end
     if self.type ~= "transmitter" then return end
-    if self.connected == nil or global.entityTable[self.connected] == nil or global.entityTable[self.connected].thisEntity == nil or global.entityTable[self.connected].thisEntity.valid == false then return end
+    if self.connected == nil or storage.entityTable[self.connected] == nil or storage.entityTable[self.connected].thisEntity == nil or storage.entityTable[self.connected].thisEntity.valid == false then return end
 
-    local obj = global.entityTable[self.connected]
+    local obj = storage.entityTable[self.connected]
     if BaseNet.exists_in_network(obj.networkController, obj.entID) and obj.networkController.entID ~= self.networkController.entID then
         self.thisEntity.order_deconstruction("player")
     else
@@ -153,9 +153,9 @@ function TR:DataConvert_ItemToEntity(tag)
     if tag.nametag then
         self.nametag = tag.nametag
     end
-    if self.connected and global.entityTable[self.connected] then
-        global.entityTable[self.connected].connected = self.thisEntity.unit_number
-        global.entityTable[self.connected]:force_controller_update()
+    if self.connected and storage.entityTable[self.connected] then
+        storage.entityTable[self.connected].connected = self.thisEntity.unit_number
+        storage.entityTable[self.connected]:force_controller_update()
     end
     self:force_controller_update()
 end
@@ -166,7 +166,7 @@ function TR:DataConvert_EntityToItem(tag)
 
     if self.connected then
         tags.connection = self.connected
-        local obj = global.entityTable[self.connected]
+        local obj = storage.entityTable[self.connected]
         Util.add_list_into_table(description, {{"item-description.RNS_TransReceiverConnectionTag"}, obj and obj.nametag or ""})
     end
 
@@ -201,7 +201,7 @@ function TR:getTooltips(guiTable, mainFrame, justCreated)
         
         GuiApi.add_line(guiTable, "", infoFlow, "horizontal")
         if self.connected then
-            if global.entityTable[self.connected] == nil or global.entityTable[self.connected].thisEntity == nil or global.entityTable[self.connected].thisEntity.valid == false then
+            if storage.entityTable[self.connected] == nil or storage.entityTable[self.connected].thisEntity == nil or storage.entityTable[self.connected].thisEntity.valid == false then
                 self.connected = nil
             end
         end
@@ -281,30 +281,30 @@ end
 function TR.interaction(event, RNSPlayer)
     local guiTable = RNSPlayer.GUI[Constants.Settings.RNS_Gui.tooltip]
     if string.match(event.element.name, "RNS_TransReceiver_Channels") and event.name ~= defines.events.on_gui_click then
-		local obj = global.entityTable[event.element.tags.ID]
+		local obj = storage.entityTable[event.element.tags.ID]
 		if obj == nil then return end
         local selected_index = event.element.selected_index
         local selected = event.element.items[selected_index]
         if selected == "" then
-            global.entityTable[obj.connected].connected = nil
-            global.entityTable[obj.connected]:force_controller_update()
+            storage.entityTable[obj.connected].connected = nil
+            storage.entityTable[obj.connected]:force_controller_update()
             obj.connected = nil
             obj:force_controller_update()
         else
             local number = selected[1] == "gui-description.RNS_TransReceiver_ID" and selected[2] or selected[3]
             obj.connected = tonumber(number)
-            global.entityTable[obj.connected].connected = obj.thisEntity.unit_number
-            global.entityTable[obj.connected]:force_controller_update()
+            storage.entityTable[obj.connected].connected = obj.thisEntity.unit_number
+            storage.entityTable[obj.connected]:force_controller_update()
             obj:force_controller_update()
         end
 		return
 	elseif string.match(event.element.name, "RNS_TransReceiver_Name_Button") then
-		local obj = global.entityTable[event.element.tags.ID]
+		local obj = storage.entityTable[event.element.tags.ID]
 		if obj == nil then return end
             obj:make_name_change(guiTable, guiTable.vars["nameFlow"])
 		return
 	elseif string.match(event.element.name, "RNS_TransReceiver_Element_Button") and event.name ~= defines.events.on_gui_click then
-		local obj = global.entityTable[event.element.tags.ID]
+		local obj = storage.entityTable[event.element.tags.ID]
 		if obj == nil then return end
             guiTable.vars["RNS_TransReceiver_Name_Text"].text = guiTable.vars["RNS_TransReceiver_Name_Text"].text .. Util.signal_to_rich_text(event.element.elem_value)
             guiTable.vars["RNS_TransReceiver_Name_Text"].focus()
@@ -314,7 +314,7 @@ function TR.interaction(event, RNSPlayer)
               }
 		return
 	elseif string.match(event.element.name, "RNS_TransReceiver_Checkmark") then
-		local obj = global.entityTable[event.element.tags.ID]
+		local obj = storage.entityTable[event.element.tags.ID]
 		if obj == nil then return end
         if guiTable.vars["RNS_TransReceiver_Name_Text"].text == "" then
             obj.nametag = {"gui-description.RNS_TransReceiver_ID", obj.thisEntity.unit_number, obj.thisEntity.surface.name, tostring(serpent.line(obj.thisEntity.position))}
@@ -324,7 +324,7 @@ function TR.interaction(event, RNSPlayer)
         obj:make_name_label(guiTable, guiTable.vars["nameFlow"])
 		return
     --[[elseif string.match(event.element.name, "xPos") then
-		local obj = global.entityTable[event.element.tags.ID]
+		local obj = storage.entityTable[event.element.tags.ID]
 		if obj == nil then return end
         if event.element.text ~= "" then
             obj.receiver.position.x = tonumber(event.element.text)
@@ -334,7 +334,7 @@ function TR.interaction(event, RNSPlayer)
         obj:force_controller_update()
 		return
 	elseif string.match(event.element.name, "yPos") then
-		local obj = global.entityTable[event.element.tags.ID]
+		local obj = storage.entityTable[event.element.tags.ID]
 		if obj == nil then return end
         if event.element.text ~= "" then
             obj.receiver.position.y = tonumber(event.element.text)
@@ -344,7 +344,7 @@ function TR.interaction(event, RNSPlayer)
         obj:force_controller_update()
 		return
 	elseif string.match(event.element.name, "SurfaceID") then
-		local obj = global.entityTable[event.element.tags.ID]
+		local obj = storage.entityTable[event.element.tags.ID]
 		if obj == nil then return end
         if event.element.text ~= "" then
             obj.receiver.surface = tonumber(event.element.text)

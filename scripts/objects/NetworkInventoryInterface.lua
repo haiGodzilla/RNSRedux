@@ -99,8 +99,8 @@ function NII:createArms()
     for _, area in pairs(areas) do
         local ents = self.thisEntity.surface.find_entities_filtered{area={area.startP, area.endP}}
         for _, ent in pairs(ents) do
-            if ent ~= nil and ent.valid == true and ent.to_be_deconstructed() == false and string.match(ent.name, "RNS_") ~= nil and global.entityTable[ent.unit_number] ~= nil then
-                local obj = global.entityTable[ent.unit_number]
+            if ent ~= nil and ent.valid == true and ent.to_be_deconstructed() == false and string.match(ent.name, "RNS_") ~= nil and storage.entityTable[ent.unit_number] ~= nil then
+                local obj = storage.entityTable[ent.unit_number]
                 if (string.match(obj.thisEntity.name, "RNS_NetworkCableIO") ~= nil and obj:getConnectionDirection() == area.direction) or (string.match(obj.thisEntity.name, "RNS_NetworkCableRamp") ~= nil and obj:getConnectionDirection() == area.direction) or obj.thisEntity.name == Constants.WirelessGrid.name then
                     --Do nothing
                 else
@@ -304,12 +304,12 @@ end
 		if item.ammo ~= nil then
 			table.insert(buttonText, "\n")
 			table.insert(buttonText, {"gui-description.RNS_ammo"})
-			table.insert(buttonText, item.ammo .. "/" .. game.item_prototypes[item.name].magazine_size)
+			table.insert(buttonText, item.ammo .. "/" .. prototypes.item[item.name].magazine_size)
 		end
 		if item.durability ~= nil then
 			table.insert(buttonText, "\n")
 			table.insert(buttonText, {"gui-description.RNS_durability"})
-			table.insert(buttonText, item.durability .. "/" .. game.item_prototypes[item.name].durability)
+			table.insert(buttonText, item.durability .. "/" .. prototypes.item[item.name].durability)
 		end
 		if item.connected_entity ~= nil then
 			table.insert(buttonText, "\n")
@@ -317,12 +317,12 @@ end
 			table.insert(buttonText, item.connected_entity.entity_label or Util.get_item_name(item.connected_entity.name))
 		end
 		if guiTable.vars.NII.player[itemIndex] == nil then
-			table.insert(guiTable.vars.NII.player, GuiApi.add_button(guiTable, "RNS_NII_PInv_".. itemIndex, tableList, "item/" .. (item.name), "item/" .. (item.name), "item/" .. (item.name), buttonText, 37, false, true, item.count, ((item.modified or (item.ammo and item.ammo < game.item_prototypes[item.name].magazine_size) or (item.durability and item.durability < game.item_prototypes[item.name].durability)) and {Constants.Settings.RNS_Gui.button_2} or {Constants.Settings.RNS_Gui.button_1})[1], {ID=self.thisEntity.unit_number, name=(item.name), stack=item}))
+			table.insert(guiTable.vars.NII.player, GuiApi.add_button(guiTable, "RNS_NII_PInv_".. itemIndex, tableList, "item/" .. (item.name), "item/" .. (item.name), "item/" .. (item.name), buttonText, 37, false, true, item.count, ((item.modified or (item.ammo and item.ammo < prototypes.item[item.name].magazine_size) or (item.durability and item.durability < prototypes.item[item.name].durability)) and {Constants.Settings.RNS_Gui.button_2} or {Constants.Settings.RNS_Gui.button_1})[1], {ID=self.thisEntity.unit_number, name=(item.name), stack=item}))
 		else
 			local button = guiTable.vars.NII.player[itemIndex]
 			if Itemstack:reload(button.tags.stack):compare_itemstacks(item, true, true) == false then
 				button.destroy()
-				guiTable.vars.NII.player[itemIndex] = GuiApi.add_button(guiTable, "RNS_NII_PInv_".. itemIndex, tableList, "item/" .. (item.name), "item/" .. (item.name), "item/" .. (item.name), buttonText, 37, false, true, item.count, ((item.modified or (item.ammo and item.ammo < game.item_prototypes[item.name].magazine_size) or (item.durability and item.durability < game.item_prototypes[item.name].durability)) and {Constants.Settings.RNS_Gui.button_2} or {Constants.Settings.RNS_Gui.button_1})[1], {ID=self.thisEntity.unit_number, name=(item.name), stack=item})
+				guiTable.vars.NII.player[itemIndex] = GuiApi.add_button(guiTable, "RNS_NII_PInv_".. itemIndex, tableList, "item/" .. (item.name), "item/" .. (item.name), "item/" .. (item.name), buttonText, 37, false, true, item.count, ((item.modified or (item.ammo and item.ammo < prototypes.item[item.name].magazine_size) or (item.durability and item.durability < prototypes.item[item.name].durability)) and {Constants.Settings.RNS_Gui.button_2} or {Constants.Settings.RNS_Gui.button_1})[1], {ID=self.thisEntity.unit_number, name=(item.name), stack=item})
 			end
 			guiTable.vars.NII.player[itemIndex].tooltip = buttonText
 			guiTable.vars.NII.player[itemIndex].number = item.count
@@ -496,12 +496,12 @@ function NII:createNetworkInventory(guiTable, RNSPlayer, text)
 		if item.ammo ~= nil then
 			table.insert(buttonText, "\n")
 			table.insert(buttonText, {"gui-description.RNS_ammo"})
-			table.insert(buttonText, item.ammo .. "/" .. game.item_prototypes[item.name].magazine_size)
+			table.insert(buttonText, item.ammo .. "/" .. prototypes.item[item.name].magazine_size)
 		end
 		if item.durability ~= nil then
 			table.insert(buttonText, "\n")
 			table.insert(buttonText, {"gui-description.RNS_durability"})
-			table.insert(buttonText, item.durability .. "/" .. game.item_prototypes[item.name].durability)
+			table.insert(buttonText, item.durability .. "/" .. prototypes.item[item.name].durability)
 		end
 		if item.connected_entity ~= nil then
 			table.insert(buttonText, "\n")
@@ -509,15 +509,15 @@ function NII:createNetworkInventory(guiTable, RNSPlayer, text)
 			table.insert(buttonText, item.connected_entity.entity_label or Util.get_item_name(item.connected_entity.name))
 		end
 		if guiTable.vars.NII.cache.items[itemIndex] == nil then
-			table.insert(guiTable.vars.NII.cache.items, GuiApi.add_button(guiTable, "RNS_NII_IDInv_".. itemIndex, guiTable.vars.NetworkInventoryTableItems, "item/" .. (item.name), "item/" .. (item.name), "item/" .. (item.name), buttonText, 37, false, true, item.count, ((item.modified or (item.ammo and item.ammo < game.item_prototypes[item.name].magazine_size) or (item.durability and item.durability < game.item_prototypes[item.name].durability)) and {Constants.Settings.RNS_Gui.button_2} or {Constants.Settings.RNS_Gui.button_1})[1], {ID=self.thisEntity.unit_number, name=(item.name), stack=item}, itemIndex))
+			table.insert(guiTable.vars.NII.cache.items, GuiApi.add_button(guiTable, "RNS_NII_IDInv_".. itemIndex, guiTable.vars.NetworkInventoryTableItems, "item/" .. (item.name), "item/" .. (item.name), "item/" .. (item.name), buttonText, 37, false, true, item.count, ((item.modified or (item.ammo and item.ammo < prototypes.item[item.name].magazine_size) or (item.durability and item.durability < prototypes.item[item.name].durability)) and {Constants.Settings.RNS_Gui.button_2} or {Constants.Settings.RNS_Gui.button_1})[1], {ID=self.thisEntity.unit_number, name=(item.name), stack=item}, itemIndex))
 		else
 			local button = guiTable.vars.NII.cache.items[itemIndex]
 			if button.tags.stack == nil or Itemstack:reload(button.tags.stack):compare_itemstacks(item, true, true) == false then
 				button.destroy()
-				guiTable.vars.NII.cache.items[itemIndex] = GuiApi.add_button(guiTable, "RNS_NII_IDInv_".. itemIndex, guiTable.vars.NetworkInventoryTableItems, "item/" .. (item.name), "item/" .. (item.name), "item/" .. (item.name), buttonText, 37, false, true, item.count, ((item.modified or (item.ammo and item.ammo < game.item_prototypes[item.name].magazine_size) or (item.durability and item.durability < game.item_prototypes[item.name].durability)) and {Constants.Settings.RNS_Gui.button_2} or {Constants.Settings.RNS_Gui.button_1})[1], {ID=self.thisEntity.unit_number, name=(item.name), stack=item}, itemIndex)
+				guiTable.vars.NII.cache.items[itemIndex] = GuiApi.add_button(guiTable, "RNS_NII_IDInv_".. itemIndex, guiTable.vars.NetworkInventoryTableItems, "item/" .. (item.name), "item/" .. (item.name), "item/" .. (item.name), buttonText, 37, false, true, item.count, ((item.modified or (item.ammo and item.ammo < prototypes.item[item.name].magazine_size) or (item.durability and item.durability < prototypes.item[item.name].durability)) and {Constants.Settings.RNS_Gui.button_2} or {Constants.Settings.RNS_Gui.button_1})[1], {ID=self.thisEntity.unit_number, name=(item.name), stack=item}, itemIndex)
 			--elseif guiTable.vars.NII.item[itemIndex].number ~= item.count then
 			--	button.destroy()
-			--	guiTable.vars.NII.item[itemIndex] = GuiApi.add_button(guiTable, "RNS_NII_IDInv_".. itemIndex, tableList, "item/" .. (item.name), "item/" .. (item.name), "item/" .. (item.name), buttonText, 37, false, true, item.count, ((item.modified or (item.ammo and item.ammo < game.item_prototypes[item.name].magazine_size) or (item.durability and item.durability < game.item_prototypes[item.name].durability)) and {Constants.Settings.RNS_Gui.button_2} or {Constants.Settings.RNS_Gui.button_1})[1], {ID=self.thisEntity.unit_number, name=(item.name), stack=item})
+			--	guiTable.vars.NII.item[itemIndex] = GuiApi.add_button(guiTable, "RNS_NII_IDInv_".. itemIndex, tableList, "item/" .. (item.name), "item/" .. (item.name), "item/" .. (item.name), buttonText, 37, false, true, item.count, ((item.modified or (item.ammo and item.ammo < prototypes.item[item.name].magazine_size) or (item.durability and item.durability < prototypes.item[item.name].durability)) and {Constants.Settings.RNS_Gui.button_2} or {Constants.Settings.RNS_Gui.button_1})[1], {ID=self.thisEntity.unit_number, name=(item.name), stack=item})
 			end
 			guiTable.vars.NII.cache.items[itemIndex].number = item.count
 			guiTable.vars.NII.cache.items[itemIndex].tags = {ID=self.thisEntity.unit_number, name=(item.name), stack=item}
@@ -538,7 +538,7 @@ function NII:createNetworkInventory(guiTable, RNSPlayer, text)
 	Util.merge_sort(fluid, nil, nil, self.sortOrder)
 	for _, c in pairs(fluid) do
 		fluidIndex = fluidIndex + 1
-		local buttonText = {"", "[color=blue]", Util.get_fluid_name(c.name), "[/color]\n", {"gui-description.RNS_count"}, Util.toRNumber(c.amount), "\n", {"gui-description.RNS_Temperature"}, c.temperature or game.fluid_prototypes[c.name].default_temperature}
+		local buttonText = {"", "[color=blue]", Util.get_fluid_name(c.name), "[/color]\n", {"gui-description.RNS_count"}, Util.toRNumber(c.amount), "\n", {"gui-description.RNS_Temperature"}, c.temperature or prototypes.fluid[c.name].default_temperature}
 		if guiTable.vars.NII.cache.fluids[fluidIndex] == nil then
 			table.insert(guiTable.vars.NII.cache.fluids, GuiApi.add_button(guiTable, "RNS_NII_FDInv_".. fluidIndex, guiTable.vars.NetworkInventoryTableFluids, "fluid/" .. (c.name), "fluid/" .. (c.name), "fluid/" .. (c.name), buttonText, 37, false, true, c.amount, Constants.Settings.RNS_Gui.button_1, {ID=self.entID, name=c.name}, fluidIndex))
 		else
@@ -580,14 +580,14 @@ function NII.transfer_from_pinv(RNSPlayer, NII, tags, count)
 	local network = NII.networkController ~= nil and NII.networkController.network or nil
 	if network == nil then return end
 	if network:is_full() then return end
-	--if itemstack.id ~= nil and global.itemTable[itemstack.id] ~= nil and global.itemTable[itemstack.id].is_active == true then return end
+	--if itemstack.id ~= nil and storage.itemTable[itemstack.id] ~= nil and storage.itemTable[itemstack.id].is_active == true then return end
 	local itemstack = RNSPlayer.thisEntity.cursor_stack
 	if itemstack.valid_for_read == false and count ~= -4 then return end
 	
 	local amount = 1
 	if count == -1 and itemstack.count ~= 0 then amount = itemstack.count end
-	if count == -2 and itemstack.count ~= 0 then amount = math.ceil(math.min(itemstack.count, game.item_prototypes[itemstack.name].stack_size/2)) end
-	if count == -3 and itemstack.count ~= 0 then amount = game.item_prototypes[itemstack.name].stack_size*10 end
+	if count == -2 and itemstack.count ~= 0 then amount = math.ceil(math.min(itemstack.count, prototypes.item[itemstack.name].stack_size/2)) end
+	if count == -3 and itemstack.count ~= 0 then amount = prototypes.item[itemstack.name].stack_size*10 end
 	if count == -4 then amount = (2^32) end
 
 	--local inv = RNSPlayer.thisEntity.get_main_inventory()
@@ -622,8 +622,8 @@ function NII.transfer_from_pinv(RNSPlayer, NII, tags, count)
 						if EIO.has_item_room(inv1) == true then
 							--if external.metadataMode == false then
 							--	if itemstack.modified == true then return end
-							--	if itemstack.cont.ammo ~= game.item_prototypes[itemstack.cont.name].magazine_size then return end
-							--	if itemstack.cont.durability ~= game.item_prototypes[itemstack.cont.name].durability then return end
+							--	if itemstack.cont.ammo ~= prototypes.item[itemstack.cont.name].magazine_size then return end
+							--	if itemstack.cont.durability ~= prototypes.item[itemstack.cont.name].durability then return end
 							--end
 							amount = amount - BaseNet.transfer_from_inv_to_inv(inv, inv1, itemstack, external, amount, false, true)
 							if amount <= 0 then return end
@@ -655,9 +655,9 @@ function NII.transfer_from_idinv(RNSPlayer, NII, tags, count)
 	if network:is_empty() then return end
 	if tags == nil then return end
 	local itemstack = Itemstack:reload(tags.stack)
-	if count == -1 then count = game.item_prototypes[itemstack.name].stack_size end
-	if count == -2 then count = math.ceil(math.max(1, game.item_prototypes[itemstack.name].stack_size/2)) end
-	if count == -3 then count = game.item_prototypes[itemstack.name].stack_size*10 end
+	if count == -1 then count = prototypes.item[itemstack.name].stack_size end
+	if count == -2 then count = math.ceil(math.max(1, prototypes.item[itemstack.name].stack_size/2)) end
+	if count == -3 then count = prototypes.item[itemstack.name].stack_size*10 end
 	if count == -4 then count = (2^32) end
 
 	--local inv = RNSPlayer.thisEntity.get_main_inventory()
@@ -691,8 +691,8 @@ function NII.transfer_from_idinv(RNSPlayer, NII, tags, count)
 						if has > 0 and RNSPlayer:has_room() == true then
 							--if external.metadataMode == false then
 							--	if itemstack.modified == true then return end
-							--	if itemstack.cont.ammo ~= game.item_prototypes[itemstack.cont.name].magazine_size then return end
-							--	if itemstack.cont.durability ~= game.item_prototypes[itemstack.cont.name].durability then return end
+							--	if itemstack.cont.ammo ~= prototypes.item[itemstack.cont.name].magazine_size then return end
+							--	if itemstack.cont.durability ~= prototypes.item[itemstack.cont.name].durability then return end
 							--end
 							amount = amount - BaseNet.transfer_from_inv_to_inv(inv1, inv, itemstack, nil, math.min(has, amount), false, true)
 							if amount <= 0 then return end
@@ -726,9 +726,9 @@ function NII.transfer_from_fdinv(RNSPlayer, NII, tags, count)
 	if tags == nil then return end
 	local fluid = tags.name
 
-	--if count == -1 then count = game.item_prototypes[itemstack.cont.name].stack_size end
-	--if count == -2 then count = math.max(1, game.item_prototypes[itemstack.cont.name].stack_size/2) end
-	--if count == -3 then count = game.item_prototypes[itemstack.cont.name].stack_size*10 end
+	--if count == -1 then count = prototypes.item[itemstack.cont.name].stack_size end
+	--if count == -2 then count = math.max(1, prototypes.item[itemstack.cont.name].stack_size/2) end
+	--if count == -3 then count = prototypes.item[itemstack.cont.name].stack_size*10 end
 	--if count == -4 then count = (2^32)-1 end
 --
 	--local inv = RNSPlayer.thisEntity.get_main_inventory()
@@ -751,7 +751,7 @@ function NII.interaction(event, RNSPlayer)
 		return
 	elseif string.match(event.element.name, "RNS_NII_SortOrder") then
         local id = event.element.tags.ID
-		local io = global.entityTable[id]
+		local io = storage.entityTable[id]
 		if io == nil then return end
         io.sortOrder = event.element.switch_state == "left" and "HL" or "LH"
 		return
@@ -765,7 +765,7 @@ function NII.interaction(event, RNSPlayer)
 	if event.button == defines.mouse_button_type.left and event.control == true then count = -4 end --All Stacks
 
 	
-	local obj = global.entityTable[event.element.tags.ID]
+	local obj = storage.entityTable[event.element.tags.ID]
 	if BaseNet.exists_in_network(obj.networkController, obj.entID) == false then return end
 
 	if string.match(event.element.name, "RNS_NII_Insert") then
