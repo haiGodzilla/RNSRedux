@@ -21,6 +21,7 @@ require("scripts.objects.NetworkCables")
 require("scripts.objects.NetworkCableUnderground")
 require("scripts.objects.ItemStore")
 require("scripts.objects.Itemstack")
+require("scripts.debug.StressTest")
 require("scripts.objects.ItemIOV3")
 require("scripts.objects.FluidIO")
 require("scripts.objects.ExternalIO")
@@ -332,3 +333,21 @@ commands.add_command("rns-store-test", "RNSRedux: exercise ItemStore against a s
 
     game.print(table.concat(lines, "\n"))
 end)
+
+--Stress test commands for UPS measurement.
+commands.add_command("rns-stress-build", "RNSRedux: build a stress network. <stations> <drivesPerStation>",
+    function(data)
+        local a, b = string.match(data.parameter or "", "(%d+)%s+(%d+)")
+        game.print(StressTest.build(tonumber(a) or 5, tonumber(b) or 10))
+    end)
+
+commands.add_command("rns-stress-fill", "RNSRedux: load drives with items. <typesPerDrive> <amountPerType>",
+    function(data)
+        local a, b = string.match(data.parameter or "", "(%d+)%s+(%d+)")
+        game.print(StressTest.fill(tonumber(a) or 10, tonumber(b) or 200))
+    end)
+
+commands.add_command("rns-stress-clear", "RNSRedux: remove everything the stress builder created",
+    function()
+        game.print(StressTest.clear())
+    end)
