@@ -248,3 +248,57 @@ script.on_event(defines.events.on_gui_value_changed, onGuiElemChanged)
 script.on_event(defines.events.on_player_setup_blueprint, onBlueprintSetup)
 script.on_event(defines.events.on_player_configured_blueprint, onBlueprintConfigured)
 script.on_event(defines.events.on_entity_settings_pasted, onSettingsPasted)
+
+--Debug command: dumps the network bookkeeping from inside the mod.
+--The console runs in its own storage and cannot see ours; this can.
+commands.add_command("rns-debug", "RNSRedux: dump network and interface state", function()
+    local lines = {}
+    local total = 0
+    for _ in pairs(storage.entityTable or {}) do total = total + 1 end
+    table.insert(lines, "entityTable entries: " .. total)
+
+    for _, obj in pairs(storage.entityTable or {}) do
+        if obj.thisEntity ~= nil and obj.thisEntity.valid == true then
+            local name = obj.thisEntity.name
+            if name == Constants.NetworkController.main.name then
+                local members = 0
+                for _ in pairs(obj.network.connectedEntities or {}) do members = members + 1 end
+                table.insert(lines, "NC " .. obj.entID
+                    .. " members=" .. members
+                    .. " shouldRefresh=" .. tostring(obj.network.shouldRefresh)
+                    .. " powerDraw=" .. tostring(obj.network.powerDraw))
+            elseif name == Constants.NetworkInventoryInterface.name then
+                local hasController = obj.networkController ~= nil
+                local inNetwork = false
+                if hasController then
+                    inNetwork = BaseNet.exists_in_network(obj.networkController, obj.entID)
+                end
+                table.insert(lines, "NII " .. obj.entID
+                    .. " ctrl=" .. tostring(hasController)
+                    .. " inNetwork=" .. tostring(inNetwork))
+            elseif string.match(name, "RNS_ItemDrive") ~= nil or string.match(name, "RNS_FluidDrive") ~= nil then
+                table.insert(lines, "Drive " .. obj.entID
+                    .. " ctrl=" .. tostring(obj.networkController ~= nil)
+                    .. " stored=" .. tostring(obj.storedAmount))
+            end
+        end
+    end
+
+    for _, player in pairs(game.players) do
+        local inv = player.get_main_inventory()
+        local filled = 0
+        local slots = -1
+        if inv ~= nil then
+            slots = #inv
+            for i = 1, slots do
+                local stack = inv[i]
+                if stack ~= nil and stack.valid_for_read and stack.count > 0 then
+                    filled = filled + 1
+                end
+            end
+        end
+        table.insert(lines, "player " .. player.name .. " slots=" .. slots .. " filled=" .. filled)
+    end
+
+    game.print(table.concat(lines, "\n"))
+end)
