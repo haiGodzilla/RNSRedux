@@ -334,9 +334,10 @@ Entscheidungsrelevante Trennung:
   Durchsatz, solange eine Charge ein Item groß ist. Das ist eine
   Balance-Änderung, keine Optimierung.
 
-Vor jeder Änderung an diesem Pfad fehlt die Messung: Der Stresstest baut keine
-IO-Busse, also ist der Pfad derzeit nicht messbar. Das ist der Blocker, nicht
-der Umbau selbst.
+Vor jeder Änderung an diesem Pfad fehlt die Messung: Der Stresstest baute keine
+IO-Busse, also war der Pfad nicht messbar. **Behoben:** Der Aufbau baut jetzt
+Busse, siehe Messverfahren in Abschnitt 9. Damit ist der Blocker weg und die
+Reihenfolge entscheidbar.
 
 ## 7. Gestrichen
 
@@ -359,7 +360,8 @@ Ebenso gestrichen: die Slot-Umrechnung „1 Slot je 100 Items".
   braucht es viele Busse oder höhere Ausbaustufen. Das ist eine
   Balance-Entscheidung, keine technische.
 - Ob der IO-Pfad oder der Refresh-Pfad in einem realistischen Save mehr kostet.
-  Es gibt keine Messung mit IO-Bussen; der Stresstest baut keine.
+  Der Stresstest baut seit dem 30.09.2026 Busse, die Frage ist damit messbar
+  geworden; die Messung selbst steht noch aus.
 - Ob `Contents.item` an allen Aufrufstellen vollständig gebucht wird. Gelesen
   sind vier Stellen; den Beweis soll die Differenzprüfung in Abschnitt 9
   liefern, nicht eine Zählung im Quelltext.
@@ -394,7 +396,8 @@ alle Drives).
 erzwingt den Vollaufbau. Beide Dumps müssen identisch sein — das ist der
 Abnahmemaßstab für P1.
 
-**Stressaufbau.** `/rns-stress-build <stationen> <drivesProStation>`, dann
+**Stressaufbau.** `/rns-stress-build <stationen> <drivesProStation> [busseProStation]`,
+dann
 `/rns-stress-fill <typenProDrive> <mengeProTyp>`, `/rns-stress-status`,
 `/rns-stress-clear`, `/rns-stress-purge`. Verifizierte Erwartungswerte:
 
@@ -407,10 +410,32 @@ Abnahmemaßstab für P1.
 `members` = Drives + Kabel **pro Station** + 2. Weicht eine Zeile ab, ist der
 Aufbau unvollständig und die Stufe unbrauchbar.
 
+**Busse (dritter Parameter).** Pro Bus drei Entities an einer Station: ein
+Stichkabel, der Bus, seine Kiste. Sie liegen südlich der Spinne, deren Geometrie
+unberührt bleibt. Erwartung: `members = Drives + spineLength + 2 × Busse + 2`;
+`/rns-stress-build` gibt den Wert selbst aus.
+
+| Aufbau | `members` |
+|---|---|
+| `10 20` | 64 |
+| `10 20 4` | 72 |
+| `20 50 10` | 174 |
+
+Abwechselnd Item-IO (exportiert, Kiste leer) und External-IO (importiert, Kiste
+mit 4.800 Items vorgefüllt). Zwei Einstellungen setzt der Aufbau selbst, weil die
+Busse sonst nichts tun: `filters` auf ein Item, das der Fill auch in die Drives
+legt (`ItemIOV3:IO` betritt den Exportzweig nur bei `filters.max ~= 0`,
+`ItemIOV3.lua:522`), und `onlyModified = false` am External-Bus (der Import
+überspringt sonst jeden unmodifizierten Stapel, `NetworkBase.lua:1187`).
+`/rns-stress-status` meldet zusätzlich `buses total= withTarget= inNetwork=` — ein
+Bus ohne Ziel tut nichts, ein Bus ohne Netz bekommt keine Updates.
+
 Einschränkung des Aufbaus: `spineLength` hängt an `drivesPerStation`, die Stufen
-verdoppeln also Drives und Kabel gleichzeitig. Für die Größenentscheidung reicht
-die Summe; eine Trennung der Anteile bräuchte einen zweiten Aufbau mit variabler
-Kabellänge. Und: Der Aufbau enthält keine Busse, deckt also P1 ab, nicht P5.
+verdoppeln also Drives und Kabel gleichzeitig, und die Busspalten müssen in die
+Spinne passen. Der Befehl kürzt die Buszahl bei Bedarf selbst und meldet es.
+Drives und Busse lassen sich damit nicht unabhängig skalieren; für die Frage
+„was kostet der Bus" reicht das, für eine Trennung bräuchte es einen zweiten
+Aufbau.
 
 ## 10. Quellen
 

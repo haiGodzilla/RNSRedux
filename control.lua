@@ -509,10 +509,10 @@ commands.add_command("rns-store-test", "RNSRedux: exercise ItemStore against a s
 end)
 
 --Stress test commands for UPS measurement.
-commands.add_command("rns-stress-build", "RNSRedux: build a stress network. <stations> <drivesPerStation>",
+commands.add_command("rns-stress-build", "RNSRedux: build a stress network. <stations> <drivesPerStation> [busesPerStation]",
     function(data)
-        local a, b = string.match(data.parameter or "", "(%d+)%s+(%d+)")
-        game.print(StressTest.build(tonumber(a) or 5, tonumber(b) or 10))
+        local a, b, c = string.match(data.parameter or "", "(%d+)%s+(%d+)%s*(%d*)")
+        game.print(StressTest.build(tonumber(a) or 5, tonumber(b) or 10, tonumber(c) or 0))
     end)
 
 commands.add_command("rns-stress-fill", "RNSRedux: load drives with items. <typesPerDrive> <amountPerType>",

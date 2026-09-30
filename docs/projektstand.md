@@ -502,10 +502,7 @@ wirkungslos sein — gelesen, nicht gemessen.
 greift und die Objekte sonst unverändert in `storage` liegen — gelesen, nicht
 gemessen. Mit P2 (ItemStore) bekommt das ohnehin einen eigenen Test.
 
-Danach ist der IO-Bus der nächste Posten (Abschnitt 6, offene Reihenfolge in
-`docs/ups-architektur.md` Abschnitt 6a).
-
-## 6. Der IO-Bus (vermuteter Hauptposten)
+## 6. Der IO-Bus (nächster Posten, Messaufbau steht)
 
 Der IO-Bus ist die einzige Kostenquelle, die dauerhaft und vielfach pro Sekunde
 anfällt. Der Refresh-Posten im Dauerbetrieb ist seit `a5add2b` entfallen; er
@@ -540,8 +537,48 @@ Durchsatz, Kadenz senken kostet Durchsatz.** `RNS_ItemIO_Tick = 4` entspricht
 Durchsatz, solange eine Charge ein Item groß ist. Das wäre eine
 Balance-Änderung, keine Optimierung.
 
-Blocker: Der Stresstest baut keine IO-Busse, der Pfad ist also nicht messbar.
-Vor jedem Umbau steht die Erweiterung des Stresstests.
+Blocker: Der Stresstest baute keine IO-Busse, der Pfad war also nicht messbar.
+**Behoben am 30.09.2026** — siehe 6.1.
+
+### 6.1 Der Stresstest baut jetzt Busse
+
+`/rns-stress-build <stationen> <drivesProStation> [busseProStation]`. Pro Bus vier
+Entities an einer Station: ein Stichkabel, der Bus, seine Kiste (und das
+Stichkabel zählt als Kabel). Die Spalten liegen südlich der Spinne, deren
+Geometrie unverändert bleibt. Erwartung:
+`members = Drives + spineLength + 2 × Busse + 2` — der Befehl gibt den Wert
+selbst mit aus, `/rns-stress-status` prüft gegen.
+
+| Aufbau | `members` |
+|---|---|
+| `10 20` | 64 |
+| `10 20 4` | 72 |
+| `20 50 10` | 174 |
+
+Abwechselnd Item-IO (exportiert aus dem Netz, Kiste startet leer) und
+External-IO (importiert, Kiste mit 4.800 Items vorgefüllt).
+
+**Zwei Einstellungen setzt der Aufbau selbst, sonst tun die Busse nichts** — beide
+beim Bau gelesen, nicht vermutet:
+
+- `filters` auf ein Item, das der Fill in die Drives legt. `ItemIOV3:IO` betritt
+  den Exportzweig nur bei `filters.max ~= 0` (`ItemIOV3.lua:522`) und baut den
+  Master-Stack aus dem Filter (`525`). Ein Bus ohne Filter ist wirkungslos.
+- `onlyModified = false` am External-Bus. Der Import überspringt sonst jeden
+  unmodifizierten Stapel (`NetworkBase.lua:1187`), und der Aufbau hält nur
+  unmodifizierte — der Bus würde den Container lesen und nichts bewegen.
+
+`/rns-stress-status` meldet `buses total= withTarget= inNetwork=`. Ein Bus ohne
+Ziel tut nichts, ein Bus ohne Netz bekommt keine Updates. Beides ist der erste
+Verdacht, wenn die Messung flach bleibt.
+
+Einschränkung: Die Busspalten müssen in die Spinne passen, deren Länge mit
+`drivesPerStation` wächst. Der Befehl kürzt die Buszahl selbst und meldet es.
+Busse und Drives lassen sich also nicht unabhängig skalieren.
+
+**Noch nicht gebaut:** der Infinity-Aufbau für die Dauerlast. Die External-Kisten
+laufen bei 15 Items/s in gut fünf Minuten leer; für eine Zwei-Minuten-Messung
+reicht das, für längere nicht.
 
 ## 7. Offene technische Schulden
 
