@@ -4,7 +4,8 @@ Einstiegspunkt für die Weiterarbeit. Technischer Plan und Begründungen:
 `docs/ups-architektur.md`. Dieses Dokument beantwortet „wo stehen wir, was ist
 verifiziert, was ist der nächste Schritt".
 
-Stand: Commit `ab3d4ae`, Branch `port/2.0`, Version 2.0.0. P1 ist abgenommen.
+Stand: Commit `f94c3f0`, Branch `port/2.0`, Version 2.0.0.
+P0 und P1 sind durch, der IO-Bus ist der laufende Posten.
 
 ## 1. Projekt
 
@@ -802,6 +803,8 @@ busTruth=<Busse>/<was der Cache behauptet>/<was im Container steht>
 
 Das ist die Größe, die die Änderung überleben muss. `external=` und `busTruth`
 mittlere Zahl müssen zusammenpassen; die dritte ist die Wahrheit im Container.
+Hinzu kommt `busSkips=<übersprungen>/<gesamt>` — dieses Paar zählt, wie oft die
+Abkürzung greift, und **geht selbst auf**, siehe 6.11.
 
 **Der Gewinn hängt daran, wie oft sich der Container ändert**, und der Messaufbau
 ist dabei der Bestfall (siehe 6.10). Wenn die Zahl nicht deutlich fällt, ist der

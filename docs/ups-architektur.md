@@ -480,6 +480,15 @@ Drei Dinge prüfen den Aufbau, bevor die Zahl etwas wert ist:
   (`NetworkBase.addConnectables` → `init_cache`), er liest den Container nicht —
   ein veralteter Cache wäre in jedem Dump-Vergleich unsichtbar. `busTruth` ist die
   einzige Stelle, an der die beiden gegeneinander laufen.
+- `/rns-debug-nc` → `busSkips=<übersprungen>/<gesamt>`. Beide Zähler sind monoton,
+  also zwei Dumps als Differenz lesen. **Diese Zählung ist der eigentliche Beweis
+  für einen Eingriff am Lesepfad** — sie geht selbst auf (Sweeps pro Tick × Busse ×
+  Messdauer, Sicherheitsabruf alle `RNS_ExternalStorage_Rescan`) und braucht keinen
+  A/B-Lauf. Siehe `docs/projektstand.md` 6.11.
+- `/rns-bus-skip <n>` schaltet die Abkürzung des External-Busses ab (`1`) oder an
+  (`20`), **liest den Wert zurück** und nullt die Zähler. Als A/B-Werkzeug gedacht
+  — aber erst nach der Zählung entscheiden, denn ein A/B-Lauf über einen
+  Konsolen-Ausdruck ist nur so gut wie die Prüfung, dass der Ausdruck ankam.
 
 **Stressaufbau.** `/rns-stress-build <stationen> <drivesProStation> [busseProStation]`,
 dann
