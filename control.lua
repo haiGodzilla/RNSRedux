@@ -251,6 +251,41 @@ script.on_event(defines.events.on_player_setup_blueprint, onBlueprintSetup)
 script.on_event(defines.events.on_player_configured_blueprint, onBlueprintConfigured)
 script.on_event(defines.events.on_entity_settings_pasted, onSettingsPasted)
 
+--Builds the counter dump for a single network controller. Shared by /rns-debug
+--and /rns-debug-nc, so the two can never drift apart.
+local function controllerCounterLine(obj)
+    local network = obj.network
+    local members = 0
+    for _ in pairs(network.connectedEntities or {}) do members = members + 1 end
+
+    --Sum and key count are reported separately: a growing key count with a flat
+    --sum means zero entries pile up instead of dropping out.
+    local trackedItems = 0
+    local trackedTypes = 0
+    for _, count in pairs(network.Contents.item or {}) do
+        trackedItems = trackedItems + count
+        trackedTypes = trackedTypes + 1
+    end
+
+    local cachedStacks = 0
+    for _, list in pairs(network.interfaceCache.item or {}) do
+        cachedStacks = cachedStacks + #list
+    end
+
+    local partition = network.StoredPartition or {}
+    local drive = partition.itemDrive or {}
+    local external = partition.itemExternal or {}
+
+    return "NC " .. obj.entID
+        .. " members=" .. members
+        .. " shouldRefresh=" .. tostring(network.shouldRefresh)
+        .. " powerDraw=" .. tostring(network.powerDraw)
+        .. " tracked=" .. trackedItems .. "/" .. trackedTypes
+        .. " cache=" .. cachedStacks
+        .. " drive=" .. tostring(drive.storedAmount) .. "/" .. tostring(drive.capacity)
+        .. " external=" .. tostring(external.storedAmount) .. "/" .. tostring(external.capacity)
+end
+
 --Debug command: dumps the network bookkeeping from inside the mod.
 --The console runs in its own storage and cannot see ours; this can.
 commands.add_command("rns-debug", "RNSRedux: dump network and interface state", function()
@@ -263,37 +298,7 @@ commands.add_command("rns-debug", "RNSRedux: dump network and interface state", 
         if obj.thisEntity ~= nil and obj.thisEntity.valid == true then
             local name = obj.thisEntity.name
             if name == Constants.NetworkController.main.name then
-                local network = obj.network
-                local members = 0
-                for _ in pairs(network.connectedEntities or {}) do members = members + 1 end
-
-                --The incremental counters that P1 must not disturb. Sum and key
-                --count are reported separately: a growing key count with a flat
-                --sum would mean zero entries pile up instead of dropping out.
-                local trackedItems = 0
-                local trackedTypes = 0
-                for _, count in pairs(network.Contents.item or {}) do
-                    trackedItems = trackedItems + count
-                    trackedTypes = trackedTypes + 1
-                end
-
-                local cachedStacks = 0
-                for _, list in pairs(network.interfaceCache.item or {}) do
-                    cachedStacks = cachedStacks + #list
-                end
-
-                local partition = network.StoredPartition or {}
-                local drive = partition.itemDrive or {}
-                local external = partition.itemExternal or {}
-
-                table.insert(lines, "NC " .. obj.entID
-                    .. " members=" .. members
-                    .. " shouldRefresh=" .. tostring(network.shouldRefresh)
-                    .. " powerDraw=" .. tostring(network.powerDraw)
-                    .. " tracked=" .. trackedItems .. "/" .. trackedTypes
-                    .. " cache=" .. cachedStacks
-                    .. " drive=" .. tostring(drive.storedAmount) .. "/" .. tostring(drive.capacity)
-                    .. " external=" .. tostring(external.storedAmount) .. "/" .. tostring(external.capacity))
+                table.insert(lines, controllerCounterLine(obj))
             elseif name == Constants.NetworkInventoryInterface.name then
                 local hasController = obj.networkController ~= nil
                 local inNetwork = false
@@ -346,6 +351,28 @@ commands.add_command("rns-debug-refresh", "RNSRedux: force a network rebuild on 
         end
     end
     game.print("rns-debug-refresh: rebuilt " .. rebuilt .. " controllers")
+end)
+
+--Debug command: the same controller counters without the per-entity noise. Two
+--runs of this fit on one screen, which a full /rns-debug dump does not.
+commands.add_command("rns-debug-nc", "RNSRedux: dump only the controller counters", function()
+    local entries = {}
+    for _, obj in pairs(storage.entityTable or {}) do
+        if obj.network ~= nil then
+            entries[#entries + 1] = {id = obj.entID, text = controllerCounterLine(obj)}
+        end
+    end
+    if #entries == 0 then
+        game.print("rns-debug-nc: no controllers")
+        return
+    end
+
+    table.sort(entries, function(a, b) return a.id < b.id end)
+    local lines = {}
+    for _, entry in pairs(entries) do
+        lines[#lines + 1] = entry.text
+    end
+    game.print(table.concat(lines, "\n"))
 end)
 
 --Debug command for M1: exercises ItemStore against a scratch inventory, without
