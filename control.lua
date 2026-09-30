@@ -281,9 +281,12 @@ end
 --self-consistent in any two dumps. This is the only place the two are compared.
 local function externalTotals(network)
     local buses, cached, actual = 0, 0, 0
+    local skipped, read = 0, 0
     for _, obj in pairs(network.connectedEntities or {}) do
         if obj.cache ~= nil and obj.type == "item" then
             buses = buses + 1
+            skipped = skipped + (obj.skippedSweeps or 0)
+            read = read + (obj.readSweeps or 0)
             for i = 1, #obj.cache do
                 local entry = obj.cache[i]
                 if entry ~= nil and entry.name ~= "RNS_Empty" then
@@ -299,7 +302,7 @@ local function externalTotals(network)
             end
         end
     end
-    return buses, cached, actual
+    return buses, cached, actual, skipped, read
 end
 
 --Builds the counter dump for a single network controller. Shared by /rns-debug
@@ -327,7 +330,7 @@ local function controllerCounterLine(obj)
     local drive = partition.itemDrive or {}
     local external = partition.itemExternal or {}
     local driveCount, driveClaimed, driveActual, fluidClaimed, fluidActual = driveTotals(network)
-    local busCount, busCached, busActual = externalTotals(network)
+    local busCount, busCached, busActual, busSkipped, busRead = externalTotals(network)
 
     return "NC " .. obj.entID
         .. " members=" .. members
@@ -340,6 +343,7 @@ local function controllerCounterLine(obj)
         .. " truth=" .. driveCount .. "/" .. driveClaimed .. "/" .. driveActual
         .. " fluidTruth=" .. fluidClaimed .. "/" .. fluidActual
         .. " busTruth=" .. busCount .. "/" .. busCached .. "/" .. busActual
+        .. " busSkips=" .. busSkipped .. "/" .. (busSkipped + busRead)
 end
 
 --Debug command: dumps the network bookkeeping from inside the mod.

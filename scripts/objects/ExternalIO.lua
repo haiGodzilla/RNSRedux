@@ -292,8 +292,10 @@ function EIO:update(network, periodic)
         self.rescanCounter = (self.rescanCounter or 0) + 1
         if total == self.seenCount
             and self.rescanCounter < Constants.Settings.RNS_ExternalStorage_Rescan then
+            self.skippedSweeps = (self.skippedSweeps or 0) + 1
             return
         end
+        self.readSweeps = (self.readSweeps or 0) + 1
         self.seenCount = total
         self.rescanCounter = 0
     end
