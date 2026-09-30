@@ -2163,16 +2163,111 @@ Füllmengen bei halben Magazinen), die fehlende Qualität im Stapel-Dialekt, den
 Lesepfad aus der 2.0-Portierung und den Absturz bei fremden Entity-Tags bei der
 Platzierung.
 
-## 8. Offene technische Schulden
+## 8. P3 — Chargentransfer
+
+### 8.1 Der Plan-Zuschnitt für P3 trägt nicht
+
+Der Plan führt P3 als „Alle Transferpfade auf Stack-Tabellen umstellen, Buchhaltung
+pro Charge". Beim Lesen der Pfade fallen zwei Punkte dagegen:
+
+**Erstens: Eine Charge ist ein Item, und das ist Absicht.**
+
+```lua
+RNS_BaseItemIO_TransferCapacity = 1        -- utils/constants.lua:104
+transportCapacity = self.stackSize * 1     -- ItemIOV3.lua:468
+stackSize = storage.IIOMultiplier          -- Startwert 1, control.lua:45
+```
+
+Also `transportCapacity = 1`. **Ein Item pro Charge, ein Item pro 4 Ticks — das
+ergibt die 15 Items/s, die der Bus leisten soll.** „Buchhaltung pro Charge statt pro
+Item" spart bei einer Charge von einem Item nichts. Größere Chargen entstehen erst
+über `IIOMultiplier` nach Forschung, und dort sind sie bereits vorhanden.
+
+**Zweitens: Die Pfade sind schon stapelweise.** `insert_item_into_drive` nimmt
+`math.min(transferCapacity, inv_item.count, remainingStorage)` in **einem** Split.
+`extract_item_from_drive` ebenso. Die Quelle wird pro Inventar-Slot verarbeitet,
+nicht pro Item. Und die Buchhaltung läuft pro Charge, nicht pro Item.
+
+**Drittens: Mehr bündeln geht nicht.** `insert` nimmt keinen Stapel-Array
+(`ItemStackIdentification` ist ein Union aus drei **Einzel**stapel-Formen, 7.3). Der
+Plan-Punkt „Charge statt Einzelitem" hat also kein größeres Ziel, das er erreichen
+könnte.
+
+### 8.2 Was dagegen ein echter Regress war, und behoben ist
+
+**P2 hat den Transferpfad teurer gemacht, und ich habe es beim Schreiben nicht
+gesehen.** Vorher:
+
+```lua
+local storedItem = drive.storageArray[itemstack_master.name]   -- ein Hash-Zugriff
+```
+
+Nachher:
+
+```lua
+local storedItem = drive:getStoredStack(name, quality)          -- find_item_stack + Itemstack:new
+```
+
+`getStack` läuft über die Chunks und ruft `find_item_stack` — **eine Engine-Suche
+über die Slots des Chunks, die bei fehlendem Item alle absuchen muss.** Und der
+Aufruf liegt **pro Drive und pro Item** in der Transferschleife. Der Negativfall ist
+dort der Normalfall: Ein Drive hält eine Handvoll Typen, die Schleife läuft über
+alle.
+
+**Behoben (Commit `55dccb0`):** Der Store führt längst einen exakten Index
+(`self.index[key]`, gesetzt beim ersten Einlagern, gelöscht bei Menge 0). `getStack`
+fragt ihn jetzt zuerst:
+
+```lua
+function ItemStore:getStack(name, quality)
+    if name == nil then return nil end
+    if not self:hasAny(name, quality) then return nil end
+    ...
+```
+
+`hasAny` ist exakt, nicht heuristisch: ein vorhandener Schlüssel bedeutet eine
+positive Menge, weil der Index nur bei Menge 0 gelöscht wird. Der Negativfall ist
+damit ein Hash-Zugriff statt einer Engine-Suche — **und das war der Fall, der
+zählt.**
+
+**Bewusst nicht gemacht:** den Index nutzen, um nur **einen** Chunk zu durchsuchen
+statt aller. Das würde voraussetzen, dass der indizierte Chunk den Stapel noch hält.
+Die Einfüge- und Entnahmeordnung spricht dafür, aber **Chunks sind mit
+Standard-Stackgrößen unerreichbar** (7.2), also kann ich es nicht testen. Der
+Frühausstieg oben ist exakt und deckt den häufigen Fall; die Suche im Trefferfall
+bleibt.
+
+### 8.3 Was in P3 noch übrig ist
+
+**Die beiden Interface-Cache-Scans** sind der Plan-Punkt (c) und **echt, aber
+klein**: `add_item_to_interface_cache` und `remove_item_from_interface_cache`
+(`NetworkBase.lua:549–569`) laufen je Einlagerung/Entnahme linear über die Liste
+**eines Item-Namens**, mit `Itemstack:reload` (neue Metatable) und
+`compare_itemstacks` pro Eintrag. Die Liste ist bei normalen Items **ein** Eintrag —
+`Util.item_add_list_into_table` führt gleiche Stapel zusammen —, also ist n klein.
+
+Sie wächst erst mit **modifizierten** Varianten (Munition, Haltbarkeit), und ein
+Umbau auf `name|quality → ein Eintrag` würde gleichzeitig den Schlüssel für die
+spätere Qualitäts-Freischaltung vorbereiten. **Das ist der einzige Teil von P3, der
+noch eine echte Verbesserung wäre**, und er ist klein und in sich abgeschlossen.
+
+**Was ich nicht behaupte:** ob P3 in der Praxis überhaupt messbar ist. Der ganze
+Transferpfad läuft im Basiszustand mit 15 Items/s pro Bus — das sind **0,25 Items pro
+Tick pro Bus**. Ein Umbau, der dort etwas spart, spart an einer Stelle, die einen
+Bruchteil der gemessenen 0,41 ms pro Tick ausmacht.
+
+## 9. Offene technische Schulden
+
+Aus dem 1:1-Port bekannt, bewusst nicht angefasst:
 
 - `NetworkBase.addConnectables`, Zeilen 183/186/191: drei Prüfungen mit `and`
   statt `or` (`if x == nil and x.valid == false`). Crash statt sauberer Abbruch
   im Fehlerfall. Zeile 186 prüft `.valid` auf einer Tabelle ohne dieses Feld.
 - `Util.fluid_add_list_into_table`: Temperaturmischung falsch gewichtet,
   `v.amount` wird vor der Gewichtung erhöht.
-- `ItemDrives.add_or_merge_basic_item`: Munition und Haltbarkeit werden per
-  Modulo addiert — halbvolle Magazine werden zu einem Eintrag mit erfundener
-  Füllmenge.
+- ~~`ItemDrives.add_or_merge_basic_item`: Munition und Haltbarkeit per Modulo~~
+  — **erledigt in P2**: der Pfad liegt jetzt im Store, die Engine führt Stapel
+  über das `ammo`-Feld zusammen.
 - `NC:createArms` übergibt einen String an `order_deconstruction("player")`, in
   2.0 erwartet die Signatur eine ForceID. Ob das still fehlschlägt, ist nicht
   geprüft.
@@ -2180,8 +2275,9 @@ Platzierung.
   vertikaler Balken in der Items-Spalte.
 - `RNSPlayer.process_logistic_slots` nutzt entfernte Logistic-Slot-Funktionen,
   gehört zu M5.
-- `remove_item_from_interface_cache` (`NetworkBase.lua:550–564`) ist ein
-  linearer Scan pro Entnahme. Das ist Plan-Punkt (c) und gehört zu P3.
+- `add_item_to_interface_cache` / `remove_item_from_interface_cache`
+  (`NetworkBase.lua:549–569`) sind lineare Scans pro Einlagerung/Entnahme,
+  Plan-Punkt (c). Umfang und Empfehlung in Abschnitt 8.3.
 - Der Verweis auf die Projektnotiz „Analyse Fabrikdurchsatz" in
   `docs/ups-architektur.md` läuft ins Leere: **die Notiz liegt nicht im Repo.**
 - `filter_externalIO_by_valid_signal` (`NetworkBase.lua:1340–1355`) baut bei
@@ -2194,7 +2290,7 @@ Platzierung.
   billig, bei einigen Tausend nicht. Zusammen mit dem Item-Sweep derselbe
   Posten, den P4 mit Zeitschlitzen lösen soll.
 
-## 9. Arbeitsweise
+## 10. Arbeitsweise
 
 Ein Fehler pro Runde ist normal. Manche Umgebungen brechen beim ersten Problem
 ab und zeigen nur eines. Deshalb: die tragfähige Korrektur liefern, statt alles

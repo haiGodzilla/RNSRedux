@@ -386,9 +386,26 @@ zusammen), `Itemstack.create_template` erzeugt `{}`. Wer dort `exact=true`
 ItemStore verschwindet die Frage, weil Stapel dann von der Engine gehalten
 werden.
 
-**P3 — Chargentransfer.** Alle Transferpfade auf Stack-Tabellen umstellen,
-Buchhaltung pro Charge. Betrifft die zehn Aufrufstellen in `NetworkBase` und
-`NetworkInventoryInterface`.
+**P3 — Chargentransfer. Der Zuschnitt des Plans trägt nicht; ein Regress aus P2 ist
+behoben.** Nachgelesen statt vermutet: Eine Charge ist **ein Item**, und das ist die
+Balance (`RNS_BaseItemIO_TransferCapacity = 1` × `IIOMultiplier = 1` = 15 Items/s bei
+4 Ticks Kadenz). Die Pfade arbeiten bereits stapelweise und buchen pro Charge. Und
+mehr bündeln geht nicht, weil `insert` keinen Stapel-Array annimmt. „Chargen statt
+Einzelitems" hat damit kein Ziel, das es erreichen könnte — Herleitung in
+`docs/projektstand.md` 8.1.
+
+**Der echte Fund:** P2 hat den Transferpfad teurer gemacht. Die Probe
+`drive.storageArray[name]` (ein Hash-Zugriff) wurde zu
+`drive:getStoredStack()` → `getStack` → `find_item_stack`, einer Engine-Suche über
+die Chunks, die bei fehlendem Item alle Slots absuchen muss — und die liegt pro Drive
+und pro Item in der Schleife, wo der Negativfall der Normalfall ist. Behoben in
+`55dccb0`: `getStack` fragt zuerst den Index ab, der die Antwort exakt kennt
+(`docs/projektstand.md` 8.2).
+
+**Was bleibt:** die beiden Interface-Cache-Scans (Plan-Punkt c) — echt, aber klein,
+weil die Liste pro Item-Name bei normalen Items **einen** Eintrag hat. Ein Umbau auf
+`name|quality → ein Eintrag` würde zusätzlich den Schlüssel für die spätere
+Qualitäts-Freischaltung vorbereiten. Details in `docs/projektstand.md` 8.3.
 
 **P4 — Scheduler.** Zeitschlitze für Drives und Busse.
 
