@@ -2011,15 +2011,12 @@ Identität jetzt vollständig trägt und der Inhalt damit überhaupt wiederherst
 wäre. Vorher wäre er ebenso verloren gegangen, nur unauffällig.
 
 **Offen bleibt ein zweiter, kleinerer Fehler:** Die Mouseover-Anzeige eines Drives
-zeigt `0/0`, während der Klick auf denselben Drive die richtige Füllung zeigt.
-Nachgeprüft: Die Prototypen tragen keine `x / y`-Zeichenkette
-(`prototypes/Drives.lua` setzt nur die Größe), die Zahl kommt also aus dem Code.
-Zwei Kandidaten stehen in `ItemDrives.lua`: die Item-Beschreibung aus
-`DataConvert_EntityToItem` (Zeile 328) und die GUI-Zeile (365, 422). **`0/0`
-verlangt, dass beide Werte null sind** — also entweder `maxStorage = 0` auf dem
-Objekt, das die Anzeige benutzt, oder die Anzeige liest ein anderes Objekt als der
-Klick. **Ungemessen**, und bewusst nicht geraten: Es braucht die Angabe, worüber
-genau gefahren wird.
+zeigt `0/0`, während der Klick auf denselben Drive die richtige Füllung zeigt. Die
+Prototypen tragen keine `x / y`-Zeichenkette (`prototypes/Drives.lua` setzt nur die
+Größe), die Zahl kommt also aus dem Code. **`0/0` verlangt, dass beide Werte null
+sind** — entweder `maxStorage = 0` auf dem Objekt, das die Anzeige liest, oder die
+Anzeige liest ein anderes Objekt als der Klick. **Nicht geraten, sondern
+vorgemerkt:** siehe 7.19.
 
 ### 7.18 Behoben: ein fremder Entity-Tag hat den platzierten Drive zerstört
 
