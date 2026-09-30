@@ -272,6 +272,32 @@ function EIO:update(network, periodic)
         self:clear_cache()
     end
 
+    --Reading the container is what this bus costs: one pass per slot plus a
+    --sort_and_merge of the whole inventory, measured at ~513 us per run against
+    --~90 us for an item bus. Most sweeps find nothing changed, so ask one cheap
+    --question first -- the total item count -- and skip the walk when the answer
+    --is the same as last time. A container whose total stays equal while its
+    --contents are reshuffled would slip past that, so a full pass is forced every
+    --RNS_ExternalStorage_Rescan sweeps.
+    --This has to sit after the guards above, which flush and clear the cache, and
+    --before init_cache below, which builds it the first time. Both leave cache nil,
+    --and nil means read.
+    if self.type == "item" and self.cache ~= nil
+        and self.focusedEntity.inventory.output.max ~= 0 then
+        local total = 0
+        for i = 1, self.focusedEntity.inventory.output.max do
+            local inv = self.focusedEntity.thisEntity.get_inventory(i)
+            if inv ~= nil then total = total + inv.get_item_count() end
+        end
+        self.rescanCounter = (self.rescanCounter or 0) + 1
+        if total == self.seenCount
+            and self.rescanCounter < Constants.Settings.RNS_ExternalStorage_Rescan then
+            return
+        end
+        self.seenCount = total
+        self.rescanCounter = 0
+    end
+
     if self:init_cache() then return end
 
     if self.type == "item" then
