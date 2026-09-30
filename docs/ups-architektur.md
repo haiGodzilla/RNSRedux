@@ -383,18 +383,20 @@ Erster Eingriff umgesetzt (`0db27d7`, `docs/projektstand.md` 6.9) und gemessen
 wenn sich die Gesamtzahl geändert hat, mit einem erzwungenen Vollaufbau als Netz.
 `avg` fiel von 2,756 auf 1,088 ms, die Buchhaltung blieb exakt.
 
-**Aber der Kontrolllauf widerlegt die Zuordnung** (`docs/projektstand.md` 6.11):
-Mit abgeschalteter Abkürzung (`Rescan = 1`) blieb `avg` bei 1,121 statt auf 2,75
-zurückzugehen. Die 1,67 ms stammen also nicht, oder nicht allein, aus dem
-Container-Durchlauf. Ob der Kontrolllauf überhaupt gültig war — ob die
-Konsolenzuweisung ankam — klärt der Zähler `busSkips` im Dump. **Bis dahin ist
-keine der beiden Zuordnungen belastbar, auch die Aufteilung aus 6.8 nicht.**
+**Aber der Kontrolllauf widerlegt die Zuordnung nicht mehr — der Zähler belegt
+sie** (`docs/projektstand.md` 6.11): Über 16.573 Ticks wurden 6.630 Sweeps gezählt,
+erwartet 16.573 × 2/5 = 6.630, und der nicht übersprungene Anteil ist 332 von
+6.630, also genau der erzwungene Volllauf alle 20 Sweeps. Die Abkürzung greift bei
+95 % der Sweeps; 0,05 × 4,10 ms = 0,21 ms External-Restkosten. Der A/B-Kontrolllauf
+über den Konsolen-Ausdruck war **untauglich** — alle Dumps zeigten wachsende
+Zähler, der andere Zustand kam in der Ausgabe nicht vor. Die Zählung ist der
+bessere Beweis: monoton und selbstprüfend, während ein Kontrolllauf mit
+unbelegtem Eingriff nichts widerlegen kann.
 
-**Damit ist auch `RNS_ExternalStorage_Rescan = 1` als Gegenprobe fragwürdig**, weil
-sie den Wert per Konsole setzt und nichts prüft, dass er ankommt. Ein
-Kontrolllauf, dessen Eingriff nicht belegt ist, kann nichts widerlegen. Der
-nächste Schritt ist deshalb kein weiterer Eingriff, sondern die Auswertung von
-`busSkips`.
+**Offen:** die 95 % gelten für statische Container und sind damit der Bestfall;
+und eine Zerlegung geht nicht auf — nach der Zählung müssten 0,45 (20 Item-Busse)
++ 0,21 = 0,66 ms herauskommen, gemessen sind 0,87 ms Buskosten. **0,21 ms sind
+unerklärt.** Die Größenordnung des Gewinns steht, die feine Aufteilung nicht.
 
 **Kadenz senken kostet Durchsatz.** `RNS_ItemIO_Tick = 4` entspricht 15 Items/s
 bei `IIOMultiplier = 1`. Eine Senkung auf 16 Ticks viertelt den Durchsatz,

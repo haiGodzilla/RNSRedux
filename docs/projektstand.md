@@ -809,7 +809,7 @@ nächste Schritt Plan-Punkt (j) in voller Länge: der Slot-Durchlauf selbst, als
 `Itemstack:new` pro Slot und das `sort_and_merge` — das braucht aber eine andere
 Vergleichsgrundlage als den Slot-Index und ist damit der größere Umbau.
 
-### 6.10 Messung: die Zahl fällt, die Ursache ist damit nicht belegt
+### 6.10 Messung: der Zähler bestätigt den Mechanismus
 
 Gemischter Aufbau `10 20 4`, zwei Minuten, `/perf-avg-frames 600`:
 
@@ -817,17 +817,6 @@ Gemischter Aufbau `10 20 4`, zwei Minuten, `/perf-avg-frames 600`:
 |---|---|---|---|
 | vor der Abkürzung (6.6) | 2,756 | 2,095 | 7,974 |
 | nach der Abkürzung | **1,088** | 0,207 | 10,786 |
-
-Über das Fenster gemittelt: (2,756 + 1,088) / 2 = 1,922 ms, also **1,67 ms
-weniger pro Tick**. Zum Vergleich: die Item-Seite allein kostet 0,90 ms (6.8).
-
-**Diese Zuordnung ist widerlegt, siehe 6.11.** Der Kontrolllauf mit abgeschalteter
-Abkürzung fiel nicht zurück. Was bleibt, ist der Messwert der Zahl und die
-Buchhaltung; „die Abkürzung spart 1,67 ms" steht nicht mehr.
-
-`max` steigt von 7,974 auf 10,786 ms und bleibt unter dem Budget. Eine Erklärung
-dafür habe ich nicht — sie stand einmal hier („Vollaufbauten bündeln sich"), aber
-die setzt voraus, dass die Abkürzung greift, und das ist offen.
 
 **Die Buchhaltung hält, und die Zahlen schließen sich gegenseitig auf.** Zwei
 Dumps, dazwischen der erzwungene Refresh:
@@ -845,7 +834,7 @@ Vier unabhängige Proben stimmen überein:
 - **`truth` behauptet = tatsächlich** (250400/250400): die Drives sind in sich
   konsistent.
 - **`busTruth` Cache = Container** (9600/9600): der Cache stimmt mit dem Container
-  überein. Das gilt unabhängig davon, ob in diesem Lauf übersprungen wurde.
+  überein.
 - **`external=96/96`** sind die belegten Slots der beiden Item-External-Busse
   (2 × 48, voll), und 96 × 100 Items = 9600. Passt zu `busTruth`.
 
@@ -856,86 +845,79 @@ denselben Betrag fällt und `external` sich nicht rührt, ist genau das erwartet
 Bild: Quelle sind die Drives, die External-Container waren voll und wurden nicht
 angefasst.
 
-**Korrektur an 6.9.** Dort steht, der gemessene Gewinn sei eine *Untergrenze* für
-den Praxisfall. Das ist falsch, und zwar in der Richtung: In diesem Aufbau sind
-die External-Container **statisch** — voll, und niemand entnimmt etwas. Die
-Abkürzung würde deshalb bei praktisch jedem Sweep greifen, das wäre der
-**Bestfall**. In einer echten Anlage entnehmen Maschinen aus diesen Containern, die
-Gesamtzahl ändert sich laufend, und der Durchlauf findet dann wieder statt.
+### 6.11 Der Zähler belegt die Ursache, der Kontrolllauf war untauglich
 
-Der Hinweis gilt **unter der Annahme, dass die Abkürzung wirkt** — und die ist nach
-6.11 offen. `busSkips` sagt, wie oft sie in diesem Aufbau tatsächlich greift, und
-damit, ob die Bestfall-Annahme überhaupt zutrifft.
+Vier Dumps aus einem Lauf, 16.573 Ticks Abstand zwischen erstem und letztem:
 
-**Die Gegenprobe ist ein Einzeiler.** `Constants.Settings.RNS_ExternalStorage_Rescan
-= 1` schaltet die Abkürzung ab: das Tor prüft `rescanCounter < Rescan`, und bei 1
-ist die Bedingung nach dem ersten Inkrement falsch, also wird immer voll gelesen.
-Damit lassen sich beide Zustände auf demselben Aufbau messen, ohne Neubau.
-
-### 6.11 Der Kontrolllauf widerlegt die Zuordnung
-
-Dieser Einzeiler wurde ausgeführt, auf demselben `bus-mixed-skip`-Stand:
-
-| Aufnahme | avg | min | max |
+| Dump | Tick | `busSkips` | Anteil |
 |---|---|---|---|
-| vor der Abkürzung (6.6) | 2,756 | 2,095 | 7,974 |
-| nach der Abkürzung (6.10) | 1,088 | 0,207 | 10,786 |
-| mit `Rescan = 1` (Abkürzung aus) | **1,121** | 0,205 | 7,352 |
+| 1 | 3.328 | 382/402 … 384/404 | 95,0 % |
+| 2 | 9.364 | 2.676/2.818 | 95,0 % |
+| 3 | 12.634 | 3.920/4.126 | 95,0 % |
+| 4 | 19.901 | 6.680/7.032 … 6.682/7.034 | 95,0 % |
 
-**Erwartet war ein Rückgang auf rund 2,75 ms. Passiert ist nichts.** `min` ist mit
-0,205 praktisch identisch zu 0,207, `max` fällt von 10,786 auf 7,352.
+**Die Zählung geht exakt auf.** Zwei External-Busse pro Netz, jeder auf einem von
+fünf Ticks, über 16.573 Ticks: erwartet 16.573 × 2/5 = **6.630** Sweeps, gezählt
+6.630 (7.032 − 402). Kein Doppelzählen, keine Lücke.
 
-**Damit ist die Zuordnung aus 6.10 widerlegt: Die 1,67 ms stammen nicht — oder
-nicht allein — aus dem übersprungenen Container-Durchlauf.**
+**Und die 5 % sind der Sicherheitsabruf.** Nicht übersprungen wurden 6.630 − 6.298
+= **332**, und 6.630/20 = 331,5 — genau der erzwungene Volllauf alle
+`RNS_ExternalStorage_Rescan` (20) Sweeps. Die Container dieses Aufbaus ändern sich
+also **nie**: jeder volle Lesevorgang ist das Netz, nicht eine Änderung.
 
-Zwei Erklärungen, und von außen sind sie ununterscheidbar:
+**Damit ist die Zuordnung aus 6.10 belegt** — nicht durch den Kontrolllauf,
+sondern durch die Zählung: die Abkürzung greift bei 95 % der Sweeps, und
+0,05 × 4,10 ms = 0,21 ms erwartete External-Restkosten. Der Kontrolllauf aus der
+letzten Runde (Commit `4424050` voraus) war **untauglich**, nicht widerlegend: alle
+vier Dumps zeigen wachsende Zähler, der Zustand `Rescan = 1` kommt in der Ausgabe
+nicht vor. Entweder wurde der Wert nicht gesetzt oder er kam nicht an.
 
-1. **Die Konsolenzuweisung ist nicht angekommen.** Dann hat der Lauf zweimal
-   denselben Zustand gemessen, und der Vergleich sagt nichts.
-2. **Die Abkürzung ist tatsächlich nicht die Ursache.** Dann war die
-   Gegenprobe gültig und die Abkürzung bringt nichts.
+**Zwei Konsequenzen:**
 
-**Mein Verfahrensfehler:** Ich habe `Constants.Settings.RNS_ExternalStorage_Rescan`
-per Konsole gesetzt und **nicht geprüft, dass der Wert ankommt**. Ein Kontrolllauf,
-dessen Eingriff nicht belegt ist, kann alles bestätigen und nichts widerlegen — er
-hätte genau so gut als Bestätigung durchgehen können, wenn die Zahl zufällig
-gefallen wäre. Das ist die Lücke, nicht die Messung.
+- **Die Zählung ist der bessere Beweis als der A/B-Lauf.** Sie ist monoton und
+  selbstprüfend: Sweep-Zahl und Sicherheitsabruf-Anteil gehen beide exakt auf. Ein
+  Kontrolllauf, dessen Eingriff man nicht verifizieren kann, wäre schwächer gewesen
+  — auch wenn er funktioniert hätte.
+- **Die 95 % sind der Bestfall.** Die Container sind statisch, die Abkürzung greift
+  deshalb fast immer. In einer echten Anlage entnehmen Maschinen, die Gesamtzahl
+  ändert sich, und es wird öfter gelesen. **Wie viel übrig bleibt, sagt dieser
+  Aufbau nicht.**
 
-**Was der Zähler entscheidet** (Commit `4424050`). Jeder External-Bus zählt jetzt
-übersprungene und volle Sweeps, der Dump zeigt die Summe:
+**Und eine Zerlegung, die nicht aufgeht.** Mein früherer Schluss „External-Seite
+von 4,10 auf 0,19 ms" rechnet 0,90 (Item, aus 6.8) + 0,19 = 1,09 und trifft die
+gemessenen 1,088. Nach der Zählung müssten es aber 0,45 (20 statt 40 Item-Busse)
++ 0,21 = 0,66 ms sein. Gemessen sind 0,87 ms Buskosten (1,088 − 0,221). **Die
+Differenz von 0,21 ms ist unerklärt.** Ich buche sie als offen; die Größenordnung
+des Gewinns (2,756 → 1,088) steht davon unberührt, die feine Aufteilung nicht.
+
+**Die verifizierbare Umschaltung gibt es jetzt als Befehl** (Commit `f94c3f0`):
 
 ```
-busSkips=<übersprungen>/<gesamt>
+/rns-bus-skip 1     -- Abkürzung aus
+/rns-bus-skip 20    -- Abkürzung an (Vorgabe)
 ```
 
-| Befund im `Rescan = 1`-Lauf | Bedeutung |
-|---|---|
-| `busSkips` **wächst weiter** | Die Zuweisung kam nicht an. Der Lauf war ungültig, die Zuordnung aus 6.10 steht wieder offen. |
-| `busSkips` **steht still** | Das Tor war aus, der Lauf war gültig — und dann bringt die Abkürzung nichts. |
-
-Und für den Zustand mit Abkürzung sagt `busSkips` zusätzlich, **wie oft** sie
-greift. Daran hängt die Obergrenzen-Frage aus 6.10: greift sie in diesem Aufbau
-bei jedem Sweep oder nur gelegentlich?
-
-**Ein Indiz, das ich nicht überdeute:** `max` fiel im Kontrolllauf von 10,786 auf
-7,352, also zurück in die Nähe der 7,974 von 6.6, während `avg` unverändert blieb.
-Das spricht dafür, dass der Eingriff **etwas** bewirkt hat — sonst wäre `max`
-gleich geblieben. Aber `avg` müsste dann mitziehen, und das tut es nicht. Ich lese
-daraus keine Ursache, bevor der Zähler sagt, ob das Tor überhaupt an war.
+Der Befehl setzt den Wert **und liest ihn zurück**, und er nullt die Zähler der
+Busse, damit zwei Läufe über dasselbe Fenster vergleichbar sind. Das ist die
+fehlende Prüfung: Ein Konsolen-Ausdruck auf `Constants.Settings` wurde nie belegt.
+**Für die Zuordnung ist er nicht mehr nötig** — die Zählung trägt sie. Er bleibt
+als Werkzeug für den Fall, dass ein späterer Eingriff wieder eine Umschaltung
+braucht.
 
 ### 6.12 Offen nach diesem Schritt
 
-- **Woher die 1,67 ms kommen.** Nach 6.11 ist der Container-Durchlauf als alleinige
-  Ursache widerlegt. Der Zähler aus 6.11 entscheidet, ob die Abkürzung überhaupt
-  greift; erst danach ist die nächste Spur sinnvoll.
-- **Der Gewinn in der Praxis.** Für eine belastbare Zahl braucht es einen Aufbau,
-  in dem aus den External-Containern laufend entnommen wird — und einen Abnehmer
-  für die Item-Busse, der die Kisten nicht füllt und dann stehen lässt.
-- **Die 9 % Mehrkosten aus 6.6** sind weiterhin ungeklärt.
-- **Der Item-Bus.** In 6.10 galt er als der größere Restposten (0,90 von 1,088 ms).
-  Nach 6.11 steht auch diese Zuordnung auf wackligem Grund, weil sie aus derselben
-  Messreihe stammt. Sein Verdacht steht in 6.7 und ist nicht angefasst. Die
-  Reihenfolge ist dieselbe: erst den Zähler lesen, dann greifen.
+- **Der Gewinn in der Praxis.** Die 95 % gelten für statische Container. Für eine
+  belastbare Zahl braucht es einen Aufbau, in dem aus den External-Containern
+  laufend entnommen wird — und einen Abnehmer für die Item-Busse, der die Kisten
+  nicht sofort füllt und dann stehen lässt.
+- **Die 0,21 ms, die in der Zerlegung fehlen** (6.11). Die Größenordnung des
+  Gewinns steht, die feine Aufteilung Item/External in diesem Aufbau nicht.
+- **Die 9 % Mehrkosten aus 6.6** sind weiterhin ungeklärt, und die 0,21 ms könnten
+  dieselbe Ursache haben: ein Posten, der mit der Anzahl der Busse wächst und den
+  ich keiner der beiden Seiten zugeordnet habe.
+- **Der Item-Bus.** In 6.8 kostete er 0,90 ms pro 40 Busse; in `mixed` sind nur 20
+  davon, also rund 0,45 ms. Er ist damit der größere Restposten. Sein Verdacht
+  steht in 6.7 und ist nicht angefasst.
 
 ## 7. Offene technische Schulden
 
