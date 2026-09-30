@@ -1465,30 +1465,83 @@ ist die Zeile darunter: `bare count=0 explicit normal=0` bei drei legendären It
 im Inventar ist mehrdeutig, und ob Qualität den Speicher übersteht, hat der Lauf
 gar nicht gefragt. Das ist 7.4.
 
-### 7.4 Eine Lücke im ersten Test, und ihre Schließung
+### 7.4 Zweiter Probelauf: beide offenen Fragen entschieden
 
-**`bare count=0 explicit normal=0` bei `legendary=3` war mehrdeutig, und der Test
-hat sie nicht geschlossen.** Beide Zählformen lasen null, obwohl drei legendäre
-Items im Inventar lagen — die Probe sah das nur nicht, weil sie den blanken Namen
-und `normal` abfragte, nicht `legendary`. Zwei Lesarten blieben: „ein blanker
-Item-Name zählt nur `normal`" oder „ein blanker Item-Name zählt gar nichts".
+Commit `3e27dd0`, zwei Aufrufe um einen Speicher-/Ladezyklus. Die neuen Zeilen:
 
-**Und schlimmer:** Der Test konnte die **wichtigere** Frage gar nicht stellen —
-**ob Qualität einen Speicher-/Ladezyklus übersteht.** Der legendäre Stapel lag in
-einem Wegwerf-Inventar, das ich vor dem Speichern zerstört habe. Die Probe stand
-dort, wo sie nicht überleben konnte.
+```
+phase 1:
+quality: legendary insert accepted=9 bare=4 normal=4 legendary=9 (4 normal + 9 legendary inserted)
 
-**Behoben (Commit `3e27dd0`):** Ein dauerhaftes 64-Slot-Inventar hält jetzt
-**4 normale und 9 legendäre** Eisenplatten. Phase 2 meldet alle drei Zählformen
-plus die vorher eingelegten Werte. Damit sind beide Fragen mit einem Lauf
-entschieden — ob Qualität den Speicher übersteht, und was ein blanker Name zählt.
+phase 2:
+chunkC present=true valid=true
+quality after load: bare=4 normal=4 legendary=9 (placed: 4/4/9)
+```
 
-**Warum das aufgeschrieben wird:** Es ist derselbe Fehlertyp wie die Runden davor —
-ein Messwert, der nicht dort stand, wo er gebraucht wurde. Der erste Lauf hat drei
-Annahmen bestätigt und dabei die vierte offengelassen, weil ich die Probe dorthin
-gelegt habe, wo sie nicht überleben konnte.
+**Ein blanker Item-Name zählt nur `normal`.** `bare=4` gegen `normal=4` und
+`legendary=9`: Der blanke Name liefert die vier normalen, nicht die dreizehn
+zusammen. Die Mehrdeutigkeit aus 7.3 ist damit aufgelöst.
 
-### 7.5 Und danach: die Umstellung der Drives
+**Für den Store ist das ohne Belang** — er fragt beide Teile immer explizit mit
+`quality = ItemStore.qualityOf(...)` ab und hängt nicht an der Antwort.
+
+**Für die Zählertabelle ist es entscheidend.** Sie indiziert nach Item-Namen
+(`self.Contents.item[name]`), und wenn dort später `name|quality` als Schlüssel
+steht, kommt es genau auf diese Semantik an: `get_item_count(name)` ohne Qualität
+würde die Stufen sonst **nicht** mitzählen, und die Netzwerkbuchhaltung wäre
+unvollständig, ohne dass es auffiele. Der Befund gehört deshalb in P2, nicht nur
+in dieses Protokoll.
+
+**Und Qualität übersteht den Speicher.** `legendary=9` nach dem Laden, gegen
+dieselben neun vorher. Damit ist die Fähigkeit vollständig belegt: Die Engine
+hält Qualität, unterscheidet sie, und sie überlebt den Ladezyklus. **Die Politik
+(Blockade am Drive-Eingang) bleibt davon getrennt entscheidbar.**
+
+**Was das für `isStorable` heißt:** Die Funktion bleibt wie sie ist. Sie ist
+Politik, nicht Fähigkeit, und trennt die beiden sauber — sie steht im Weg, obwohl
+der Store das Item annehmen könnte.
+
+### 7.5 Die Umstellung der Drives: Umfang und die eine offene Entscheidung
+
+`storageArray` wird an **fünf Stellen außerhalb** des Moduls direkt gelesen, dazu
+die Buchhaltung in `ItemDrives.lua`:
+
+| Stelle | was sie tut |
+|---|---|
+| `NetworkBase.lua:206` | Beitritt: läuft über alle Stapel, bucht `increase_tracked_item_count` und den Interface-Cache |
+| `NetworkBase.lua:971`, `1008` | Entnahme: `drive.storageArray[name]` als Suchschlüssel |
+| `NetworkInventoryInterface.lua:368` | Anzeige: läuft über alle Stapel |
+| `WirelessGrid.lua:391` | Anzeige, dieselbe Form |
+| `ItemDrives.lua` selbst | `storedAmount`, `add_or_merge_basic_item`, `remove_item`, `getStorageSize`, `getRemainingStorageSize`, `validate`, `DataConvert_*` |
+
+**Und es sind drei gekoppelte Änderungen, nicht eine:**
+
+1. **Substrat:** Lua-Tabelle → Engine-Inventar.
+2. **Identität:** Der Schlüssel wird `name|quality` statt `name`. Für die
+   Buchhaltung heißt das `self.Contents.item[name|quality]`, und damit ändert sich
+   auch die Semantik des Detectors und der Anzeige.
+3. **Blueprint:** `DataConvert_EntityToItem` schreibt heute `tags.storage =
+   self.storageArray` (Zeile 289) und `DataConvert_ItemToEntity` liest es zurück
+   (Zeile 274). **Ein Drive trägt seinen Inhalt also durch Blueprint und Abbau
+   hindurch.** Ein Engine-Inventar lässt sich so nicht in ein Item-Tag schreiben —
+   Item-Tags halten Daten, keine Objektreferenzen. **Dieser Pfad bricht.**
+
+**Punkt 3 ist die Entscheidung, und sie ist eine Produktfrage, keine technische:**
+Ein Drive, der abgebaut und wieder aufgebaut wird, verliert mit einem
+Engine-Inventar seinen Inhalt — es sei denn, man serialisiert ihn weiterhin für
+den Blueprint-Pfad, was einen Teil des Umbaus wieder aufhebt (aber nur dort, nicht
+im Betrieb).
+
+**Erschwerend, und ungeprüft:** Ob ein Item-Tag überhaupt eine LuaObject-Referenz
+tragen kann, habe ich nicht nachgelesen. Die Storage-Doku erlaubt Referenzen in
+`storage`; für Item-Tags gilt das nicht automatisch. Meine Aussage „dieser Pfad
+bricht" stützt sich auf den Unterschied zwischen Daten und Referenzen, **nicht auf
+eine geprüfte API-Aussage**. Vor dem Bauen ist das zu klären — es entscheidet, ob
+der Inhalt verloren geht oder serialisiert werden muss.
+
+**Konsequenz für den Zuschnitt:** Punkt 1 und 2 sind groß und berühren den
+Transferpfad, für den die P1-Abnahme (`truth` im Dump) schon existiert. Punkt 3 ist
+davon unabhängig und muss vorher entschieden sein.
 
 `storageArray` wird an **fünf Stellen außerhalb** des Moduls direkt gelesen:
 
