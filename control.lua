@@ -573,6 +573,22 @@ commands.add_command("rns-bus-skip", "RNSRedux: set the external bus rescan peri
         .. ", counters zeroed on " .. zeroed .. " buses")
 end)
 
+--Registering the tick handler here means it survives a save/load, which a
+--registration made from the command would not. The handler returns immediately
+--while the drain is off.
+script.on_nth_tick(1, StressTest.tick)
+
+commands.add_command("rns-stress-drain", "RNSRedux: drain the external containers at a fixed rate. <itemsPerSecondPerContainer>, 0 stops it",
+    function(data)
+        local rate = tonumber(data.parameter or "") or 0
+        game.print(StressTest.setDrain(rate))
+    end)
+
+commands.add_command("rns-stress-drain-status", "RNSRedux: report the drain rate and how much it has removed",
+    function()
+        game.print(StressTest.drainStatus())
+    end)
+
 --Stress test commands for UPS measurement.
 commands.add_command("rns-stress-build", "RNSRedux: build a stress network. <stations> <drivesPerStation> [busesPerStation] [mixed|item|external]",
     function(data)

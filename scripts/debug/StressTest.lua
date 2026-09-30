@@ -27,6 +27,16 @@ local PLAYER_CLEARANCE = 20 -- tiles between the player and the first controller
 local BUS_SPACING = 2       -- columns between two bus stubs on the same spine
 local BUS_FILL = 4800       -- one steel chest of a 100-stack item
 
+--Dosed drain on the external containers. In the build as it stands the containers
+--never change, so the cheap skip in EIO:update fires on every sweep -- the best
+--case for it. A machine drawing from a container makes the total move, and the
+--skip then fires less often. The rate here is exact, which the real thing never is,
+--and it is given per container so it does not shift when the bus count changes.
+local drainRate = 0         -- items per second per container
+local drainRemainder = 0
+local drainTaken = 0
+local drainIndex = 0
+
 --Filtered against the active prototypes, so mod sets that drop one simply
 --contribute fewer types.
 local FILL_ITEMS = {
@@ -78,6 +88,60 @@ local function configureExternalBus(obj)
     obj.onlyModified = false
 end
 
+--Sets the drain rate and zeroes the bus skip counters, so before and after are
+--compared over the same window instead of as a difference of monotonic totals.
+function StressTest.setDrain(ratePerContainer)
+    drainRate = math.max(0, ratePerContainer or 0)
+    drainRemainder = 0
+    drainTaken = 0
+    drainIndex = 0
+
+    local zeroed = 0
+    for _, obj in pairs(storage.entityTable or {}) do
+        if obj.skippedSweeps ~= nil then
+            obj.skippedSweeps = 0
+            obj.readSweeps = 0
+            zeroed = zeroed + 1
+        end
+    end
+
+    return string.format("drain=%.2f items/s per container, skip counters zeroed on %d buses",
+        drainRate, zeroed)
+end
+
+--Takes the drained items out of the containers. Called from the mod's own tick.
+function StressTest.tick()
+    if drainRate <= 0 then return end
+
+    local state = storage.stressTest or {}
+    local chests = state.drainChests or {}
+    local count = #chests
+    local itemName = state.busItem
+    if count == 0 or itemName == nil then return end
+
+    drainRemainder = drainRemainder + (drainRate * count) / 60
+    local take = math.floor(drainRemainder)
+    if take <= 0 then return end
+    drainRemainder = drainRemainder - take
+
+    for _ = 1, take do
+        drainIndex = drainIndex % count + 1
+        local chest = chests[drainIndex]
+        if chest ~= nil and chest.valid == true then
+            local inv = chest.get_inventory(defines.inventory.chest)
+            --No pcall on purpose: a drain that silently does nothing would read as
+            --"the rate has no effect" and send the next step the wrong way.
+            drainTaken = drainTaken + inv.remove{name = itemName, count = 1}
+        end
+    end
+end
+
+function StressTest.drainStatus()
+    local state = storage.stressTest or {}
+    return string.format("drain=%.2f items/s per container, containers=%d, removed=%d",
+        drainRate, #(state.drainChests or {}), drainTaken)
+end
+
 function StressTest.build(stationCount, drivesPerStation, busesPerStation, busKind)
     local player = game.player
     if player == nil then return "no player" end
@@ -87,6 +151,7 @@ function StressTest.build(stationCount, drivesPerStation, busesPerStation, busKi
     local record = {}
     local powerSources = {}
     local chests = {}
+    local drainChests = {}
     local stats = {controllers = 0, drives = 0, cables = 0, grids = 0, power = 0,
         buses = 0, itemBuses = 0, externalBuses = 0, filledChests = 0,
         busUnregistered = 0, failed = 0}
@@ -251,6 +316,9 @@ function StressTest.build(stationCount, drivesPerStation, busesPerStation, busKi
                 if isExternal then
                     chest.get_inventory(defines.inventory.chest).insert{name = busItem, count = BUS_FILL}
                     stats.filledChests = stats.filledChests + 1
+                    --Only the external containers are drained: those are the ones the
+                    --bus reads, and the ones a machine would draw from.
+                    drainChests[#drainChests + 1] = chest
                 end
             end
         end
@@ -274,6 +342,13 @@ function StressTest.build(stationCount, drivesPerStation, busesPerStation, busKi
     local allChests = storage.stressTest.chests or {}
     for _, entity in pairs(chests) do allChests[#allChests + 1] = entity end
     storage.stressTest.chests = allChests
+
+    --Held for the drain, which needs to know which containers the bus reads and
+    --which item they hold.
+    local allDrain = storage.stressTest.drainChests or {}
+    for _, entity in pairs(drainChests) do allDrain[#allDrain + 1] = entity end
+    storage.stressTest.drainChests = allDrain
+    storage.stressTest.busItem = busItem
 
     --Did the mod actually pick the entities up? Anything missing means the
     --placement handler rejected or destroyed it.

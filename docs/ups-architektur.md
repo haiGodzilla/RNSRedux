@@ -383,20 +383,20 @@ Erster Eingriff umgesetzt (`0db27d7`, `docs/projektstand.md` 6.9) und gemessen
 wenn sich die Gesamtzahl geändert hat, mit einem erzwungenen Vollaufbau als Netz.
 `avg` fiel von 2,756 auf 1,088 ms, die Buchhaltung blieb exakt.
 
-**Aber der Kontrolllauf widerlegt die Zuordnung nicht mehr — der Zähler belegt
-sie** (`docs/projektstand.md` 6.11): Über 16.573 Ticks wurden 6.630 Sweeps gezählt,
-erwartet 16.573 × 2/5 = 6.630, und der nicht übersprungene Anteil ist 332 von
-6.630, also genau der erzwungene Volllauf alle 20 Sweeps. Die Abkürzung greift bei
-95 % der Sweeps; 0,05 × 4,10 ms = 0,21 ms External-Restkosten. Der A/B-Kontrolllauf
-über den Konsolen-Ausdruck war **untauglich** — alle Dumps zeigten wachsende
-Zähler, der andere Zustand kam in der Ausgabe nicht vor. Die Zählung ist der
-bessere Beweis: monoton und selbstprüfend, während ein Kontrolllauf mit
-unbelegtem Eingriff nichts widerlegen kann.
+**Der Zähler belegt den Mechanismus** (`docs/projektstand.md` 6.11): Über 16.573
+Ticks wurden 6.630 Sweeps gezählt, erwartet 16.573 × 2/5 = 6.630, und der nicht
+übersprungene Anteil ist 332 von 6.630, also genau der erzwungene Volllauf alle 20
+Sweeps. Die Abkürzung greift bei 95 % der Sweeps.
 
-**Offen:** die 95 % gelten für statische Container und sind damit der Bestfall;
-und eine Zerlegung geht nicht auf — nach der Zählung müssten 0,45 (20 Item-Busse)
-+ 0,21 = 0,66 ms herauskommen, gemessen sind 0,87 ms Buskosten. **0,21 ms sind
-unerklärt.** Die Größenordnung des Gewinns steht, die feine Aufteilung nicht.
+**Aber das ist der Bestfall, und damit offen, was sie in der Praxis wert ist.**
+Der Aufbau liest Container, die sich nie ändern. Die Trefferquote folgt
+`1 - exp(-r / 12)` mit `r` = Items pro Sekunde pro Container; die Kipprate liegt
+bei 8,3 Items/s. **Punkt 1 der Liste hilft bei jeder Rate, die Abkürzung nur bei
+langsamen Containern** — die Kurve ist damit die Entscheidungsgrundlage für den
+nächsten Eingriff. Messwerkzeug: `/rns-stress-drain` (`docs/projektstand.md` 6.12).
+
+**Unerklärt und kleiner:** eine Zerlegung geht um 0,21 ms nicht auf, und die
+9 % Mehrkosten aus 6.6 haben keine Ursache. Möglicherweise derselbe Posten.
 
 **Kadenz senken kostet Durchsatz.** `RNS_ItemIO_Tick = 4` entspricht 15 Items/s
 bei `IIOMultiplier = 1`. Eine Senkung auf 16 Ticks viertelt den Durchsatz,
@@ -468,6 +468,20 @@ Beide Dumps müssen identisch sein — das war der Abnahmemaßstab für P1.
 soll sich etwas bewegen. Stattdessen zwei Läufe desselben Aufbaus, jeweils
 speichern, laden, zwei Minuten stehen lassen, dann `/perf-avg-frames 600` und
 `mod-RNSRedux` ablesen. **Die Differenz ist das Ergebnis**, nicht der Absolutwert.
+
+**Lastdosierung mit `/rns-stress-drain`.** Der Busaufbau liest Container, die sich
+nie ändern; das ist der Bestfall für jede Abkürzung im Lesepfad. Ein Abfluss mit
+exakter Rate macht daraus einen messbaren Fall:
+
+```
+/rns-stress-drain <itemsProSekundeProContainer>
+```
+
+Der Befehl **nullt die Zähler** der Busse, also ist danach
+`busSkips=` eine Fenstermessung. Erwartete Trefferquote
+`1 - exp(-r / 12)` plus der erzwungene Volllauf alle 20 Sweeps — Herleitung und
+Tabelle in `docs/projektstand.md` 6.12. **Nach einem Save/Load muss der Befehl
+erneut aufgerufen werden**, die Rate steht dann wieder auf 0.
 
 Drei Dinge prüfen den Aufbau, bevor die Zahl etwas wert ist:
 

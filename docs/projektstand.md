@@ -907,20 +907,72 @@ fehlende Prüfung: Ein Konsolen-Ausdruck auf `Constants.Settings` wurde nie bele
 als Werkzeug für den Fall, dass ein späterer Eingriff wieder eine Umschaltung
 braucht.
 
-### 6.12 Offen nach diesem Schritt
+### 6.12 Offen nach diesem Schritt — und der Aufbau, der es klärt
 
-- **Der Gewinn in der Praxis.** Die 95 % gelten für statische Container. Für eine
-  belastbare Zahl braucht es einen Aufbau, in dem aus den External-Containern
-  laufend entnommen wird — und einen Abnehmer für die Item-Busse, der die Kisten
-  nicht sofort füllt und dann stehen lässt.
-- **Die 0,21 ms, die in der Zerlegung fehlen** (6.11). Die Größenordnung des
-  Gewinns steht, die feine Aufteilung Item/External in diesem Aufbau nicht.
-- **Die 9 % Mehrkosten aus 6.6** sind weiterhin ungeklärt, und die 0,21 ms könnten
-  dieselbe Ursache haben: ein Posten, der mit der Anzahl der Busse wächst und den
-  ich keiner der beiden Seiten zugeordnet habe.
-- **Der Item-Bus.** In 6.8 kostete er 0,90 ms pro 40 Busse; in `mixed` sind nur 20
-  davon, also rund 0,45 ms. Er ist damit der größere Restposten. Sein Verdacht
-  steht in 6.7 und ist nicht angefasst.
+Die Praxis-Frage aus 6.11 lässt sich **nicht** mit dem bisherigen Aufbau beantworten:
+Dessen Container ändern sich nie, der Bus liest also nie etwas Neues. Und ein
+echter Verbraucher (Inserter, Maschine) hätte eine ungenaue Rate. Deshalb ein
+dosierter Abfluss mit exakter Rate (Commit `4a1f2c8`):
+
+```
+/rns-stress-drain <itemsProSekundeProContainer>   -- 0 schaltet ab
+/rns-stress-drain-status
+```
+
+Der Befehl setzt die Rate, **nullt die Zähler** der Busse — damit zwei Läufe über
+dasselbe Fenster vergleichbar sind — und entnimmt dann jeden Tick so viele Items
+aus den External-Containern, dass die Rate pro Container stimmt. Round-Robin über
+die Container, damit die Verteilung gleichmäßig ist. Der Tick-Handler wird in
+`control.lua` registriert und kehrt sofort zurück, solange die Rate 0 ist; **er
+überlebt ein Save/Load, die Rate nicht** — die ist eine lokale Variable der Datei
+und steht nach dem Laden wieder auf 0. Der Befehl muss nach dem Laden erneut
+aufgerufen werden.
+
+**Die erwartete Kurve.** Der Bus liest alle `RNS_ExternalStorage_Tick` = 5 Ticks,
+also `L` = 12 mal pro Sekunde. Ändert sich die Gesamtzahl mit Rate `r` pro
+Container, dann trifft ein Sweep nur dann etwas Neues, wenn seit dem letzten
+Treffer etwas passiert ist:
+
+```
+Trefferquote = 1 - exp(-r / L)      daraus gelesen, plus der erzwungene Volllauf
+```
+
+| `r` pro Container | Treffer | Übersprungen |
+|---|---|---|
+| 0 (heutiger Aufbau) | 0 % | 95 % |
+| 0,5 Items/s | 4 % | 91 % |
+| 1 Items/s | 8 % | 87 % |
+| 4 Items/s | 28 % | 67 % |
+| 8,3 Items/s | 50 % | 45 % |
+| 12 Items/s | 63 % | 32 % |
+
+**Die Kipprate liegt bei `L` × ln 2 ≈ 8,3 Items/s pro Container.** Darunter ist die
+Abkürzung ihr Geld wert, darüber verliert sie schnell.
+
+Das ist eine Rechnung, keine Messung, und sie steht hier als Erwartung. **Der Lauf
+prüft sie:** Ist die gemessene Trefferquote bei `r = 1` deutlich unter 8 %, greift
+die Abkürzung seltener als die Rechnung sagt, und dann ist die Unabhängigkeit der
+Änderungen vom Lesetakt verletzt — was ich beim Bau dieses Werkzeugs als Annahme
+gesetzt habe und nicht belegt habe.
+
+**Was der Lauf nicht klärt:** welcher Fall in einer echten Anlage vorliegt. Das
+hängt am Spielstil und an der Anzahl Busse pro Verbraucher, und beides kann ich
+nicht abschätzen. Die Kurve sagt, wo die Grenze liegt — welchen Punkt man
+annehmen will, ist eine Entscheidung, keine Messung.
+
+### 6.13 Offen nach diesem Schritt
+
+- **Der Gewinn in der Praxis**, jetzt als Kurve statt als Zahl. Der Aufbau liefert
+  die Trefferquote für eine vorgegebene Rate; welche Rate realistisch ist, bleibt
+  offen.
+- **Die 0,21 ms, die in der Zerlegung fehlen** (6.11), und die 9 % aus 6.6. Beide
+  unerklärt und möglicherweise derselbe Posten: etwas, das mit der Busanzahl
+  wächst und das ich keiner der beiden Seiten zugeordnet habe.
+- **Der Item-Bus** (rund 0,45 ms in `mixed`), der größere verbleibende
+  Einzelposten. Verdacht in 6.7, unangetastet.
+- **P5-Punkt 1, der Slot-Durchlauf.** Er ist der nächste echte Eingriff: Er hilft
+  bei **jeder** Änderungsrate, während die Abkürzung nur bei langsamen Containern
+  greift. Die Kurve aus 6.12 ist damit auch die Entscheidungsgrundlage dafür.
 
 ## 7. Offene technische Schulden
 
