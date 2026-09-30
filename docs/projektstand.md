@@ -4,7 +4,7 @@ Einstiegspunkt für die Weiterarbeit. Technischer Plan und Begründungen:
 `docs/ups-architektur.md`. Dieses Dokument beantwortet „wo stehen wir, was ist
 verifiziert, was ist der nächste Schritt".
 
-Stand: Commit `f29a9dd`, Branch `port/2.0`, Version 2.0.0.
+Stand: Commit `ab3d4ae`, Branch `port/2.0`, Version 2.0.0. P1 ist abgenommen.
 
 ## 1. Projekt
 
@@ -103,7 +103,7 @@ die Summe, für eine Trennung der Anteile bräuchte es einen zweiten Aufbau mit
 variabler Kabellänge. Der Aufbau enthält außerdem **keine Busse**, deckt also P1
 ab, nicht P5.
 
-## 5. Aktueller Fokus: P1 (abgenommen, zwei Randpfade offen)
+## 5. P1 — Netzwerk-Accounting: abgenommen
 
 ### 5.1 Der Befund, der den Zuschnitt ändert
 
@@ -329,12 +329,9 @@ Menge, `player` steigt um dieselbe — die Buchung in `Contents.item` läuft als
 `can_insert=true`, `insertable=7700`, `emptyStacks=77`: das Inventar ist weder
 voll noch blockiert. **Damit ist die Entnahmebuchung selbst belegt.**
 
-Offen ist nur noch, warum der GUI-Klick nicht bis dorthin kommt. Zwei Stellen
-fallen dabei auf, beide still:
-
 ### 5.9 Klick-Spur: der Klick kommt durch, der Fehler sitzt tiefer
 
-Erster Spur-Lauf (Commit `31d2347`). Drei Klicks, jeder läuft bis in den Handler:
+Erster Spur-Lauf (Commit `31d2347`), zwei Klicks, beide laufen bis in den Handler:
 
 ```
 click 'RNS_NII_IDInv_16' button=2 shift=false ctrl=false
@@ -347,9 +344,6 @@ Damit ist die GUI-Verkabelung **ausgeschlossen**: Der Handler läuft, die Tags
 sind da, die ID löst auf, `exists_in_network` ist wahr, und die Klickart ergibt
 `count=1`. Der stille Ausstieg in Zeile 788 war nicht die Ursache. Der Fehler
 sitzt in oder hinter `NII.transfer_from_idinv`.
-
-Was die Spur **nicht** hergibt und deshalb offen bleibt: ob die Funktion früh
-zurückkehrt, ob `transfer_from_network_to_inv` scheitert, oder ob sie wirft.
 
 Die Maustaste ist damit geklärt: `left=2`, `right=4`. `button=2` war die linke,
 die Zuordnung im Code ist korrekt — belegt durch die Ausgabe, nicht durch
@@ -466,13 +460,47 @@ An derselben Stelle bleibt eine Beobachtung, die ohne Not nicht korrigiert wird:
 der echte Pfad zu kopieren. Der Fill nutzt das aus; im Produktivpfad ist die
 übergebene Form bereits die des echten Pfads, deshalb fällt es dort nicht auf.
 
-**Zwei Stellen, die beim Lesen aufgefallen und weiterhin ungemessen sind:**
-`NII.interaction` hat keinen Zweig für `RNS_NII_PInv_*` — die Buttons der
-Spielerinventar-Spalte erzeugt das GUI, aber kein Klick-Handler liest sie
-(`NetworkInventoryInterface.lua:790–799`). Und der Sortierschalter
-`RNS_NII_SortOrder` wird im Klick-Pfad behandelt, während ein Schalter
-`on_gui_element_changed` auslöst, wo der `RNS_NII`-Zweig fehlt
-(`Gui.lua:170–215`).
+### 5.13 Ergebnis und Aufräumen
+
+Letzter Lauf auf frischem Aufbau (Commit `b78f3e0`), zwei Klickarten:
+
+```
+click 'RNS_NII_IDInv_7'  count=1   exact=true  →  net 15000->14999  player 0->1
+click 'RNS_NII_IDInv_1'  count=-4  exact=true  →  net 20000->12400  player 0->7600
+```
+
+Linksklick entnimmt eines, Strg+Linksklick den ganzen Bestand. Die 7600 statt
+20000 sind die **richtige** Grenze, nicht ein Fehler: `isPlayer` begrenzt die
+Übergabe auf die freie Menge im Inventar (`NetworkBase.lua:961`), und der erste
+Werkzeuglauf hatte 77 freie Slots à 100 Eisenplatten gemeldet — nach dem einen
+abgezogenen Item sind es 76, also 7600. Exakt.
+
+**P1 ist damit abgeschlossen.** Beide Buchungsrichtungen sind gemessen, Austritt
+und Entnahme, und der Vollaufbau reproduziert beide.
+
+Diagnose entfernt, Commit `ab3d4ae`: die Klick-Spur in `Gui.lua` und die drei
+Spuren in `transfer_from_idinv` sind weg; `grep` auf `TEMPORARY DIAGNOSTIC` und
+`rns-click` liefert nichts mehr. `/rns-debug-extract` bleibt — es ist ein
+Werkzeug wie `/rns-debug-refresh`, keine Spur — und gehört in die P6-Aufräumliste.
+
+**Ein echter Fund beim Aufräumen.** `NII.interaction` hatte keinen Zweig für
+`RNS_NII_PInv_*`, die Buttons der Spielerinventar-Spalte waren also tot: Das GUI
+erzeugt sie (`NetworkInventoryInterface.lua:322/327`), aber niemand liest ihren
+Klick. `NII.transfer_player_to_network` stand als **tote Funktion** in der Datei,
+und `port_pinv.py:33` zeigt, dass genau dieser Zweig bei der Portierung eingefügt
+werden sollte — er ist nicht im Code angekommen. Verdrahtet in `ab3d4ae`, vor dem
+`RNS_NII_IDInv`-Zweig. **Ungemessen**, der Zweig ist neu und hat noch keinen
+Testlauf.
+
+**Weiterhin offen und ungemessen:** der Sortierschalter `RNS_NII_SortOrder` wird
+im Klick-Pfad behandelt, ein `switch` feuert aber `on_gui_element_changed`, und
+dort fehlt der `RNS_NII`-Zweig (`Gui.lua:170–215`). Der Schalter sollte damit
+wirkungslos sein — gelesen, nicht gemessen.
+
+**Ebenfalls offen:** Save/Load mit einem Transfer dazwischen. Der Wert in
+`storage` sollte den Ladezyklus überstehen, weil `DataConvert` für Blueprints
+greift und die Objekte sonst unverändert in `storage` liegen — gelesen, nicht
+gemessen. Mit P2 (ItemStore) bekommt das ohnehin einen eigenen Test.
 
 Danach ist der IO-Bus der nächste Posten (Abschnitt 6, offene Reihenfolge in
 `docs/ups-architektur.md` Abschnitt 6a).
