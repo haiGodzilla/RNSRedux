@@ -718,44 +718,88 @@ was er nicht ist. **Ich buche die 9 % als ungeklärt, nicht als Kosten.**
 Was sicher ist: **die Spitze war das Problem, und sie ist weg.** Ob 40 Busse
 2,5 ms kosten, ist unabhängig davon, wie die 2,5 ms über die Ticks verteilt sind.
 
-### 6.7 Die Kontaktkosten, und welche Seite zuerst
+### 6.7 Die Kontaktkosten, Verdacht im Code
 
-Der Mittelwert ist die eigentliche Rechnung: 2,756 minus 0,221 ms Grundlast
-ergibt **rund 2,5 ms für 40 Busse**, also 6,3 % des Tick-Budgets — dauerhaft, in
-jedem Tick. Bei den 40 Bussen sind das im Mittel neun Busläufe pro Tick
-(20 Item-Busse auf einem von vier Ticks, 20 External-Busse auf einem von fünf),
-also **rund 280 µs pro Buslauf**.
+Nach Abzug der Grundlast (0,221 ms) bleiben **rund 2,5 ms für 40 Busse**, also
+6,3 % des Budgets — dauerhaft, in jedem Tick. Das skaliert linear: 400 Busse wären
+über dem Budget.
 
-Diese Zahl ist hoch genug, um misstrauisch zu werden, und der Verdacht steht im
-Code:
+Der Verdacht steht im Code, und alle drei Punkte sind dieselbe Sorte Zugriff:
 
 - `EIO:update` läuft bei **jedem** Buslauf über **jeden** Slot des Containers und
-  legt dafür ein `Itemstack:new(...)` an (`ExternalIO.lua:278`) — bei 48 Slots
-  also 48 Allokationen pro Buslauf. Das ist genau das Muster, das die
-  Durchsatzanalyse verbietet.
-- `inv.sort_and_merge()` wird pro Buslauf aufgerufen, an mehreren Stellen
-  (`ExternalIO.lua:223`, `276`, `NetworkBase.lua:952`).
+  legt dafür ein `Itemstack:new(...)` an (`ExternalIO.lua:291`) — bei 48 Slots
+  also 48 Allokationen pro Buslauf. Dazu `Itemstack:new` mit `t.extras = {}`, also
+  zwei Tabellen pro Slot.
+- `inv.sort_and_merge()` über den ganzen Container, bei jedem Buslauf
+  (`ExternalIO.lua:289`; weitere Stellen `223`, `NetworkBase.lua:952`).
 - `NetworkBase.lua:1066–1069` fragt pro Insert-Versuch zweimal `get_item_count`
   und einmal `count_empty_stacks` ab.
 
-**Was die Messung nicht hergibt: welche der beiden Seiten das Mittel trägt.** Der
-Aufbau baute bisher nur gemischt. Der Plan trennt sie aber — P4 ist der
-Scheduler, P5 ist ausdrücklich External IO —, also entscheidet erst die Trennung,
-welchen Meilenstein wir anfassen.
+Welche der beiden Busarten das trägt, war offen — der Aufbau baute bisher nur
+gemischt. 6.8 beantwortet es.
 
-Dafür hat `/rns-stress-build` jetzt einen vierten Parameter
-(`… 4 item` / `… 4 external` / `… 4 mixed`). Zwei Läufe, sonst identisch:
+### 6.8 Gemessen: die External-Seite trägt 82 % der Buskosten
 
-1. `/rns-stress-build 10 20 4 item` → 40 Item-Busse, keine External-Busse
-2. `/rns-stress-build 10 20 4 external` → 40 External-Busse, keine Item-Busse
+| Aufbau | avg | min | max | Buskosten gegen 0,221 |
+|---|---|---|---|---|
+| ohne Busse | 0,221 | 0,070 | 1,003 | — |
+| `4 item` (40 Item-Busse) | 1,125 | 0,593 | 7,052 | **0,90 ms** |
+| `4 external` (40 External-Busse) | 4,322 | 3,511 | 10,686 | **4,10 ms** |
+| `4 mixed` (20 + 20) | 2,756 | 2,095 | 7,974 | 2,54 ms |
 
-Zusammen mit dem gemischten Wert aus 6.6 ergeben die drei Zahlen ein
-Gleichungssystem, das die Kosten je Seite isoliert. Der Aufbau ist bis auf die
-Busart identisch, also ist die Differenz zurechenbar.
+**Die External-Seite ist 4,5-mal so teuer wie die Item-Seite**, bei gleicher
+Busanzahl. Pro Buslauf: **513 µs external gegen 90 µs item** (40 Busse auf einem
+von fünf bzw. einem von vier Ticks). 40 External-Busse kosten 4,10 ms, also 25 %
+des Tick-Budgets — und das skaliert linear: 160 Busse wären über dem Budget.
 
-**Für beide Läufe gilt: vorher `/rns-stress-fill 16 1000`.** Ohne Fill hat die
-Item-Seite nichts zu exportieren, und die Messung zeigt dann nur die External-
-Seite — unabhängig davon, was der Parameter sagt.
+**Die Zuordnung prüft sich selbst.** 20 Item-Busse (halbe Menge → 0,45 ms) plus
+20 External-Busse (2,05 ms) ergeben 2,50 ms, gemessen wurden im gemischten Aufbau
+2,54 ms. Abweichung 1,3 %. Die drei Messungen passen also zusammen, und damit
+trägt die Trennung.
+
+**Konsequenz für die Reihenfolge: P5 vor P4.** Der Plan führt beide als getrennte
+Meilensteine, und nach dieser Messung ist die External-Seite der Posten. Der
+Scheduler bleibt richtig, greift aber am kleineren Anteil.
+
+Zur Einordnung des Fixtures: In `mixed` ziehen die Item-Busse aus den Kisten der
+External-Busse, in `external` gibt es keinen Abnehmer, also bewegt sich dort
+nichts. **Für die Bewertung einer Ersparnis ist `mixed` der ehrliche Aufbau**, in
+`external` würde jede Einsparung am ruhenden Container zu groß erscheinen.
+
+### 6.9 Erster P5-Eingriff: der Container wird nur noch bei Änderung gelesen
+
+Commit `0db27d7`. Der External-Bus stellt eine billige Frage — die Gesamtzahl der
+Items im Container — und läuft nur dann über die Slots, wenn die Antwort eine
+andere ist. Der Durchlauf besteht aus einem Zugriff pro Slot plus einem
+`sort_and_merge` über den ganzen Container; daraus bestehen die 513 µs.
+
+Zwei Randbedingungen, im Code gelesen und nicht vermutet:
+
+- **Das Tor sitzt hinter den Schutzprüfungen.** Die Wächter davor
+  (`focusedEntity` ungültig, kein Inventar) räumen den Cache ab, `init_cache`
+  danach baut ihn. Beide hinterlassen `cache == nil`, und `nil` heißt lesen.
+- **Ein Vollaufbau wird erzwungen**, alle `RNS_ExternalStorage_Rescan` (20)
+  Sweeps. Sonst bliebe ein Container unbemerkt, dessen Gesamtzahl gleich bleibt,
+  während der Inhalt umgeschichtet wird.
+
+**Was das ändert und was nicht:** Der Bus transferiert nichts anders, er liest nur
+seltener. Die Menge, die ein Sweep sieht, ist dieselbe.
+
+**Das Risiko ist die Buchhaltung**, nicht der Durchsatz: der Cache speist
+`Contents.item` und `StoredPartition` des Netzes. Bleibt er zu lange stehen,
+laufen die Zähler auseinander. Deshalb ist die Prüfung nicht nur eine Messung,
+sondern auch der P1-Abnahmetest — `/rns-debug-nc`, `/rns-debug-refresh`,
+`/rns-debug-nc` müssen identisch sein.
+
+**Der Gewinn hängt daran, wie oft sich der Container ändert.** In einer echten
+Anlage schiebt ein Inserter wenige Items pro Sekunde ein, dann greift die
+Abkürzung fast immer. Im Messaufbau fließt mehr, also ist der dort gemessene
+Gewinn eine **Untergrenze** für den Praxisfall.
+
+Wenn die Zahl nicht deutlich fällt, ist der nächste Schritt Plan-Punkt (j) in
+voller Länge: der Slot-Durchlauf selbst, also `Itemstack:new` pro Slot und das
+`sort_and_merge` — das braucht aber eine andere Vergleichsgrundlage als den
+Slot-Index und ist damit der größere Umbau.
 
 ## 7. Offene technische Schulden
 

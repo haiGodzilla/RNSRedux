@@ -129,12 +129,20 @@ false)` auf einem echten Inventar ab, und `insert_item_into_external` ruft am
 Ende jeder Charge noch `external:update(self)` (Zeile 1101) — ein weiterer
 voller Scan innerhalb des Transfers.
 
-**Gemessen am 30.09.2026, siehe `docs/projektstand.md` 6.2, 6.6 und 6.7.** Aufbau
-`10 20`, gemischt: 40 Busse kosten **2,5 ms pro Tick im Mittel** gegen 0,221 ms
-ohne Busse, also 6,3 % des Budgets — dauerhaft, in jedem Tick. Nach dem
-Phasen-Offset liegt die Spitze bei 7,974 statt 20,945 ms. Pro Buslauf sind das
-rund **280 µs**, mehr als die ganze Mod ohne Busse pro Tick braucht. Damit ist
-(j) nicht mehr Verdacht, sondern der gemessene Hauptposten.
+**Gemessen am 30.09.2026, siehe `docs/projektstand.md` 6.2 und 6.8.** Getrennt
+nach Busart, gegen die 0,221 ms Grundlast ohne Busse:
+
+| 40 Busse | Buskosten | pro Buslauf |
+|---|---|---|
+| Item-IO | 0,90 ms | 90 µs |
+| **External-IO** | **4,10 ms** | **513 µs** |
+| gemischt (20 + 20) | 2,54 ms | — |
+
+Die External-Seite ist 4,5-mal so teuer und trägt 82 % der gemischten Kosten. Die
+drei Messungen passen zusammen (20 Item + 20 External sagen 2,50 ms voraus,
+gemessen 2,54 ms). 40 External-Busse sind 25 % des Tick-Budgets, und das skaliert
+linear. **(j) ist damit nicht nur der Hauptposten, sondern auf der External-Seite
+lokalisiert.**
 
 Belegt durch den Changelog des Originalautors, der über vier Monate wiederholt
 an Kadenz und Vollständigkeitsprüfungen nachgebessert hat, ohne die Struktur
@@ -339,11 +347,17 @@ Befehle (`/rns-debug`, `/rns-debug-nc`, `/rns-debug-refresh`,
 
 ### 6a Priorisierung: entschieden
 
-P1 ist durch, und die Messung aus `docs/projektstand.md` 6.2 hat die Reihenfolge
-entschieden: **Der IO-Bus ist der Posten, um eine Größenordnung vor allem
-anderen.** 40 Busse kosten 2,31 ms pro Tick im Mittel und eine Spitze über dem
-Budget; der Refresh-Posten ist mit `a5add2b` auf Strukturänderungen
-zusammengeschrumpft und liegt im Rauschen.
+P1 ist durch. Die Messung hat zwei Fragen entschieden
+(`docs/projektstand.md` 6.2, 6.6 und 6.8):
+
+**Erstens: der IO-Bus ist der Posten, um eine Größenordnung vor allem anderen.**
+40 Busse kosten 2,5 ms pro Tick im Mittel, der Refresh-Posten ist mit `a5add2b`
+auf Strukturänderungen zusammengeschrumpft und liegt im Rauschen.
+
+**Zweitens: es ist die External-Seite.** 513 µs pro Buslauf gegen 90 µs bei
+Item-IO, also 82 % der gemischten Kosten und 25 % des Budgets bei nur 40 Bussen.
+**Damit P5 vor P4** — der Scheduler bleibt richtig, greift aber am kleineren
+Anteil.
 
 Der Phasen-Offset ist umgesetzt (`beb263c`, `10154d6`) — er kostet keinen
 Durchsatz und war damit der erste Schritt: `max` fiel von 20,945 auf 7,974 ms,
@@ -356,10 +370,19 @@ der eigentliche Umbau nach Abschnitt 3.6:
 3. Nur bei Bedarf handeln, statt bei jedem Sweep.
 
 Die Reihenfolge aus 3.6 trägt: 1 vor 2 vor 3, weil nur 1 ohne Nebenwirkung ist.
-**Welche Seite zuerst, entscheidet die Messung** (`docs/projektstand.md` 6.7):
-Der Aufbau kann Item- und External-Busse jetzt getrennt bauen, damit die 2,5 ms
-zurechenbar werden. Der Plan führt sie als getrennte Meilensteine — P4 Scheduler,
-P5 External IO —, also ist die Trennung die Voraussetzung für beide.
+**Die Messung hat die Seite entschieden** (`docs/projektstand.md` 6.8):
+External-IO kostet 513 µs pro Buslauf gegen 90 µs bei Item-IO, trägt also 82 % der
+gemischten Kosten. **Also P5 vor P4.**
+
+Punkt 3 kam trotzdem zuerst, mit Absicht: Er ist der kleinste Eingriff, ändert
+nicht, was transferiert wird, und braucht keine neue Vergleichsgrundlage. Punkt 1
+ist der größere Umbau, weil er den Slot-Index als Vergleichsbasis aufgibt.
+
+Erster Eingriff umgesetzt (`0db27d7`, `docs/projektstand.md` 6.9): Der
+External-Bus liest seinen Container nur noch, wenn sich die Gesamtzahl geändert
+hat, mit einem erzwungenen Vollaufbau als Netz. Fällt die Zahl damit nicht
+deutlich, ist Punkt 1 fällig — der Slot-Durchlauf selbst, also `Itemstack:new`
+pro Slot und das `sort_and_merge`.
 
 **Kadenz senken kostet Durchsatz.** `RNS_ItemIO_Tick = 4` entspricht 15 Items/s
 bei `IIOMultiplier = 1`. Eine Senkung auf 16 Ticks viertelt den Durchsatz,
