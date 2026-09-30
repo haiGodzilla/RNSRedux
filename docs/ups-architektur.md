@@ -317,8 +317,8 @@ Spielerklick-Grenze im Inventar liegt und nicht in der Mod.
 
 Betrifft `NetworkController.lua` (geändert) und `NetworkBase.lua` (unverändert).
 
-**P2 — ItemStore mit Chunks. Modul und Brücke fertig und belegt; die Drives sind
-nicht umgestellt.** Ausbau des begonnenen Moduls um dynamische Chunks, Item- und
+**P2 — ItemStore mit Chunks. Modul, Brücke und die Umstellung der Drives fertig;
+die Abnahme steht aus.** Ausbau des begonnenen Moduls um dynamische Chunks, Item- und
 Quality-Schlüssel, O(1)-Abfragen. Testbefehl um Vielfach-Chunks und Save/Load
 erweitert.
 
@@ -346,11 +346,18 @@ solange die Tür zu ist, kommt kein Qualitäts-Item in die Zählertabelle.
 - **`insert` nimmt keinen Stapel-Array.** Chargentransfers in P3 müssen als
   Schleife gehen.
 
-**Offen und als Nächstes:** die Umstellung der Drives. `storageArray` wird an fünf
-Stellen außerhalb des Moduls direkt gelesen (`NetworkBase.lua` 206/971/1008,
-`NetworkInventoryInterface.lua` 368, `WirelessGrid.lua` 391), dazu die
-Buchhaltung in `ItemDrives.lua`. Die ersten drei sitzen im Transferpfad, für den
-die P1-Abnahme (`truth` im Dump) schon existiert.
+**Offen und als Nächstes:** die Drives sind umgestellt (Commit `95c2d27`), die
+Zählertabelle mit. Was bleibt:
+
+1. **Die Qualitäts-Blockade fehlt.** `ItemStore.isStorable` wird nirgends
+   aufgerufen — die Absicht „kein stiller Verlust, keine stille Abwertung" war nie
+   implementiert, im 1:1-Port kollabierte die Qualität still. Mit dem Engine-Store
+   wird sie nun **erhalten** statt abgewertet. Entscheidung nötig
+   (`docs/projektstand.md` 7.12).
+2. **Die Item-Verteilung beim Abbau** (Andre). Eigener Schritt, weil sie denselben
+   Einbau-Pfad benutzt; offen ist der Rückfall, wenn das Netz danach voll ist.
+3. Der Abnahmetest für die Umstellung: `/rns-debug-nc` → `/rns-debug-refresh` →
+   `/rns-debug-nc`, plus `truth` im Dump (behauptet gegen tatsächlich).
 
 Vorbedingung aus der P1-Abnahme: `Itemstack` speichert Stapel als Lua-Tabellen,
 und ob ein Feld leer (leere Tabelle) oder gar nicht vorhanden (`nil`) ist,

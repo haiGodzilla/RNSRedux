@@ -1727,6 +1727,95 @@ Standalone-Inventare mit Inhalt, und `array insert ok=false` als Beleg für P3.
    denselben Einbau-Pfad benutzt. Offen ist der Rückfall, wenn das Netz nach dem
    Abbau voll ist.
 
+### 7.11 Die Drives sind umgestellt (Commit `95c2d27`)
+
+`storageArray` ist aus `ItemDrives.lua` verschwunden. Ein `ItemStore` hält den
+Inhalt, die Engine hält die Identität.
+
+**Umfang, und zwei Korrekturen am notierten Plan.** Der Plan führte fünf
+Aufrufstellen außerhalb des Moduls. **Drei davon waren auskommentiert** —
+`NetworkInventoryInterface.lua:368`, `WirelessGrid.lua:391` und der
+`has_item`-Block in `ItemDrives.lua` liegen in `--[[…]]`. Verifiziert, nicht
+vermutet. Die **aktiven** Leser waren damit nur:
+
+| Stelle | Umstellung |
+|---|---|
+| `NetworkBase.lua:206` (Beitritt) | `store:forEachStack` plus `Itemstack:new` je Stapel, weil die Buchhaltung die Mod-Dialekt-Form braucht |
+| `NetworkBase.lua:971`, `1008` (Entnahme) | `drive:getStoredStack(name, quality)` statt `storageArray[name]` |
+| `control.lua` `truth`-Spalte | Summe über die Slots statt über den geführten Zähler |
+
+**Und die Anzeige brauchte nichts.** Sie liest aus `interfaceCache`, das der
+Beitritt füllt — die auskommentierten Blöcke waren der alte, nie aktivierte Weg.
+
+**Was aus `ItemDrives` verschwunden ist:**
+
+- `add_or_merge_basic_item`s Munitions- und Haltbarkeits-Modulo. Das war der
+  Fehler, der halbvolle Magazine zu erfundenen Füllmengen verschmolz. Die Engine
+  entscheidet die Zusammenführung jetzt aus dem `ammo`-Feld.
+- `remove_item`s `split`-Aufruf mit `exact`-Steuerung. Der Stapel liegt als echter
+  Engine-Stapel vor, also gibt es nichts zu rechnen — der Aufrufer prüft die
+  Gleichheit vorher selbst (`compare_itemstacks` in `transfer_from_network_to_inv`),
+  und die Entnahme liest die Werte **vor** dem Entfernen ab.
+- `validate`s Suche nach Item-Namen, die es nicht mehr gibt. Die Engine hält nur
+  gültige Prototypen.
+- `getStorageSize`/`getRemainingStorageSize` rechnen nicht mehr selbst, sondern
+  fragen den Store.
+
+**Zwei Ergänzungen in `Itemstack.lua`, ohne die der Umbau falsch wäre:**
+
+- **`quality` fehlte im Dialekt.** `Itemstack:new` las die Qualität nicht, also
+  hätte der Blueprint-Pfad einen legendären Stapel als normalen geschrieben und
+  ebenso zurückgelesen — **stille Abwertung**, genau das, was die Absicht
+  ausschließen wollte.
+- **`compare_itemstacks` prüfte die Qualität nicht.** Der Store hält die Stufen
+  getrennt, der Vergleich hätte sie verschmolzen. Die Prüfung sitzt außerhalb des
+  `exact`-Zweigs, weil sie keine Geschmacksfrage ist, und normalisiert `nil` gegen
+  `"normal"`, damit ein Stapel ohne das Feld weiter passt.
+
+**Die `truth`-Spalte musste ihre Quelle wechseln.** Sie summierte `storageArray`
+und summiert jetzt `store:forEachStack` — **nicht** `store:getTotalItems()`. Der
+geführte Zähler würde mit sich selbst übereinstimmen und nichts beweisen; die
+Summe über die Slots ist die unabhängige Seite des Vergleichs.
+
+**Der Blueprint-Pfad serialisiert weiter, jetzt über den Store.**
+`DataConvert_EntityToItem` sammelt die Stapel per `forEachStack`, `_ItemToEntity`
+legt sie über `insertItemstack` zurück. Beide Formen werden akzeptiert (die neue
+Liste und die name-indizierte Tabelle aus einem älteren Blueprint), sonst würde ein
+vor diesem Commit gebauter Blueprint seinen Inhalt verlieren.
+
+### 7.12 Ein Befund, der eine Entscheidung braucht: die Qualitäts-Blockade existiert nicht
+
+`ItemStore.isStorable` steht seit `bb5ad52` da und wird **nirgends aufgerufen.**
+Nachgeprüft mit einem `grep` über das ganze Repo: der einzige Treffer ist die
+Definition selbst.
+
+**Die Blockade am Drive-Eingang war nie implementiert.** Im 1:1-Port war sie auch
+nicht nötig: Die Handserialisierung kannte Qualität nicht, sie **kollabierte**
+still — zwei Stufen wurden ein Eintrag. Die Absicht „kein stiller Verlust, keine
+stille Abwertung" beschrieb also das Ziel, nicht den Zustand.
+
+**Mit dem Engine-Store ändert sich das Verhalten an dieser Stelle.** Der Store hält
+Qualität jetzt (belegt in 7.9), `Itemstack:new` trägt sie, `compare_itemstacks`
+unterscheidet sie. Ein Qualitäts-Item, das heute am Eingang ankommt, wird also
+**nicht mehr abgewertet, sondern erhalten** — als eigener Engine-Stapel.
+
+**Und es funktioniert rechnerisch:** Die Zählertabelle summiert beide Stufen unter
+demselben Namen, `tracked` bleibt also die Summe und stimmt mit `truth` überein.
+Nur die Anzeige fasst sie in einem Eintrag zusammen, bis der Schlüssel `name|quality`
+kommt.
+
+**Drei Wege, und ich empfehle den ersten:**
+
+1. **Blockade jetzt verdrahten** — `isStorable` am Drive-Eingang aufrufen, wo der
+   Stapel den Store erreicht (in `add_or_merge_basic_item`, vor dem `insertItemstack`).
+   Klein, und es setzt die dokumentierte Absicht um: keine stille Vermischung.
+2. **Qualität durchlassen** — sie wird erhalten statt abgewertet, was streng
+   genommen besser ist, aber die Anzeige fasst zwei Stufen zusammen, bis der
+   Schlüssel wandert. Das ist eine sichtbare Ungenauigkeit, keine falsche Zahl.
+3. **Nichts tun** — ist Weg 2 mit unklarer Absicht, deshalb nicht zu empfehlen.
+
+**Der Umbau selbst ist unberührt davon** und getestet werden muss er so oder so.
+
 ## 8. Offene technische Schulden
 
 - `NetworkBase.addConnectables`, Zeilen 183/186/191: drei Prüfungen mit `and`
