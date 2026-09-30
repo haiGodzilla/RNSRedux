@@ -378,11 +378,20 @@ Punkt 3 kam trotzdem zuerst, mit Absicht: Er ist der kleinste Eingriff, ändert
 nicht, was transferiert wird, und braucht keine neue Vergleichsgrundlage. Punkt 1
 ist der größere Umbau, weil er den Slot-Index als Vergleichsbasis aufgibt.
 
-Erster Eingriff umgesetzt (`0db27d7`, `docs/projektstand.md` 6.9): Der
-External-Bus liest seinen Container nur noch, wenn sich die Gesamtzahl geändert
-hat, mit einem erzwungenen Vollaufbau als Netz. Fällt die Zahl damit nicht
-deutlich, ist Punkt 1 fällig — der Slot-Durchlauf selbst, also `Itemstack:new`
-pro Slot und das `sort_and_merge`.
+Erster Eingriff umgesetzt (`0db27d7`, `docs/projektstand.md` 6.9) und **gemessen**
+(`docs/projektstand.md` 6.10): Der External-Bus liest seinen Container nur noch,
+wenn sich die Gesamtzahl geändert hat, mit einem erzwungenen Vollaufbau als Netz.
+`avg` fällt von 2,756 auf 1,088 ms, die External-Seite von 4,10 auf rund 0,19 ms,
+und die Buchhaltung bleibt exakt (`tracked` = `drive` + External, `busTruth`
+Cache = Container).
+
+**Der Wert gilt für einen Aufbau mit statischen Containern und ist damit eine
+Obergrenze.** In einer echten Anlage ändert sich der Container laufend, die
+Abkürzung greift seltener. Die Gegenprobe auf demselben Aufbau ist einzeilig:
+`Constants.Settings.RNS_ExternalStorage_Rescan = 1` schaltet die Abkürzung ab.
+
+**Damit ist der Item-Bus der größere Posten** (0,90 ms von 1,088 gemessen). Sein
+Verdacht steht in `docs/projektstand.md` 6.7 und ist noch nicht angefasst.
 
 **Kadenz senken kostet Durchsatz.** `RNS_ItemIO_Tick = 4` entspricht 15 Items/s
 bei `IIOMultiplier = 1`. Eine Senkung auf 16 Ticks viertelt den Durchsatz,

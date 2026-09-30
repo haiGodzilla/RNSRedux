@@ -803,15 +803,82 @@ busTruth=<Busse>/<was der Cache behauptet>/<was im Container steht>
 Das ist die Größe, die die Änderung überleben muss. `external=` und `busTruth`
 mittlere Zahl müssen zusammenpassen; die dritte ist die Wahrheit im Container.
 
-**Der Gewinn hängt daran, wie oft sich der Container ändert.** In einer echten
-Anlage schiebt ein Inserter wenige Items pro Sekunde ein, dann greift die
-Abkürzung fast immer. Im Messaufbau fließt mehr, also ist der dort gemessene
-Gewinn eine **Untergrenze** für den Praxisfall.
+**Der Gewinn hängt daran, wie oft sich der Container ändert**, und der Messaufbau
+ist dabei der Bestfall (siehe 6.10). Wenn die Zahl nicht deutlich fällt, ist der
+nächste Schritt Plan-Punkt (j) in voller Länge: der Slot-Durchlauf selbst, also
+`Itemstack:new` pro Slot und das `sort_and_merge` — das braucht aber eine andere
+Vergleichsgrundlage als den Slot-Index und ist damit der größere Umbau.
 
-Wenn die Zahl nicht deutlich fällt, ist der nächste Schritt Plan-Punkt (j) in
-voller Länge: der Slot-Durchlauf selbst, also `Itemstack:new` pro Slot und das
-`sort_and_merge` — das braucht aber eine andere Vergleichsgrundlage als den
-Slot-Index und ist damit der größere Umbau.
+### 6.10 Ergebnis: die Abkürzung greift, und die Buchhaltung hält
+
+Gemischter Aufbau `10 20 4`, zwei Minuten, `/perf-avg-frames 600`:
+
+| Aufnahme | avg | min | max |
+|---|---|---|---|
+| vor der Abkürzung (6.6) | 2,756 | 2,095 | 7,974 |
+| nach der Abkürzung | **1,088** | 0,207 | 10,786 |
+
+Über das Fenster gemittelt: (2,756 + 1,088) / 2 = 1,922 ms. **Die Abkürzung spart
+1,67 ms pro Tick, also 61 % der Buskosten.** Zum Vergleich: die Item-Seite allein
+kostet 0,90 ms (6.8). Nach der Abkürzung liegt der gemischte Aufbau bei 1,088 ms
+— die External-Seite ist damit auf rund 0,19 ms geschrumpft, von 4,10 ms.
+
+`max` steigt von 7,974 auf 10,786 ms und bleibt unter dem Budget. Das ist
+erwartbar: mit der Abkürzung ist die Arbeit wieder ungleichmäßiger, weil
+Vollaufbauten sich bündeln können.
+
+**Die Buchhaltung hält, und die Zahlen schließen sich gegenseitig auf.** Zwei
+Dumps, dazwischen der erzwungene Refresh:
+
+```
+# vorher   tracked=260542/16 drive=250942/1700000 external=96/96 truth=20/250942/250942 busTruth=2/9600/9600
+# nachher  tracked=260000/16 drive=250400/1700000 external=96/96 truth=20/250400/250400 busTruth=2/9600/9600
+```
+
+Vier unabhängige Proben stimmen überein:
+
+- **`tracked` = `drive` + External.** 250400 + 9600 = 260000, und 250942 + 9600 =
+  260542. Die 9600 aus `busTruth` sind genau der External-Anteil in `tracked`. Das
+  schließt den Kreis: der Cache speist `Contents.item` mit dem richtigen Wert.
+- **`truth` behauptet = tatsächlich** (250400/250400): die Drives sind in sich
+  konsistent.
+- **`busTruth` Cache = Container** (9600/9600): der übersprungene Lesevorgang hat
+  keine Abweichung hinterlassen.
+- **`external=96/96`** sind die belegten Slots der beiden Item-External-Busse
+  (2 × 48, voll), und 96 × 100 Items = 9600. Passt zu `busTruth`.
+
+Die 542 Items, um die `tracked` zwischen den Dumps fällt, sind **legitime Arbeit**,
+kein Fehler: die Item-Busse haben während der Messung exportiert (2 Busse × rund
+271 Items in 1.109 Ticks, bei einem Item pro vier Ticks). Dass `drive` um
+denselben Betrag fällt und `external` sich nicht rührt, ist genau das erwartete
+Bild: Quelle sind die Drives, die External-Container waren voll und wurden nicht
+angefasst.
+
+**Korrektur an 6.9.** Dort steht, der gemessene Gewinn sei eine *Untergrenze* für
+den Praxisfall. Das ist falsch, und zwar in der Richtung: In diesem Aufbau sind
+die External-Container **statisch** — voll, und niemand entnimmt etwas. Die
+Abkürzung greift deshalb bei praktisch jedem Sweep, das ist der **Bestfall**. In
+einer echten Anlage entnehmen Maschinen aus diesen Containern, die Gesamtzahl
+ändert sich laufend, und der Durchlauf findet dann wieder statt. **Der gemessene
+Gewinn ist eine Obergrenze**, nicht eine Untergrenze. Wie viel davon übrig bleibt,
+hängt an der Änderungsrate der Container und ist mit diesem Aufbau nicht messbar.
+
+**Die Gegenprobe ist ein Einzeiler.** `Constants.Settings.RNS_ExternalStorage_Rescan
+= 1` schaltet die Abkürzung ab: das Tor prüft `rescanCounter < Rescan`, und bei 1
+ist die Bedingung nach dem ersten Inkrement falsch, also wird immer voll gelesen.
+Damit lassen sich beide Zustände auf demselben Aufbau messen, ohne Neubau.
+
+### 6.11 Offen nach diesem Schritt
+
+- **Der Gewinn in der Praxis.** Oben: der Messaufbau ist der Bestfall. Für eine
+  belastbare Zahl braucht es einen Aufbau, in dem aus den External-Containern
+  laufend entnommen wird — und einen Abnehmer für die Item-Busse, der die Kisten
+  nicht füllt und dann stehen lässt.
+- **Die 9 % Mehrkosten aus 6.6** sind weiterhin ungeklärt. Nach dieser Messung
+  sind sie ohnehin von kleinerer Größenordnung als der Gewinn.
+- **Der Item-Bus ist jetzt der größere Posten** (0,90 ms von 1,088). Sein Verdacht
+  steht in 6.7 und ist noch nicht angefasst: er läuft pro Buslauf über den
+  Interface-Cache des Netzes und über den Zielcontainer.
 
 ## 7. Offene technische Schulden
 
