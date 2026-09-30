@@ -182,7 +182,7 @@ function StressTest.drainStatus()
         rate, #(state.drainChests or {}), drainTaken, tostring(state.busItem))
 end
 
-function StressTest.build(stationCount, drivesPerStation, busesPerStation, busKind)
+function StressTest.build(stationCount, drivesPerStation, busesPerStation, busKind, externalIo)
     local player = game.player
     if player == nil then return "no player" end
     local surface = player.surface
@@ -236,6 +236,20 @@ function StressTest.build(stationCount, drivesPerStation, busesPerStation, busKi
     if kind ~= "mixed" and kind ~= "item" and kind ~= "external" then
         notes[#notes + 1] = "unknown bus kind '" .. kind .. "', using mixed"
         kind = "mixed"
+    end
+
+    --The direction of the external bus. The default "input/output" reads its
+    --container and writes into it, which in this fixture makes the bus its own
+    --supplier: it refills faster than the drain empties, the total barely moves and
+    --the read cadence of the cheap skip is never defeated.
+    --"input" blocks the write path (the insert branch in
+    --BaseNet.transfer_from_inv_to_network requires the string "output" in io) and
+    --leaves the read path, so the container only ever drains. That is the case the
+    --skip is meant for, and the one worth measuring.
+    local ioMode = externalIo or "both"
+    if ioMode ~= "both" and ioMode ~= "input" and ioMode ~= "output" then
+        notes[#notes + 1] = "unknown external io '" .. ioMode .. "', using both"
+        ioMode = "both"
     end
 
     --The item the buses move. It has to be one the fill also puts into the drives,
@@ -338,6 +352,11 @@ function StressTest.build(stationCount, drivesPerStation, busesPerStation, busKi
                     stats.busUnregistered = stats.busUnregistered + 1
                 elseif isExternal then
                     configureExternalBus(obj)
+                    if ioMode == "input" then
+                        obj.io = "input"
+                    elseif ioMode == "output" then
+                        obj.io = "output"
+                    end
                     stats.externalBuses = stats.externalBuses + 1
                 else
                     configureItemBus(obj, busItem)
@@ -389,9 +408,9 @@ function StressTest.build(stationCount, drivesPerStation, busesPerStation, busKi
     end
 
     local summary = string.format(
-        "stations=%d controllers=%d drives=%d cables=%d grids=%d power=%d buses=%d(%s) itemBuses=%d externalBuses=%d filledChests=%d failed=%d registered=%d",
+        "stations=%d controllers=%d drives=%d cables=%d grids=%d power=%d buses=%d(%s,%s) itemBuses=%d externalBuses=%d filledChests=%d failed=%d registered=%d",
         stationCount, stats.controllers, stats.drives, stats.cables, stats.grids,
-        stats.power, stats.buses, kind, stats.itemBuses, stats.externalBuses,
+        stats.power, stats.buses, kind, ioMode, stats.itemBuses, stats.externalBuses,
         stats.filledChests, stats.failed, registered)
     if #notes > 0 then
         summary = summary .. "\n" .. table.concat(notes, "\n")

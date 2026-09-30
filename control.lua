@@ -603,10 +603,10 @@ commands.add_command("rns-stress-drain-status", "RNSRedux: report the drain rate
     end)
 
 --Stress test commands for UPS measurement.
-commands.add_command("rns-stress-build", "RNSRedux: build a stress network. <stations> <drivesPerStation> [busesPerStation] [mixed|item|external]",
+commands.add_command("rns-stress-build", "RNSRedux: build a stress network. <stations> <drivesPerStation> [busesPerStation] [mixed|item|external] [both|input|output]",
     function(data)
-        local a, b, c, d = string.match(data.parameter or "", "(%d+)%s+(%d+)%s*(%d*)%s*(%a*)")
-        game.print(StressTest.build(tonumber(a) or 5, tonumber(b) or 10, tonumber(c) or 0, d))
+        local a, b, c, d, e = string.match(data.parameter or "", "(%d+)%s+(%d+)%s*(%d*)%s*(%a*)%s*(%a*)")
+        game.print(StressTest.build(tonumber(a) or 5, tonumber(b) or 10, tonumber(c) or 0, d, e))
     end)
 
 commands.add_command("rns-stress-fill", "RNSRedux: load drives with items. <typesPerDrive> <amountPerType>",

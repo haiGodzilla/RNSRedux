@@ -521,12 +521,20 @@ dann
 `members` = Drives + Kabel **pro Station** + 2. Weicht eine Zeile ab, ist der
 Aufbau unvollständig und die Stufe unbrauchbar.
 
-**Busse (dritter und vierter Parameter).** `/rns-stress-build <stationen>
-<drivesProStation> [busseProStation] [mixed|item|external]`. Pro Bus drei Entities
-an einer Station: ein Stichkabel, der Bus, seine Kiste. Sie liegen südlich der
-Spinne, deren Geometrie unberührt bleibt. Erwartung:
+**Busse (dritter bis fünfter Parameter).** `/rns-stress-build <stationen>
+<drivesPerStation> [busseProStation] [mixed|item|external] [both|input|output]`. Pro
+Bus drei Entities an einer Station: ein Stichkabel, der Bus, seine Kiste. Sie
+liegen südlich der Spinne, deren Geometrie unberührt bleibt. Erwartung:
 `members = Drives + spineLength + 2 × Busse + 2`; `/rns-stress-build` gibt den
 Wert selbst aus.
+
+Der fünfte Parameter setzt die Richtung des External-Busses. Vorgabe `both` ist
+`io = "input/output"`, also lesen **und** schreiben — in diesem Aufbau versorgt
+sich der Bus dann selbst und die Gesamtzahl des Containers bewegt sich kaum.
+`input` sperrt den Schreibpfad (der Insert-Zweig in
+`BaseNet.transfer_from_inv_to_network` verlangt die Zeichenkette `"output"` in
+`io`) und lässt den Lesepfad: der Container läuft dann nur leer. **Das ist der
+Fall, für den die Abkürzung gebaut ist** — siehe `docs/projektstand.md` 6.13.
 
 | Aufbau | `members` |
 |---|---|
