@@ -1631,6 +1631,42 @@ Zahlen beschreiben denselben Store aus verschiedenen Richtungen. Gehen sie
 auseinander, zählt der geführte `used`-Wert anders als der tatsächliche Inhalt —
 genau der Fehler, den P1 für das Netz ausgeschlossen hat.
 
+### 7.8 Der erste Brückenlauf: Munition ging verloren — mein Fehler
+
+Commit `96e8d1a`. Der Befund aus dem Lauf:
+
+```
+bridge: partial magazine inserted=1 ammo back=10 (placed: 4 rounds in one magazine) count=1
+```
+
+**`ammo=10` ist die volle Magazingröße.** Die Anzahl stimmte (1), die Identität war
+weg. Vier Schuss hinein, zehn heraus.
+
+**Die Ursache ist eine Zeile, und sie ist meine.** `ItemStore:insert` baute seine
+eigene Request-Tabelle mit `{name, count, quality}` und gab die an den Container.
+Geschrieben wurde das, **bevor** die Brücke existierte — damals hatte ein Stapel
+nichts anderes. Mit der Brücke muss die Definition durchgereicht werden.
+
+**Behoben:** `requestFrom(stack, count)` baut die Anfrage jetzt mit `health`,
+`durability`, `ammo` und `tags`. Das Inventar entscheidet daraus, wie es den Stapel
+ablegt und zusammenführt — die Anzahl allein verrät es nicht.
+
+**Und der Test protokolliert jetzt jeden Sprung** statt nur den Endwert:
+
+```
+bridge: partial magazine inserted=1 ammo along the way:
+  inventory=4 Itemstack=4 definition=4 stored=4
+  (placed: 4 rounds in one magazine, full is 10)
+```
+
+Der erste Lauf konnte nur sagen „es kamen 10 zurück". Damit war die Fehlerstelle
+irgendwo zwischen Inventar und Store. **Vier Werte machen jeden Sprung sichtbar** —
+und genau das ist die Regel, die diese Sitzung schon viermal getragen hätte.
+
+**Was dieser Lauf noch nicht zeigt:** ob die Engine das `ammo`-Feld beim Einfügen
+überhaupt beachtet. Der nächste Lauf zeigt es, und das ist die Frage, die 7.7 als
+Vorbedingung für die Drive-Umstellung festgehalten hat.
+
 ## 8. Offene technische Schulden
 
 - `NetworkBase.addConnectables`, Zeilen 183/186/191: drei Prüfungen mit `and`
