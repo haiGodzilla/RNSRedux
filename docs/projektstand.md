@@ -960,10 +960,8 @@ beim ersten Mal war es die Konsolenzuweisung von `Rescan`. Deshalb meldet der
 Befehl jetzt selbst, wie viele Container er gefunden hat und welches Item er
 entnimmt.
 
-### 6.13 Die erwartete Kurve
-
-Der Bus liest `RNS_ExternalStorage_Tick` = 5, also `L` = 12 mal pro Sekunde.
-Ändert sich die Gesamtzahl mit Rate `r` pro Container:
+**Die erwartete Kurve.** Der Bus liest `RNS_ExternalStorage_Tick` = 5, also `L` = 12
+mal pro Sekunde. Ändert sich die Gesamtzahl mit Rate `r` pro Container:
 
 ```
 Trefferquote = 1 - exp(-r / L)
@@ -978,32 +976,101 @@ Trefferquote = 1 - exp(-r / L)
 | 8,3 Items/s | 50 % | 45 % |
 | 12 Items/s | 63 % | 32 % |
 
-**Die Kipprate liegt bei `L` × ln 2 ≈ 8,3 Items/s pro Container.** Darunter ist die
-Abkürzung ihr Geld wert, darüber verliert sie schnell.
+**Die Kipprate liegt bei `L` × ln 2 ≈ 8,3 Items/s pro Container.**
 
-Das ist eine Rechnung, keine Messung. Der Lauf prüft sie: Ist die Trefferquote bei
-`r = 1` deutlich unter 8 %, greift die Abkürzung seltener als die Rechnung sagt,
-und dann ist meine Annahme verletzt, dass die Änderungen unabhängig vom Lesetakt
-passieren.
+Das ist eine Rechnung, keine Messung. Der Lauf in 6.13 prüft sie.
 
-**Ein Verdacht, der beim Lesen auftauchte und noch nicht geprüft ist.** Der
-External-Bus hat `io = "input/output"` (`ExternalIO.lua:18`) — er liest den
-Container **und** schreibt in ihn. Der Abfluss schafft Platz, der Bus könnte ihn
-sofort wieder füllen. Dann ändert sich die Gesamtzahl zwischen zwei Sweeps
-nicht, und die Trefferquote bliebe bei null, egal wie hoch die Rate ist.
-**Der Aufbau prüft das nicht**, weil er die Richtung nicht steuert. Falls der
-nächste Lauf wieder null Treffer zeigt, ist das die erste Spur.
+### 6.13 Der Abfluss läuft — und der Container füllt sich nach
 
-### 6.14 Was der Lauf entscheidet, und was nicht
+Zweiter Lauf, Regler auf 1 Item/s pro Container, 20 Container. Fenster 6.917 →
+13.983, also 7.066 Ticks:
 
-Er liefert die Trefferquote für eine vorgegebene Rate. **Welcher Fall in einer
-echten Anlage vorliegt, klärt er nicht** — das hängt am Spielstil und an der Zahl
-der Busse pro Verbraucher, und beides ist nicht abschätzbar. Die Kurve sagt, wo die
-Grenze liegt; welchen Punkt man annimmt, ist eine Entscheidung.
+| Größe | Wert |
+|---|---|
+| Erwartete Sweeps (2 × 7.066 / 5) | 2.826 |
+| Gezählt | **2.826** (4.424 − 1.598) |
+| Nicht übersprungen | **236** |
+| Erzwungene Vollläufe (2.826 / 20) | 141 |
+| **Treffer** | **95** |
+| **Trefferquote** | **3,4 %** |
+
+**Erwartet waren 8,3 %** (`1 - exp(-1/12)`). Gemessen 3,4 %, also 40 % der
+Rechnung. Aber das ist nicht die interessanteste Zahl dieses Laufs.
+
+**Die Buchhaltung schließt exakt.** `tracked` fällt um 4.800, und:
+
+```
+drives 254.964 → 250.400      −4.564
+Container 9.466 → 9.230         −236
+                             ─────────
+                              −4.800
+```
+
+Die zwei Zahlen addieren sich auf die dritte. Und `external` geht von 96 auf 94
+**Slots** — 2 Slots à 100 Items plus 36 aus einem dritten ergeben 236. Der Abfluss
+entnimmt also aus dem jeweils ersten passenden Stapel und leert Slots der Reihe
+nach. Das passt auf den Item genau.
+
+**Und jetzt der Befund: Der Container hat längst nicht so viel verloren, wie der
+Abfluss entnommen hat.** Beim Statusaufruf kurz nach dem Start stand `removed=667`.
+Die Container waren zu diesem Zeitpunkt von 9.600 auf höchstens 9.466 gefallen,
+hatten also rund **134** verloren. **Mindestens 533 Items sind zurückgeflossen.**
+
+**Der Verdacht aus 6.13 ist damit bestätigt, nicht mehr nur ein Verdacht.** Der
+External-Bus steht auf `io = "input/output"` (`ExternalIO.lua:18`) — er liest den
+Container **und schreibt in ihn**. In diesem Aufbau ist er der einzige Verbraucher
+*und* der einzige Lieferant, und er liefert schneller nach, als der Abfluss
+entnimmt (bis zu 1 Item pro eigenem Tick = 12/s gegen 1/s Abfluss). Der Container
+steht deshalb praktisch voll, seine Gesamtzahl ändert sich selten, und die
+Abkürzung greift seltener als das reine Abflussmodell sagt.
+
+**Warum das kein Messfehler, sondern ein Aufbaumerkmal ist:** Der Aufbau misst
+einen External-Bus, der sich selbst versorgt. In einer echten Anlage sind
+Verbraucher und Lieferant **verschiedene** Dinge mit verschiedenen Raten. Die
+3,4 % gelten also für diesen Sonderfall, nicht für die Praxis. **Die Kurve aus 6.13
+bleibt gültig** — sie gilt für einen Container, dessen Gesamtzahl sich mit `r`
+ändert, und genau das stellt der Abfluss nur dann her, wenn niemand nachfüllt.
+
+**Zwei Nebenbeobachtungen:**
+
+- **`busTruth` Cache ≠ Container** ist jetzt **korrekt**: In einem Dump stand
+  `9468/9467`. Mit einem Abfluss läuft der Cache dem Container um bis zu eine
+  Entnahmerate × Lesetakt hinterher. Meine frühere Aussage „Cache = Container" gilt
+  nur, solange nichts von außen am Container zieht.
+- **Die Typenzahl stieg von 16 auf 17**, und `cache` von 16 auf 17. Die Zählung
+  wächst nur, weil ein Schlüssel bei 0 stehen bleibt; sie kann nicht sagen, ob ein
+  Container einen Typ aufgenommen hat, den der Fill nie hineingelegt hat. Der Dump
+  hat deshalb jetzt `busTypes` (Commit `8a3f0de`) — die tatsächlich im Container
+  liegenden Typen, aus dem Inventar gelesen.
+
+### 6.14 Der Werkzeugmangel, der den Lauf fast unlesbar gemacht hat
+
+Die 134 gegen 667 konnte ich nur deshalb ausrechnen, weil ich **eine** frühe
+Statusausgabe hatte. Über das Messfenster selbst gab es **keine** Angabe zur
+entnommenen Menge: `removed` wurde einmal gedruckt und nie wieder.
+
+**Das ist dieselbe Sorte Fehler wie bei der `Rescan`-Zuweisung:** ein Messgerät,
+dessen Ablesung nicht mit der Messung reist. Ich habe den Zähler gebaut und ihn
+nicht in den Dump gelegt — mit dem Ergebnis, dass ich beim Auswerten nicht sagen
+konnte, ob der Regler durchlief oder ob der Container nachgefüllt wurde. Die
+Antwort stand in den Daten, aber nur, weil ein einzelner früher Wert übrig war.
+
+**Behoben (Commit `8a3f0de`):** Der Dump-Kopf trägt jetzt den Abflussstand, also
+liefert jeder Dump die entnommene Menge mit. Zwei Dumps ergeben die Differenz
+direkt.
+
+### 6.15 Was der Lauf entscheidet, und was nicht
+
+Er liefert die Trefferquote für eine vorgegebene Rate — unter der Bedingung, dass
+niemand nachfüllt. **Diese Bedingung stellt der Aufbau nicht her.** Welcher Fall in
+einer echten Anlage vorliegt, klärt er nicht: das hängt daran, wie ein Bus in der
+Praxis beschaltet ist, und das kann ich nicht abschätzen.
 
 Für den nächsten echten Eingriff ist die Folgerung davon unabhängig:
 **P5-Punkt 1, der Slot-Durchlauf, hilft bei jeder Änderungsrate** — die Abkürzung
-nur bei langsamen Containern. Sie ist damit die gute Ergänzung, nicht die Lösung.
+nur bei Containern, deren Gesamtzahl sich zwischen zwei Lesungen wirklich ändert.
+Sie ist damit die Ergänzung für den Fall „Container ändert sich selten", nicht die
+Lösung.
 
 ## 7. Offene technische Schulden
 
