@@ -317,16 +317,36 @@ Spielerklick-Grenze im Inventar liegt und nicht in der Mod.
 
 Betrifft `NetworkController.lua` (geändert) und `NetworkBase.lua` (unverändert).
 
-**P2 — ItemStore mit Chunks. Modul, Brücke und die Umstellung der Drives fertig;
-die Abnahme steht aus.** Ausbau des begonnenen Moduls um dynamische Chunks, Item- und
+**P2 — ItemStore mit Chunks. ABGENOMMEN am 01.10.2026.** Modul, Brücke, die
+Umstellung der Drives und der Blueprint-Pfad sind gemessen
+(`docs/projektstand.md` 7.21). Nebenbei repariert: der Munitions- und
+Haltbarkeits-Modulo (erfundene Füllmengen bei halben Magazinen), die fehlende
+Qualität im Stapel-Dialekt, der tote Lesepfad aus der 2.0-Portierung
+(`on_built_entity` hat kein `stack`-Feld) und ein Absturz beim Platzieren von
+Drives, deren Item keinen RNS-Tag trägt.
+
+**Offen aus P2, eigener Schritt:**
+
+1. **Die Mouseover-Anzeige** eines platzierten Drives zeigt `0/0`, der Klick die
+   richtige Füllung. Ursache gefunden: Der Drive ist ein `container` mit
+   `inventory_size = 0`, und Factorio zeigt beim Hover das Inventar. Die Mod
+   benutzt es nicht. Behebung offen (`docs/projektstand.md` 7.20).
+2. **Die Chunk-Größe**: `CHUNK_INITIAL = 1024` ist unabhängig vom Bedarf; ein
+   4k-Drive braucht 40 Slots. Kostet Savegröße und Bauzeit, nicht Ticks
+   (`docs/projektstand.md` 7.15).
+3. **Die Item-Verteilung beim Abbau** (Andre): den Inhalt eines abgebauten Drives
+   auf die verbleibenden verteilen, statt ihn im Item zu transportieren. Offen ist
+   der Rückfall, wenn das Netz danach voll ist. Ausbau des begonnenen Moduls um dynamische Chunks, Item- und
 Quality-Schlüssel, O(1)-Abfragen. Testbefehl um Vielfach-Chunks und Save/Load
 erweitert.
 
 **Entschieden (Andre):** Qualität wird **fähig** gemacht — Store und Zählertabelle
 führen `name|quality` —, aber die **Politik bleibt**: der Drive-Eingang weist
-Qualitäts-Items weiterhin ab. Und: erst das Modul, die Drives in einem eigenen
-Schritt. Der Schlüssel wandert deshalb **später** mit der Politik, nicht jetzt;
-solange die Tür zu ist, kommt kein Qualitäts-Item in die Zählertabelle.
+Qualitäts-Items ab. Verdrahtet in `BaseNet:insert_item_into_drive`, **vor** dem
+Split, weil der Split den Quellstapel beschneidet — eine Ablehnung danach würde das
+Item vernichten. Und: erst das Modul, die Drives in einem eigenen Schritt. Der
+Schlüssel wandert **später** mit der Politik; solange die Tür zu ist, kommt kein
+Qualitäts-Item in die Zählertabelle.
 
 **Belegt und nicht mehr offen** (`docs/projektstand.md` 7.3 bis 7.9):
 
@@ -346,18 +366,15 @@ solange die Tür zu ist, kommt kein Qualitäts-Item in die Zählertabelle.
 - **`insert` nimmt keinen Stapel-Array.** Chargentransfers in P3 müssen als
   Schleife gehen.
 
-**Offen und als Nächstes:** die Drives sind umgestellt (Commit `95c2d27`), die
-Zählertabelle mit. Was bleibt:
+**Offen aus P2** (`docs/projektstand.md` 7.19 bis 7.21):
 
-1. **Die Qualitäts-Blockade fehlt.** `ItemStore.isStorable` wird nirgends
-   aufgerufen — die Absicht „kein stiller Verlust, keine stille Abwertung" war nie
-   implementiert, im 1:1-Port kollabierte die Qualität still. Mit dem Engine-Store
-   wird sie nun **erhalten** statt abgewertet. Entscheidung nötig
-   (`docs/projektstand.md` 7.12).
-2. **Die Item-Verteilung beim Abbau** (Andre). Eigener Schritt, weil sie denselben
+1. **Die Mouseover-Anzeige** zeigt `0/0`, der Klick die richtige Füllung. Ursache
+   gefunden: der Drive ist ein `container` mit `inventory_size = 0`, und Factorio
+   zeigt beim Hover das Inventar, das die Mod nicht benutzt. Behebung offen.
+2. **Die Chunk-Größe**: `CHUNK_INITIAL = 1024` unabhängig vom Bedarf. Kostet
+   Savegröße und Bauzeit, nicht Ticks.
+3. **Die Item-Verteilung beim Abbau** (Andre). Eigener Schritt, weil sie denselben
    Einbau-Pfad benutzt; offen ist der Rückfall, wenn das Netz danach voll ist.
-3. Der Abnahmetest für die Umstellung: `/rns-debug-nc` → `/rns-debug-refresh` →
-   `/rns-debug-nc`, plus `truth` im Dump (behauptet gegen tatsächlich).
 
 Vorbedingung aus der P1-Abnahme: `Itemstack` speichert Stapel als Lua-Tabellen,
 und ob ein Feld leer (leere Tabelle) oder gar nicht vorhanden (`nil`) ist,
