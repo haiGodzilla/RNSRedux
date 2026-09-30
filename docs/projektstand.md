@@ -4,8 +4,9 @@ Einstiegspunkt für die Weiterarbeit. Technischer Plan und Begründungen:
 `docs/ups-architektur.md`. Dieses Dokument beantwortet „wo stehen wir, was ist
 verifiziert, was ist der nächste Schritt".
 
-Stand: Commit `f94c3f0`, Branch `port/2.0`, Version 2.0.0.
-P0 und P1 sind durch, der IO-Bus ist der laufende Posten.
+Stand: Commit `??`, Branch `port/2.0`, Version 2.0.0.
+P0 und P1 sind durch, P5 ist bis auf den Item-Bus-Restposten abgeräumt (2,5 % des
+Tick-Budgets bei 40 Bussen). **Laufender Posten: P2, ItemStore.**
 
 ## 1. Projekt
 
@@ -1345,7 +1346,118 @@ drei Lesungen je Zustand statt einer, dann trägt die Zahl. Ein weiterer Eingrif
 ohne belastbare Differenz wäre ein Blindflug — und ich habe in dieser Sitzung
 zweimal eine Zuordnung behauptet, die nicht trug.
 
-## 7. Offene technische Schulden
+## 7. P2 — ItemStore: das Modul steht, die Engine-Annahmen sind offen
+
+### 7.1 Der Zuschnitt, und die drei Befunde, die ihn bestimmen
+
+**Befund 1: `storage` entfernt unregistrierte Metatables.** Die Doku ist an der
+Stelle eindeutig [2]:
+
+> The metatable itself will not be saved. Metatables that are registered with
+> `LuaBootstrap::register_metatable` will be recorded by name and automatically
+> relinked to the registered table on loading. Any other metatables will be
+> removed; tables with unregistered metatables become plain tables when saved and
+> loaded.
+
+Das trifft den ItemStore direkt: Er nutzt `setmetatable({}, {__index = ItemStore})`
+— eine selbstgebaute Metatable. Nach einem Save/Load wäre `store:insert(...)` ein
+Aufruf auf `nil`. Das ganze Projekt löst das über `rebuild(object)`, das `onLoad`
+aufruft (`control.lua:79–92`). **Jedes Objekt hat eine, `ItemStore` hatte keine.**
+Eingebaut in 7.2.
+
+**Befund 2: `insert` nimmt keinen Stapel-Array.** `ItemStackIdentification` ist
+laut Doku ein Union aus **drei Einzelstapel-Formen** — `string`,
+`ItemStackDefinition`, `LuaItemStack` [3]. Ein Array-Member gibt es nicht. Damit
+ist die Frage aus Plan-Abschnitt 8 beantwortet, und zwar gegen die frühere
+Hoffnung: **Chargentransfers in P3 müssen als Schleife gehen.** Der Test in 7.3
+prüft es trotzdem empirisch, weil die Doku die API beschreibt und nicht das
+Verhalten.
+
+**Befund 3: Der Code widersprach dem Plan.** `ItemStore.lua` rechnete mit
+`ITEMS_PER_SLOT = 100` — genau die Slot-Umrechnung, die der Plan in Abschnitt 7
+als gestrichen führt. Das Modul war vor dieser Entscheidung geschrieben. Ersetzt
+durch die Kapazitätssemantik aus 7.2.
+
+**Zwei Entscheidungen** (Andre, diese Sitzung): Qualität wird **fähig** gemacht,
+aber die **Politik bleibt** — der Store und die Zählertabelle führen `name|quality`,
+der Drive-Eingang weist Qualitäts-Items weiterhin ab. Und: **erst das Modul**, die
+Drives bleiben in dieser Runde unangetastet.
+
+### 7.2 Das Modul (Commit `??`)
+
+`scripts/objects/ItemStore.lua` neu geschrieben:
+
+- **Chunks statt fester Slotzahl.** Der letzte Chunk verdoppelt sich bei Bedarf
+  (`resize`) bis `min(65535, nominalCapacity)`, dann kommt ein weiterer dazu. Jeder
+  Chunk startet bei `min(1024, ...)`.
+- **Kapazität ist eine Item-Zahl.** `used` wird geführt, nicht gezählt;
+  `getRemainingCapacity()` und `insert` prüfen dagegen. `ITEMS_PER_SLOT` ist weg.
+- **Schlüssel `name|quality`.** `ItemStore.key(name, quality)` und
+  `ItemStore.qualityOf(value)` normalisieren beide Formen. Der Index
+  `item|quality -> chunk_index` hält fest, wo ein Item liegt, damit ein Stapel
+  nicht über Chunks gestreut wird.
+- **`ItemStore.rebuild(object)`** stellt die Metatable wieder her — der Fix für
+  Befund 1. Der Drive ruft ihn aus seinem eigenen `rebuild` auf, sobald er
+  umgestellt ist.
+- **`destroy`** gibt alle Chunks frei, sonst leckt das Savegame.
+
+**Noch nicht drin, und das ist Absicht:** die Übergabe der vollständigen
+Item-Identität. `insert` reicht `{name, count, quality}` an den Chunk durch, also
+verliert ein Stapel mit Munition, Haltbarkeit oder Tags diese beim Einlagern. Das
+ist der Kern von P2, aber er gehört zur Umstellung der Drives: Erst wenn der
+Einlagerungspfad den echten `LuaItemStack` durchreicht, kommt die Identität mit.
+**Solange die Drives unangetastet sind, ist der Store also nicht angebunden und
+richtet keinen Schaden an.**
+
+**Und eine Einsicht, die den Chunk-Aufwand einordnet:** Ein zweiter Chunk ist mit
+**Standard-Stackgrößen nicht erreichbar.** Die Slot-Zahl eines Inventars ist
+höchstens so groß wie die Item-Zahl (bei Stackgröße 1 gleich, darüber kleiner),
+und die Item-Zahl ist durch die Kapazität begrenzt. Solange die Kapazität unter
+65535 liegt, reicht ein Chunk also immer. **Chunks sind für Kapazitäten über 65535
+in Verbindung mit kleiner Stackgröße** — genau der Mod-Fall, den Plan-Abschnitt 4
+nennt („Mit Stackgröße 1 wären 256k Items sonst 256.000 Slots"). Der Aufwand ist
+damit Versicherung gegen Stack-Size-Mods, nicht gegen Vanilla.
+
+### 7.3 Was der Test klären muss
+
+`/rns-store-test` läuft in zwei Phasen über einen Marker: Der erste Aufruf baut,
+dann wird gespeichert und geladen, der zweite Aufruf prüft. `/rns-store-reset`
+räumt auf.
+
+**Drei Engine-Annahmen, die der Lauf beantwortet:**
+
+| Frage | Warum sie zählt |
+|---|---|
+| Übersteht die `LuaInventory`-Referenz in `storage` den Ladezyklus? | Die Doku erlaubt LuaObject-Referenzen, aber das ist genau der Punkt, den der Plan als unverifiziert führt. Fällt er, braucht der Store einen Schlüssel statt einer Referenz — das ändert die Architektur. |
+| Was passiert mit der Metatable? | Erwartet: weg. Bestätigt das den `rebuild`-Fix. |
+| Überleben zwei getrennte Inventare? | Belegt den Mehrfach-Chunk-Fall, den die Store-Logik mit Vanilla-Stackgrößen nicht erreichen kann. |
+
+**Dazu zwei API-Fragen**, deren Antworten das Modul festlegen:
+
+- Zählt `get_item_count("iron-plate")` **alle** Qualitäten oder nur `normal`? Der
+  Store fragt heute explizit mit `quality = "normal"` ab, um sich nicht auf die
+  Antwort zu verlassen. Fällt die Antwort „alle", kann er vereinfachen — und die
+  Zählertabelle muss es wissen.
+- Was tut `insert` mit einem Array? Erwartet: Fehler. Die Antwort steht als
+  Tabelle im Speicher, weil `pcall` die Meldung als Wert zurückgibt.
+
+### 7.4 Und danach: die Umstellung der Drives
+
+`storageArray` wird an **fünf Stellen außerhalb** des Moduls direkt gelesen:
+
+- `NetworkBase.lua:206` (Beitritt, läuft über alle Stapel des Drives)
+- `NetworkBase.lua:971` und `1008` (Entnahmepfad, `drive.storageArray[name]`)
+- `NetworkInventoryInterface.lua:368` (Anzeige)
+- `WirelessGrid.lua:391` (Anzeige)
+
+Dazu die Buchhaltung in `ItemDrives.lua` selbst: `storedAmount`, `add_or_merge_basic_item`,
+`remove_item`, `getStorageSize`, `getRemainingStorageSize`. **Jede dieser Stellen
+wird beim Umbau angefasst**, und die ersten drei sitzen im Transferpfad, den die
+P1-Abnahme abdeckt. Der Abnahmetest dafür existiert bereits
+(`/rns-debug-nc` → `/rns-debug-refresh` → `/rns-debug-nc`), und `truth` im Dump
+vergleicht den behaupteten gegen den tatsächlichen Stand.
+
+## 8. Offene technische Schulden
 
 - `NetworkBase.addConnectables`, Zeilen 183/186/191: drei Prüfungen mit `and`
   statt `or` (`if x == nil and x.valid == false`). Crash statt sauberer Abbruch
@@ -1376,7 +1488,7 @@ zweimal eine Zuordnung behauptet, die nicht trug.
   billig, bei einigen Tausend nicht. Zusammen mit dem Item-Sweep derselbe
   Posten, den P4 mit Zeitschlitzen lösen soll.
 
-## 8. Arbeitsweise
+## 9. Arbeitsweise
 
 Ein Fehler pro Runde ist normal. Manche Umgebungen brechen beim ersten Problem
 ab und zeigen nur eines. Deshalb: die tragfähige Korrektur liefern, statt alles

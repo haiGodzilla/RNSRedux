@@ -317,9 +317,34 @@ Spielerklick-Grenze im Inventar liegt und nicht in der Mod.
 
 Betrifft `NetworkController.lua` (geändert) und `NetworkBase.lua` (unverändert).
 
-**P2 — ItemStore mit Chunks.** Ausbau des begonnenen Moduls um dynamische
-Chunks, Item- und Quality-Schlüssel, O(1)-Abfragen. Drives darauf umstellen.
-Testbefehl erweitert um Vielfach-Chunks und Save/Load.
+**P2 — ItemStore mit Chunks. Läuft; das Modul steht, die Drives sind nicht
+umgestellt.** Ausbau des begonnenen Moduls um dynamische Chunks, Item- und
+Quality-Schlüssel, O(1)-Abfragen. Testbefehl um Vielfach-Chunks und Save/Load
+erweitert.
+
+**Entschieden (Andre):** Qualität wird **fähig** gemacht — Store und Zählertabelle
+führen `name|quality` —, aber die **Politik bleibt**: der Drive-Eingang weist
+Qualitäts-Items weiterhin ab. Und: erst das Modul, die Drives in einem eigenen
+Schritt.
+
+**Zwei Erkenntnisse, die den Umfang ändern** (Herleitung in
+`docs/projektstand.md` 7.1 und 7.2):
+
+- **Der Store braucht ein `rebuild`.** `storage` entfernt unregistrierte
+  Metatables beim Speichern, also wäre `store:insert` nach einem Ladezyklus ein
+  Aufruf auf `nil`. Alle anderen Objekte des Projekts haben dafür eine
+  `rebuild`-Funktion, die `onLoad` aufruft — der ItemStore hatte keine.
+- **Chunks sind Versicherung gegen Stack-Size-Mods, nicht gegen Vanilla.** Die
+  Slot-Zahl eines Inventars ist höchstens so groß wie seine Item-Zahl, und die ist
+  durch die Kapazität begrenzt. Solange die Kapazität unter 65535 liegt, reicht ein
+  Chunk immer; ein zweiter wird erst bei größerer Kapazität **und** kleiner
+  Stackgröße erreichbar.
+
+**Offen und als Nächstes:** die Umstellung der Drives. `storageArray` wird an fünf
+Stellen außerhalb des Moduls direkt gelesen (`NetworkBase.lua` 206/971/1008,
+`NetworkInventoryInterface.lua` 368, `WirelessGrid.lua` 391), dazu die
+Buchhaltung in `ItemDrives.lua`. Die ersten drei sitzen im Transferpfad, für den
+die P1-Abnahme (`truth` im Dump) schon existiert.
 
 Vorbedingung aus der P1-Abnahme: `Itemstack` speichert Stapel als Lua-Tabellen,
 und ob ein Feld leer (leere Tabelle) oder gar nicht vorhanden (`nil`) ist,
@@ -422,8 +447,15 @@ Ebenso gestrichen: die Slot-Umrechnung „1 Slot je 100 Items".
 
 ## 8. Unverifiziert und offen
 
-- Ob `LuaInventory::insert` ein Stack-Array annimmt (P2).
-- Ob Script-Inventar-Referenzen in `storage` den Ladezyklus überstehen (P2, Test).
+- **Beantwortet:** Ob `LuaInventory::insert` ein Stack-Array annimmt (P2). Nein —
+  `ItemStackIdentification` ist ein Union aus `string`, `ItemStackDefinition` und
+  `LuaItemStack`, also drei Einzelstapel-Formen; ein Array-Member gibt es nicht.
+  Chargentransfers in P3 müssen als Schleife gehen.
+- **Beantwortet (Doku, Test offen):** Ob Script-Inventar-Referenzen in `storage`
+  den Ladezyklus überstehen (P2). Die Storage-Doku erlaubt Referenzen auf
+  LuaObjects und entfernt nur unregistrierte **Metatables**. Ein Store braucht
+  deshalb ein `rebuild`. Der Probe-Test (`docs/projektstand.md` 7.3) bestätigt es
+  empirisch.
 - Ob `count_empty_stacks` auf einem 65.535-Slot-Inventar teuer ist (P2, Messung).
   Nachtrag: Es steht bereits im Hot Path der External-IO (`NetworkBase.lua:1068`),
   einmal pro Insert-Versuch. Der Posten ist damit nicht mehr hypothetisch.

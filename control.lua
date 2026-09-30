@@ -557,18 +557,34 @@ commands.add_command("rns-store-test", "RNSRedux: P2 store probe. First call bui
 
     if storage.storeProbe == nil then
         ------------------------------ phase 1: build
+        --Capacity 4000 items. The chunk limit is min(65535, capacity), so a single
+        --chunk covers any capacity up to 65535 items at a stack size of 100. A
+        --second store chunk only becomes reachable with a small stack size, which
+        --this fixture does not have -- so the multi-chunk case is probed with two
+        --standalone inventories instead.
         local store = ItemStore.new(4000)
         store:insert{name = "iron-plate", count = 50}
         store:insert{name = "copper-plate", count = 7}
-        --Straight into the inventory, bypassing isStorable: is the engine able to
-        --keep a quality apart at all?
-        local legendaryAccepted = store.inventory.insert{name = "iron-plate", count = 3, quality = "legendary"}
+
+        --Engine probes on a throwaway inventory, so the store's own counters stay
+        --clean and each answer is unambiguous.
+        local probeInv = game.create_inventory(10)
+        --Quality, straight into the inventory: is the engine able to keep it apart?
+        local legendaryAccepted = probeInv.insert{name = "iron-plate", count = 3, quality = "legendary"}
+        --Does a bare name count every quality, or only normal? This decides which
+        --form the store's getCount may use.
+        local bareNameCount = probeInv.get_item_count("iron-plate")
+        local normalCount = probeInv.get_item_count{name = "iron-plate", quality = "normal"}
         --An array, to see what the API does with it. pcall so the message is data.
         local arrayOk, arrayResult = pcall(function()
-            return store.inventory.insert{{name = "coal", count = 5}, {name = "stone", count = 5}}
+            return probeInv.insert{{name = "coal", count = 5}, {name = "stone", count = 5}}
         end)
+        local arrayCoal = probeInv.get_item_count("coal")
+        local arrayStone = probeInv.get_item_count("stone")
+        probeInv.destroy()
 
-        --Several chunk inventories, distinguishable by content.
+        --Two standalone inventories, distinguishable by content, for the multi
+        --inventory save/load case.
         local chunkA = game.create_inventory(512)
         local chunkB = game.create_inventory(512)
         chunkA.insert{name = "steel-plate", count = 30}
@@ -581,18 +597,25 @@ commands.add_command("rns-store-test", "RNSRedux: P2 store probe. First call bui
             legendaryAccepted = legendaryAccepted,
             arrayOk = tostring(arrayOk),
             arrayResult = tostring(arrayResult),
+            arrayCoal = arrayCoal,
+            arrayStone = arrayStone,
+            bareNameCount = bareNameCount,
+            normalCount = normalCount,
         }
 
         table.insert(lines, "phase 1: built")
-        table.insert(lines, "slots=" .. store.slots
+        table.insert(lines, "chunks=" .. #store.chunks
+            .. " first slots=" .. #store.chunks[1]
+            .. " capacity=" .. store.nominalCapacity
             .. " iron=" .. store:getCount("iron-plate")
-            .. " copper=" .. store:getCount("copper-plate"))
+            .. " copper=" .. store:getCount("copper-plate")
+            .. " used=" .. store:getTotalItems())
         table.insert(lines, "legendary insert accepted=" .. tostring(legendaryAccepted)
-            .. " normal count still=" .. store:getCount("iron-plate", "normal")
-            .. " legendary count=" .. store:getCount("iron-plate", "legendary"))
+            .. " bare count=" .. bareNameCount
+            .. " explicit normal=" .. normalCount
+            .. " (equal means a bare name means normal only)")
         table.insert(lines, "array insert ok=" .. tostring(arrayOk) .. " result=" .. tostring(arrayResult)
-            .. " coal=" .. store.inventory.get_item_count("coal")
-            .. " stone=" .. store.inventory.get_item_count("stone"))
+            .. " coal=" .. arrayCoal .. " stone=" .. arrayStone)
         table.insert(lines, "chunkA steel=" .. chunkA.get_item_count("steel-plate")
             .. " chunkB plastic=" .. chunkB.get_item_count("plastic-bar"))
         table.insert(lines, "NOW SAVE, RETURN TO MENU, LOAD, THEN RUN /rns-store-test AGAIN")
@@ -607,15 +630,16 @@ commands.add_command("rns-store-test", "RNSRedux: P2 store probe. First call bui
         --this is expected to be false and is what makes a rebuild necessary.
         table.insert(lines, "store.insert is a function=" .. tostring(type(store.insert) == "function"))
 
-        local inventory = store.inventory
-        table.insert(lines, "inventory present=" .. tostring(inventory ~= nil)
-            .. " valid=" .. tostring(inventory ~= nil and inventory.valid == true))
-        if inventory ~= nil and inventory.valid == true then
-            table.insert(lines, "iron=" .. inventory.get_item_count("iron-plate")
-                .. " copper=" .. inventory.get_item_count("copper-plate")
-                .. " legendary=" .. inventory.get_item_count{name = "iron-plate", quality = "legendary"})
-            table.insert(lines, "coal=" .. inventory.get_item_count("coal")
-                .. " stone=" .. inventory.get_item_count("stone"))
+        local first = store.chunks ~= nil and store.chunks[1] or nil
+        table.insert(lines, "chunk count=" .. tostring(store.chunks ~= nil and #store.chunks or -1)
+            .. " first present=" .. tostring(first ~= nil)
+            .. " valid=" .. tostring(first ~= nil and first.valid == true))
+        if first ~= nil and first.valid == true then
+            table.insert(lines, "iron=" .. first.get_item_count("iron-plate")
+                .. " copper=" .. first.get_item_count("copper-plate")
+                .. " legendary=" .. first.get_item_count{name = "iron-plate", quality = "legendary"})
+            table.insert(lines, "coal=" .. first.get_item_count("coal")
+                .. " stone=" .. first.get_item_count("stone"))
         end
 
         for _, name in pairs{"chunkA", "chunkB"} do
@@ -627,13 +651,13 @@ commands.add_command("rns-store-test", "RNSRedux: P2 store probe. First call bui
         end
 
         --The cure for the metatable, applied by hand first so the fix is proven
-        --before it goes into the module. onLoad does the same via rebuild().
-        setmetatable(store, {__index = ItemStore})
-        table.insert(lines, "after manual setmetatable, store.insert is a function="
+        --before it goes into the drive's rebuild.
+        ItemStore.rebuild(store)
+        table.insert(lines, "after ItemStore.rebuild, store.insert is a function="
             .. tostring(type(store.insert) == "function"))
         if type(store.insert) == "function" then
             table.insert(lines, "getCount via method=" .. store:getCount("iron-plate")
-                .. " total=" .. store:getTotalItems())
+                .. " used=" .. store:getTotalItems())
         end
 
         table.insert(lines, "run /rns-store-reset to start over")
@@ -645,11 +669,10 @@ end)
 commands.add_command("rns-store-reset", "RNSRedux: drop the P2 store probe and its inventories", function()
     local probe = storage.storeProbe
     if probe ~= nil then
-        for _, key in pairs{"store", "chunkA", "chunkB"} do
-            local holder = probe[key]
-            local inventory = holder
-            if holder ~= nil and holder.inventory ~= nil then inventory = holder.inventory end
-            if inventory ~= nil and inventory.valid == true then inventory.destroy() end
+        if probe.store ~= nil then probe.store:destroy() end
+        for _, key in pairs{"chunkA", "chunkB"} do
+            local chunk = probe[key]
+            if chunk ~= nil and chunk.valid == true then chunk.destroy() end
         end
         storage.storeProbe = nil
         game.print("rns-store-reset: probe and inventories dropped")
