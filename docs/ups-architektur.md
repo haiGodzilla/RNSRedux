@@ -280,9 +280,13 @@ Typenzahl), `cache`, `drive` und `external`. **Erfüllt** (Detail in
 und nachher, dazwischen der erzwungene Vollaufbau. Die Dumps sind identisch, der
 inkrementelle Pfad und der Rebuild stimmen überein.
 
-Offen bleiben zwei Randpfade, beide ungemessen: der Austritt (Abbau setzt
-`shouldRefresh`, der Rebuild entfernt das Mitglied) und die Entnahme
-(`NetworkBase.lua:888`). Siehe `docs/projektstand.md` 5.7.
+Offen und ungemessen bleiben zwei Randpfade: die **Entnahme**
+(`NetworkBase.lua:888`, auf einem Phantom-Spielstand nicht prüfbar, siehe
+`docs/projektstand.md` 5.6 und 5.8) und Save/Load mit einem Transfer dazwischen.
+Der **Austritt** ist geprüft (`docs/projektstand.md` 5.7): ein Abbau setzt den
+Flag selbst, das Mitglied verschwindet, alle Zähler sinken konsistent — und das
+lässt sich gegen das Zwei-Minuten-Netz abgrenzen, weil dessen Termine für die
+vorliegenden `entID`s außerhalb des Messfensters liegen.
 
 Betrifft `NetworkController.lua` (geändert) und `NetworkBase.lua` (unverändert).
 

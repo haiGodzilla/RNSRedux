@@ -249,20 +249,73 @@ Zwei Konsequenzen daraus:
   pro Netz: entnehmen lässt sich nur, was in den Stapeln liegt. Für
   GUI-Prüfungen und für die IO-Bus-Messung ist ein frischer Aufbau zu bauen.
 
-### 5.7 Offene Randpfade
+**Empirisch bestätigt im Testlauf:** Entnehmen aus diesem Netz liefert fast
+nichts, während Einlagern normal funktioniert. Der Mechanismus steht im Code und
+ist nachvollziehbar, nicht gemessen:
 
-Der Abnahmemaßstab aus Abschnitt 6 des Plans ist erfüllt. Zwei Randpfade der
-Änderung `a5add2b` haben noch keine Messung; beide sind billig zu prüfen und
-gehören zusammen in einen Lauf:
+- Die Anzeige baut `NII:createNetworkInventory` aus `interfaceCache.item` auf
+  (`NetworkInventoryInterface.lua:352`). Der Cache führt die Stapel selbst,
+  zusammengeführt je Name — hier also 20 Drives × 1 Item, nicht die 260000, die
+  `Contents.item` und `StoredPartition` als Netzbestand führen.
+- Beim Ziehen setzt `NII.transfer_from_idinv` die Menge auf
+  `min(itemstack.count, count)` (`NetworkInventoryInterface.lua:666`) und ruft
+  `extract_item_from_drive`.
+- Dort begrenzt `drive:remove_item(master, math.min(storedItem.count,
+  transferCapacity), exact)` die Entnahme auf `storedItem.count`, und das ist im
+  Stapel 1 (`NetworkBase.lua:885`). Ein 64k-Drive speichert also 1000 Items, gibt
+  aber eines her.
 
-1. **Austritt.** Dass ein Abbau `shouldRefresh` setzt und der Rebuild das
-   Mitglied entfernt. Das ist der Teil von P1, der vorher durch den Takt gedeckt
-   war und es nicht mehr ist. Prüfung: `/rns-debug-nc`, einen Drive abbauen
-   (`/rns-debug-nc` → `members` muss um eins fallen), dann
-   `/rns-debug-refresh` und erneut `members`.
-2. **Entnahme** (`NetworkBase.lua:888`). Beide Richtungen buchen getrennt; ein
-   Fehler in einer Richtung bleibt sonst unsichtbar. Prüfung wie oben, Items aus
-   dem NII zurück ins Inventar.
+Ein frisch eingelagertes Item liegt dagegen mit echtem Zähler im Stapel und
+kommt vollständig zurück — genau die Beobachtung aus dem Testlauf. **Kein
+Produktivbefund.** Die Entnahme ist auf einem gesunden Aufbau bisher
+ungemessen; siehe 5.8.
+
+### 5.7 Austritt geprüft
+
+Ein Drive abgebaut, drei Dumps um den Vorgang herum. NC 27:
+
+| Dump | members | powerDraw | tracked | cache | drive | truth |
+|---|---|---|---|---|---|---|
+| A (7580) | 64 | 17020 | 260/16 | 16 | 260000/1700000 | 20/260000/260 |
+| B (9495) | 63 | 16380 | 244/16 | 16 | 244000/1636000 | 19/244000/244 |
+| C (13820, nach `/rns-debug-refresh`) | 63 | 16380 | 244/16 | 16 | 244000/1636000 | 19/244000/244 |
+
+Die neun übrigen Netze bleiben in allen drei Dumps unverändert.
+
+**Der Abbau hat den Rebuild selbst ausgelöst** — das ist der Punkt, der hier
+belegt wird, und er lässt sich gegen den Takt abgrenzen. Das Sicherheitsnetz
+feuert, wenn `(tick + refreshOffset) % 7200 == 0` mit
+`refreshOffset = entID % 7200`. Für die vorliegenden `entID`s (27 bis 3665) liegt
+der erste Termin bei `7200 - entID`, also zwischen 3535 und 7173 — vor Dump A.
+Der nächste wäre `14400 - entID`, also zwischen 10735 und 14373 — nach Dump B.
+**Kein Controller konnte dazwischen am Netz hängen.** Die Änderung in Dump B
+stammt folglich aus dem Abbau: `ID:remove()` ruft
+`BaseNet.update_network_controller` (`ItemDrives.lua:71`), das Objekt ist zu dem
+Zeitpunkt noch Mitglied, der Flag greift.
+
+Die Zahlen gehen auf: entfernt wurde ein 64k-Drive (Kapazität −64000,
+`powerDraw` −640, Mitglieder −1), der 16 Typen à 1000 gebucht hatte
+(`drive` −16000, `truth` behauptet −16000) und 16 Stapel à einem Item hielt
+(`tracked` −16, `truth` tatsächlich −16). Cache bleibt bei 16, weil er je Name
+zusammengeführt wird und der entfernte Drive nur Namen beisteuerte, die im Netz
+bleiben.
+
+**Was das nicht zeigt:** B = C gilt hier zwangsläufig, weil auch der Austritt
+über den Vollaufbau läuft. Eine inkrementelle Austrittsbuchung gibt es bewusst
+nicht (5.3). Geprüft ist damit die Behauptung, um die es geht: die Entfernung ist
+ein Ereignis und wird gefangen, ohne Takt.
+
+### 5.8 Offen: die Entnahme auf gesundem Aufbau
+
+`NetworkBase.lua:888` ist die zweite Buchungsstelle und noch ungemessen. Auf dem
+Phantom-Spielstand ist sie nicht prüfbar (5.6). Erwartung auf einem frischen
+Aufbau: Blick auf einen Netzinhalt, Drag ins Inventar, `/rns-debug-nc` — `tracked`
+und `drive` müssen um denselben Betrag fallen, und ein anschließendes
+`/rns-debug-refresh` darf nichts ändern.
+
+Dabei mitprüfen: dass ein Ziehen die Menge liefert, die die Anzeige zeigt. Wenn
+die Anzeige 100 nennt und der Drag 1 liefert, ist das ein echter Befund — er
+sähe auf dem Phantom-Spielstand genauso aus, wäre dort aber erklärbar.
 
 Nicht geprüft und bewusst offen: Save/Load mit einem Transfer dazwischen. Der
 Wert in `storage` übersteht den Ladezyklus, weil `DataConvert` für Blueprints
