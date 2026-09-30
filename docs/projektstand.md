@@ -912,7 +912,7 @@ braucht.
 Die Praxis-Frage aus 6.11 lässt sich **nicht** mit dem bisherigen Aufbau beantworten:
 Dessen Container ändern sich nie, der Bus liest also nie etwas Neues. Und ein
 echter Verbraucher (Inserter, Maschine) hätte eine ungenaue Rate. Deshalb ein
-dosierter Abfluss mit exakter Rate (Commit `4a1f2c8`):
+dosierter Abfluss mit exakter Rate (Commit `5fad81f`):
 
 ```
 /rns-stress-drain <itemsProSekundeProContainer>   -- 0 schaltet ab
