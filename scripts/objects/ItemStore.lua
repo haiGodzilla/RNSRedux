@@ -169,6 +169,19 @@ function ItemStore.isStorable(stack)
     return true, nil
 end
 
+--The inventory decides how to store and merge a stack from its ammo, durability,
+--health and tags -- not from the count alone. Handing it a reduced
+--{name, count, quality} table silently turns a partial magazine into a full one,
+--which is exactly what the first bridge probe measured: four rounds in, ten back.
+local function requestFrom(stack, count)
+    local request = {name = stack.name, count = count, quality = stack.quality}
+    if stack.health ~= nil then request.health = stack.health end
+    if stack.durability ~= nil then request.durability = stack.durability end
+    if stack.ammo ~= nil then request.ammo = stack.ammo end
+    if stack.tags ~= nil then request.tags = stack.tags end
+    return request
+end
+
 --Inserts up to stack.count, bounded by the nominal capacity, and returns how many
 --went in. The chunk already holding this item is tried first; only if that leaves
 --something over does the store look for another chunk or grow.
@@ -181,7 +194,7 @@ function ItemStore:insert(stack)
     if room <= 0 then return 0 end
     if wanted > room then wanted = room end
 
-    local request = {name = stack.name, count = wanted, quality = stack.quality}
+    local request = requestFrom(stack, wanted)
     local key = ItemStore.key(stack.name, ItemStore.qualityOf(stack.quality))
     local inserted = 0
 

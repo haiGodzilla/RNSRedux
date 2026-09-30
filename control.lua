@@ -583,7 +583,13 @@ commands.add_command("rns-store-test", "RNSRedux: P2 store probe. First call bui
         magazineInv.insert{name = "firearm-magazine", count = 1}
         local live = magazineInv[1]
         live.ammo = 4
+        --Every hop is recorded. The first run reported only the stored value, so a
+        --failure could have been anywhere between the inventory and the store.
         local wrapped = Itemstack:new(live)
+        local bridgeLiveAmmo = magazineInv[1].ammo
+        local bridgeWrappedAmmo = (wrapped ~= nil) and wrapped.ammo or -1
+        local bridgeDefinition = ItemStore.definitionFrom(wrapped)
+        local bridgeDefinitionAmmo = (bridgeDefinition ~= nil) and bridgeDefinition.ammo or -1
         local bridgeAccepted = store:insertItemstack(wrapped)
         local bridgeBack = store:getStack("firearm-magazine", "normal")
         local bridgeAmmo = (bridgeBack ~= nil) and bridgeBack.ammo or -1
@@ -620,6 +626,9 @@ commands.add_command("rns-store-test", "RNSRedux: P2 store probe. First call bui
             beforeLegendary = chunkC.get_item_count{name = "iron-plate", quality = "legendary"},
             bridgeAccepted = bridgeAccepted,
             bridgeAmmo = bridgeAmmo,
+            bridgeLiveAmmo = bridgeLiveAmmo,
+            bridgeWrappedAmmo = bridgeWrappedAmmo,
+            bridgeDefinitionAmmo = bridgeDefinitionAmmo,
         }
 
         table.insert(lines, "phase 1: built")
@@ -637,8 +646,11 @@ commands.add_command("rns-store-test", "RNSRedux: P2 store probe. First call bui
             .. " legendary=" .. chunkC.get_item_count{name = "iron-plate", quality = "legendary"}
             .. " (4 normal + 9 legendary inserted)")
         table.insert(lines, "bridge: partial magazine inserted=" .. bridgeAccepted
-            .. " ammo back=" .. bridgeAmmo .. " (placed: 4 rounds in one magazine)"
-            .. " count=" .. store:getCount("firearm-magazine"))
+            .. " ammo along the way: inventory=" .. bridgeLiveAmmo
+            .. " Itemstack=" .. bridgeWrappedAmmo
+            .. " definition=" .. bridgeDefinitionAmmo
+            .. " stored=" .. bridgeAmmo
+            .. " (placed: 4 rounds in one magazine, full is 10)")
         table.insert(lines, "chunkA steel=" .. chunkA.get_item_count("steel-plate")
             .. " chunkB plastic=" .. chunkB.get_item_count("plastic-bar"))
         table.insert(lines, "NOW SAVE, RETURN TO MENU, LOAD, THEN RUN /rns-store-test AGAIN")
@@ -698,7 +710,7 @@ commands.add_command("rns-store-test", "RNSRedux: P2 store probe. First call bui
             local magazine = store:getStack("firearm-magazine", "normal")
             table.insert(lines, "bridge after load: magazine present=" .. tostring(magazine ~= nil)
                 .. " ammo=" .. tostring(magazine ~= nil and magazine.ammo or -1)
-                .. " (placed: " .. tostring(probe.bridgeAmmo) .. ")")
+                .. " (stored before the save: " .. tostring(probe.bridgeAmmo) .. ")")
 
             --The out-bridge: every occupied slot as a live stack, which is what the
             --display and the network bookkeeping will read.
