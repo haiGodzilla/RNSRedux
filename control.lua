@@ -380,6 +380,68 @@ commands.add_command("rns-debug-refresh", "RNSRedux: force a network rebuild on 
     game.print("rns-debug-refresh: rebuilt " .. rebuilt .. " controllers")
 end)
 
+--Debug command: pulls items out of a network without going through the GUI. The
+--GUI path runs through NII.interaction, whose element tags and click modifiers
+--cannot be inspected from outside; this calls the transfer itself, so a silent
+--stop there is distinguishable from a click that never arrived.
+--It also prints the three values that decide whether the transfer does anything
+--at all: can_insert, the free slots and the free amount for that item. Those are
+--where the code stops without a message.
+--Usage: /rns-debug-extract [item] [count] -- defaults to the first tracked item
+--and a count of 1.
+commands.add_command("rns-debug-extract", "RNSRedux: extract items from a network without the GUI", function(event)
+    local player = game.players[event.player_index]
+    if player == nil then return end
+
+    local controller = nil
+    for _, candidate in pairs(storage.NetworkControllers or {}) do
+        if candidate.network ~= nil then controller = candidate break end
+    end
+    if controller == nil then
+        game.print("rns-debug-extract: no controller")
+        return
+    end
+    local network = controller.network
+
+    local name, countText = string.match(event.parameter or "", "^(%S+)%s*(%d*)$")
+    local count = tonumber(countText) or 1
+    if name == nil then
+        for trackedName in pairs(network.Contents.item or {}) do name = trackedName break end
+    end
+    if name == nil then
+        game.print("rns-debug-extract: network tracks nothing")
+        return
+    end
+
+    local inventory = player.get_inventory(defines.inventory.character_main)
+    local master = Itemstack.create_template(name)
+    if master == nil then
+        game.print("rns-debug-extract: no prototype for '" .. name .. "'")
+        return
+    end
+    master.count = count
+
+    local networkBefore = network.Contents.item[name] or 0
+    local playerBefore = inventory.get_item_count(name)
+
+    --Deliberately no pcall: if one of these raises, the exception is the finding.
+    game.print("rns-debug-extract: " .. name .. " want=" .. count
+        .. " can_insert=" .. tostring(inventory.can_insert(name))
+        .. " emptyStacks=" .. inventory.count_empty_stacks(true, false)
+        .. " insertable=" .. inventory.get_insertable_count(name)
+        .. " network=" .. networkBefore .. " player=" .. playerBefore)
+
+    local wrapper = {
+        thisEntity = player,
+        inventory = {input = {index = 1, max = 1, values = {defines.inventory.character_main}}}
+    }
+    local left = BaseNet.transfer_from_network_to_inv(network, wrapper, master, count, true, true, true)
+
+    game.print("rns-debug-extract: left=" .. tostring(left)
+        .. " network " .. networkBefore .. "->" .. (network.Contents.item[name] or 0)
+        .. " player " .. playerBefore .. "->" .. inventory.get_item_count(name))
+end)
+
 --Debug command: the same controller counters without the per-entity noise. Two
 --runs of this fit on one screen, which a full /rns-debug dump does not.
 commands.add_command("rns-debug-nc", "RNSRedux: dump only the controller counters", function()
