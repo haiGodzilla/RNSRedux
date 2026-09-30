@@ -31,6 +31,26 @@ function Event.placed(event)
         if event.tags and obj.deserialize_settings then
 			obj:deserialize_settings(event.tags)
 		end
+        --TEMPORARY TRACE, remove once the blueprint path is settled. The write side
+        --was proven (30 stacks gathered), but DataConvert_ItemToEntity never ran, so
+        --the read path is where the contents are lost. This records what Event.placed
+        --actually sees, because "the branch was never entered" and "the tag was empty"
+        --need different fixes.
+        local stackType = "nil"
+        if event.stack ~= nil then stackType = tostring(event.stack.type) end
+        local hasTag = "n/a"
+        if event.stack ~= nil and event.stack.valid_for_read == true then
+            hasTag = tostring(event.stack.get_tag(Constants.Settings.RNS_Tag) ~= nil)
+        end
+        helpers.write_file("rns-store-trace.txt", "placed: " .. tostring(entName)
+            .. " stack=" .. tostring(event.stack ~= nil)
+            .. " valid=" .. tostring(event.stack ~= nil and event.stack.valid_for_read == true)
+            .. " type=" .. stackType
+            .. " hasRnsTag=" .. hasTag
+            .. " hasConvert=" .. tostring(objInfo ~= nil and objInfo.tag ~= nil
+                and _G[objInfo.tag] ~= nil and _G[objInfo.tag].DataConvert_ItemToEntity ~= nil)
+            .. "\n", true)
+
         if event.stack ~= nil and event.stack.valid_for_read == true and event.stack.type == "item-with-tags" and obj.DataConvert_ItemToEntity ~= nil then
 			local contents = event.stack.get_tag(Constants.Settings.RNS_Tag)
 			if contents ~= nil then

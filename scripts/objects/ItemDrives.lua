@@ -203,6 +203,14 @@ end
 --object of the table.
 function ID:validate()
     self.storedAmount = self.store:getTotalItems()
+    --TEMPORARY TRACE, remove once the blueprint path is settled. The hover shows
+    --0/0, and this says whether that is an empty store, a missing maxStorage, or
+    --something else again.
+    helpers.write_file("rns-store-trace.txt", "validate: entID=" .. tostring(self.entID)
+        .. " maxStorage=" .. tostring(self.maxStorage)
+        .. " used=" .. tostring(self.store:getTotalItems())
+        .. " storedAmount=" .. tostring(self.storedAmount)
+        .. "\n", true)
 end
 
 function ID:add_or_merge_basic_item(itemstack_data, amount)
