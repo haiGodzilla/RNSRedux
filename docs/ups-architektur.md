@@ -14,10 +14,16 @@ gleichzeitig nur **10^5 bis 10^6 Items** — also nur wenige Minuten Durchsatz a
 Puffer [1]. Kapazität ist damit nie der Engpass. **Durchsatz und Kosten pro Tick
 sind es.** [1]
 
+Herabstufung dieser Zahl: Die ~5.000 Items/s stammen aus einem Rechenmodell auf
+Spieldaten, nicht aus einer Messung. Es gibt dazu keine UPS- oder CPU-Messwerte
+[1]. Die Größenordnung trägt die Aussage „Kapazität ist nicht der Engpass", sie
+ist aber keine belastbare Grundlage für Durchsatzziele. Wer den Zielbereich
+festlegen will (1.000–5.000 Items/s pro Netzwerk), braucht dafür eigene Zahlen.
+
 Der Vergleichsmaßstab aus dem eigenen Projekt: Drives mit 4k bis 256k Items,
 Item-Bus 15 Items/s im Grundausbau (exakt ein gelbes Band), Fluid-Bus 1.200/s.
-Der Originalautor kam so auf 3 Science/s bei etwa 45 UPS und nennt
-WideChests-Interaktion und External Storage Bus als UPS-Fresser [1].
+Der Originalautor kam so auf 3 Science/s (rund 180 SPM) bei etwa 45 UPS und
+nennt WideChests-Interaktion und External Storage Bus als UPS-Fresser [1].
 
 Dazu die Kompatibilitätslage: Stack-Size-Mods ändern die Annahmen. Im heutigen
 Code sind alle `stack_size`-Zugriffe zur Laufzeit gelesen, das ist robust. Was
@@ -31,6 +37,15 @@ nicht robust ist: eine fest verdrahtete Umrechnung „ein Slot je 100 Items".
 Network Inventory Interface werden so jeden Tick alle Item-Buttons verglichen,
 zerstört und neu gebaut. Bei 40 Inventarslots und hundert Item-Typen im Netz
 sind das hunderte Button-Operationen pro Tick, pro Spieler. **Behoben in P0.**
+
+Nebeneffekt: Mengenanzeigen können jetzt bis etwa 0,9 s nachlaufen.
+`RNS_Gui_Tick` ist die Stellschraube dafür.
+
+Offene Frage zu P0: Changelog 1.0.18 des Originalautors stellt Netzwerk-Grid und
+Wireless-Grid ausdrücklich auf „updates every tick instead of 55 ticks" um. Der
+auskommentierte Throttle im Code war also der Zustand *davor*, und die Änderung
+kann einen Grund gehabt haben, der hier nicht sichtbar ist. Beobachten, ob die
+Mengenanzeigen im Grid beim laufenden Betrieb korrekt nachziehen.
 
 **b) Voller Netzaufbau im Takt.** `NetworkController:update` ruft
 `network:doRefresh(self)`, sobald `shouldRefresh` gesetzt ist oder alle 600
@@ -78,6 +93,44 @@ werden clientseitig aufbereitet. Bei rund 10.000 Kabeln mit je zwei bis drei
 Objekten sind das zehntausende Renderobjekte. Für UPS unerheblich, für die
 Bildrate nicht. Ebenfalls neu im Plan.
 
+**i) Alle Controller refreshen im selben Tick.** `NetworkController.lua:92`
+prüfte `game.tick % self.updateTick == 0` mit `updateTick = 600`. Der Tick ist
+global, nicht entity-bezogen, also macht **jeder** Controller sein `doRefresh`
+im selben Tick. Bei 20 Stationen sind das 20 vollständige Netzaufbauten
+gleichzeitig, alle 10 Sekunden. Gemessen: 134,731 ms in einem einzelnen Tick
+bei 20 Stationen und 1.000 Drives (Tab-Out-Frames ausgenommen).
+
+**Behoben:** Jeder Controller leitet aus seiner `unit_number` eine feste Phase
+ab (`NetworkController.lua:97`), der Vollaufbau trifft pro Tick höchstens einen
+Controller. Gleiche Frequenz, gleiche Arbeit, verteilt. Diese Änderung
+diagnostiziert, sie heilt nicht: Sie ersetzt einen 134-ms-Freeze alle 10 s durch
+einen Ruckler alle ~0,5 s. Die eigentliche Heilung ist, die Refresh-Kosten
+selbst zu senken — das ist P1.
+
+Nicht behoben, gleiche Ursache eine Ebene tiefer:
+`NetworkController.lua:119–128` prüft fünf globale Tick-Modulo (Detector 3,
+ItemIO 4, FluidIO 5, ExternalStorage 5). Bei Tick 20 laufen ItemIO und
+ExternalStorage zusammen, bei Tick 60 alle vier. Der Spike ist damit
+dauerhaft rund vier- bis fünfmal so hoch wie nötig.
+
+**j) Der IO-Bus pollt echte Container im Takt.** Vermutete Hauptquelle, siehe
+Abschnitt 6a. `EIO:update` (`ExternalIO.lua:273–300`) holt pro Durchlauf
+`get_inventory(i)`, ruft `sort_and_merge()` darauf und legt für **jeden Slot**
+ein `Itemstack:new(...)` an (Zeile 278). Bei `RNS_ExternalStorage_Tick = 5`
+sind das zwölf vollständige Container-Scans pro Sekunde und Bus, mit einer
+Allokation pro Slot. Zusätzlich fragt `NetworkBase.lua:1066–1069` pro
+Insert-Versuch zweimal `get_item_count` und einmal `count_empty_stacks(true,
+false)` auf einem echten Inventar ab, und `insert_item_into_external` ruft am
+Ende jeder Charge noch `external:update(self)` (Zeile 1101) — ein weiterer
+voller Scan innerhalb des Transfers.
+
+Belegt durch den Changelog des Originalautors, der über vier Monate wiederholt
+an Kadenz und Vollständigkeitsprüfungen nachgebessert hat, ohne die Struktur
+anzufassen: 1.0.3 „improving ups by ~50%", 1.0.18 Grid „every tick instead of
+55 ticks", 1.0.25 „network fullness check … doesn't cause a sudden lag spike",
+1.0.30 „stop triggering anymore IO buses from working uselesslly", 1.0.39
+External Bus von 2 auf 5 Ticks, 1.0.40 „less laggy".
+
 ## 3. Zielarchitektur
 
 ### 3.1 Das Netzwerk ist die Rechnungseinheit, nicht das Drive
@@ -93,6 +146,24 @@ network.capacity   = 64000
 Jedes Drive führt dieselbe Struktur über seinen eigenen Bestand. Beim Beitritt
 werden die Drive-Zahlen addiert, beim Austritt subtrahiert. Damit sind
 Gesamtmenge, Füllstand und Kapazität O(1) statt O(Drives × Item-Typen).
+
+**Status: existiert bereits im Code.** `BaseNet:increase_tracked_item_count` und
+`decrease_tracked_item_count` (`NetworkBase.lua:408–419`) führen
+`self.Contents.item[name]` inkrementell, O(1) pro Buchung. `StoredPartition`
+(`NetworkBase.lua:115–132`) führt Belegung und Kapazität getrennt nach Drive und
+External, und wird ebenfalls inkrementell bedient: beim Beitritt
+(`NetworkBase.lua:205`), beim Einlagern (`1056`), beim Entnehmen (`889`).
+
+Der Plan hat diesen Punkt als „Zähler bauen" geführt. Tatsächlich ist nur das
+Gegenteil offen: `doRefresh` → `resetTables` (`NetworkBase.lua:77–133`) wirft
+`Contents`, `interfaceCache`, `StoredPartition`, `connectedEntities` und
+`powerDraw` weg und baut alles neu auf. Der inkrementelle Pfad existiert, wird
+aber alle 600 Ticks überschrieben. **P1 ist damit kleiner und risikoärmer als
+geplant: kein Umbau der Buchhaltung, nur ihr Auslöser.**
+
+Noch offen an dieser Stelle: `quality` ist kein Bestandteil des Schlüssels.
+`Contents.item` ist nach Item-Namen indiziert, Qualitätsstufen kollabieren also —
+genau der Fehler, den M1 behebt. Das gehört zu P2, nicht zu P1.
 
 Das ersetzt Punkt (e) und macht Punkt (b) weitgehend überflüssig.
 
@@ -186,10 +257,19 @@ Engine.
 **P0 — GUI-Throttle.** Eine Zeile, bereits umgesetzt. Größter Einzelposten, kein
 Risiko.
 
-**P1 — Netzwerk-Accounting.** Zählertabelle pro Netzwerk, inkrementeller
-Beitritt/Austritt, `doRefresh` aus dem Hot Path, Prüfliste statt Vollaufbau.
-Betrifft `NetworkBase.lua` und `NetworkController.lua`. Danach muss `/rns-debug`
-dieselben Mitgliedszahlen zeigen wie vorher.
+**P1 — Netzwerk-Accounting.** Nach dem Befund in 3.1 neu zugeschnitten:
+Die Zählertabelle existiert, die Aufgabe ist, den periodischen Vollaufbau aus
+dem Hot Path zu nehmen. `resetTables` darf `Contents`, `interfaceCache`,
+`StoredPartition` nicht mehr zurücksetzen; `doRefresh` wird durch einen
+inkrementellen Beitritt/Austritt ersetzt, wie in 3.2 beschrieben. Als
+Sicherheitsnetz bleibt die Prüfliste statt eines Komplettaufbaus.
+
+Abnahmemaßstab: `/rns-debug` liefert vor und nach erzwungenem
+`/rns-debug-refresh` identische Werte. Geprüft werden `tracked` (Summe und
+Typenzahl), `cache`, `drive` und `external` — nicht mehr nur die
+Mitgliedszahlen. Solange dieser Vergleich nicht grün ist, ist P1 nicht fertig.
+
+Betrifft `NetworkBase.lua` und `NetworkController.lua`.
 
 **P2 — ItemStore mit Chunks.** Ausbau des begonnenen Moduls um dynamische
 Chunks, Item- und Quality-Schlüssel, O(1)-Abfragen. Drives darauf umstellen.
@@ -202,9 +282,32 @@ Buchhaltung pro Charge. Betrifft die zehn Aufrufstellen in `NetworkBase` und
 **P4 — Scheduler.** Zeitschlitze für Drives und Busse.
 
 **P5 — External IO.** Gezielter Zugriff, niedrigere Kadenz, Bedarfssteuerung.
+Siehe 6a zur Reihenfolge.
 
 **P6 — Aufräumen.** `Itemstack.lua` entfernen, tote Kommentarblöcke, Debug-
 Befehle, `port_*.py`, `data-final-fixes`-Ersatzlogik prüfen.
+
+### 6a Offene Priorisierungsfrage: IO-Bus vor P1?
+
+Der IO-Bus ist die einzige Kostenquelle im Dauerbetrieb, die dauerhaft und
+vielfach pro Sekunde anfällt. Der Refresh-Posten (P1) läuft alle 600 Ticks.
+Beide betreffen dasselbe Netz, aber nicht dieselbe Größenordnung: Ein
+Phasen-Offset auf die IO-Busse (Punkt i, eine Ebene tiefer) kostet keinen
+Durchsatz und senkt die Spitze auf ein Viertel, während die eigentliche
+Kontaktkosten-Senkung ein größerer Umbau ist.
+
+Entscheidungsrelevante Trennung:
+
+- **Phase verschieben kostet keinen Durchsatz.** Jeder Bus läuft weiterhin alle
+  vier Ticks, nur verteilt. Verhalten unverändert.
+- **Kadenz senken kostet Durchsatz.** `RNS_ItemIO_Tick = 4` entspricht 15
+  Items/s bei `IIOMultiplier = 1`. Eine Senkung auf 16 Ticks viertelt den
+  Durchsatz, solange eine Charge ein Item groß ist. Das ist eine
+  Balance-Änderung, keine Optimierung.
+
+Vor jeder Änderung an diesem Pfad fehlt die Messung: Der Stresstest baut keine
+IO-Busse, also ist der Pfad derzeit nicht messbar. Das ist der Blocker, nicht
+der Umbau selbst.
 
 ## 7. Gestrichen
 
@@ -220,25 +323,83 @@ Ebenso gestrichen: die Slot-Umrechnung „1 Slot je 100 Items".
 - Ob `LuaInventory::insert` ein Stack-Array annimmt (P2).
 - Ob Script-Inventar-Referenzen in `storage` den Ladezyklus überstehen (P2, Test).
 - Ob `count_empty_stacks` auf einem 65.535-Slot-Inventar teuer ist (P2, Messung).
+  Nachtrag: Es steht bereits im Hot Path der External-IO (`NetworkBase.lua:1068`),
+  einmal pro Insert-Versuch. Der Posten ist damit nicht mehr hypothetisch.
 - Wie weit die Bus-Durchsätze für den Zielmaßstab reichen. 15 Items/s im
   Grundausbau sind ein gelbes Band; für mehrere Tausend Items pro Sekunde
   braucht es viele Busse oder höhere Ausbaustufen. Das ist eine
   Balance-Entscheidung, keine technische.
+- Ob der IO-Pfad oder der Refresh-Pfad in einem realistischen Save mehr kostet.
+  Es gibt keine Messung mit IO-Bussen; der Stresstest baut keine.
+- Ob `Contents.item` an allen Aufrufstellen vollständig gebucht wird. Gelesen
+  sind vier Stellen; den Beweis soll die Differenzprüfung in Abschnitt 9
+  liefern, nicht eine Zählung im Quelltext.
 
 ## 9. Messverfahren
 
 Kein Fortschritt ohne Messung. Vorgehen:
 
-1. Stress-Savegame: 50 Drives, 200 Busse, Dauerbetrieb.
-2. Vor und nach jedem Meilenstein `debugadapter` oder das eingebaute Profiler-
-   Overlay, dazu das Log der Tick-Zeiten.
-3. `/rns-debug` erweitert um Mitgliedszahlen und Zählerstände als
-   Konsistenzprüfung.
+**Vor jeder Messung.** Der Aufbau muss aus dem Messfenster sein: nach
+`/rns-stress-build` speichern, ins Hauptmenü, laden. Wer im Fenster tabbt,
+verfälscht die Frame-Werte und damit `max`. Sichtprüfung statt Blindmessung:
+Gerade die Zuordnung eines Spikes zu einer Codeursache gelingt über das Auge
+schneller („ruckelt es alle 10 Sekunden?") als über einen Mittelwert.
+
+**Profiler-Overlay.** `F4` → `show-time-usage`, `show-entity-time-usage`.
+Spalten sind **avg/min/max über die letzten 100 Ticks**, nicht min/avg/max. Das
+Minimum schließt Nullwerte aus. Intervall mit `/perf-avg-frames <n>` änderbar.
+
+Fallstrick: `avg` und `max` decken nicht dasselbe Fenster ab. Ein `avg` von
+0,249 ms bei `max` von 134,731 ms über 100 Ticks ist arithmetisch unmöglich —
+gemessen wurde es trotzdem. Solche Kombinationen nicht interpretieren, sondern
+das Fenster vergrößern (`/perf-avg-frames 600`) und erneut messen.
+
+**Deterministische Messung statt Overlay.** Für einzelne Refresh-Kosten ist das
+Overlay das falsche Instrument: Bei 20 Controller-Refreshes pro 600 Ticks liegt
+selten mehr als einer im 100-Tick-Fenster. Stattdessen direkt messen, etwa mit
+`game.create_profiler`, oder deterministisch zählen (Summe `#storageArray` über
+alle Drives).
+
+**Konsistenzprüfung.** `/rns-debug` zeigt pro Controller `members`, `tracked`
+(Summe/Typenzahl), `cache`, `drive` und `external`. `/rns-debug-refresh`
+erzwingt den Vollaufbau. Beide Dumps müssen identisch sein — das ist der
+Abnahmemaßstab für P1.
+
+**Stressaufbau.** `/rns-stress-build <stationen> <drivesProStation>`, dann
+`/rns-stress-fill <typenProDrive> <mengeProTyp>`, `/rns-stress-status`,
+`/rns-stress-clear`, `/rns-stress-purge`. Verifizierte Erwartungswerte:
+
+| Aufbau | Drives | Kabel | Entities (Mod) | `members` |
+|---|---|---|---|---|
+| `10 20` | 200 | 420 | 640 | 64 |
+| `20 20` | 400 | 840 | 1.280 | 64 |
+| `20 50` | 1.000 | 2.040 | 3.080 | 154 |
+
+`members` = Drives + Kabel **pro Station** + 2. Weicht eine Zeile ab, ist der
+Aufbau unvollständig und die Stufe unbrauchbar.
+
+Einschränkung des Aufbaus: `spineLength` hängt an `drivesPerStation`, die Stufen
+verdoppeln also Drives und Kabel gleichzeitig. Für die Größenentscheidung reicht
+die Summe; eine Trennung der Anteile bräuchte einen zweiten Aufbau mit variabler
+Kabellänge. Und: Der Aufbau enthält keine Busse, deckt also P1 ab, nicht P5.
 
 ## 10. Quellen
 
-[1] Interne Projektnotiz „Analyse Fabrikdurchsatz" (September 2026): Durchsatz-
-und Speichergrößen für 1.000 SPM, Vergleichsmaßstab der Mod-eigenen Drives und
-Busse, Aussagen des Originalautors zu UPS-Fressern, sowie die
-Performance-Lehre (keine Vanilla-Inventare pro Tick, dirty flags, Arbeit über
-Ticks verteilen).
+[1] Projektnotiz „Analyse Fabrikdurchsatz" (September 2026): Durchsatz- und
+Speichergrößen für 1.000 SPM, Vergleichsmaßstab der Mod-eigenen Drives und
+Busse, Aussagen des Originalautors zu UPS-Fressern, sowie die Performance-Lehre
+(keine Vanilla-Inventare pro Tick, dirty flags, Arbeit über Ticks verteilen).
+
+**Die Notiz liegt nicht im Repo.** Dieser Verweis läuft ins Leere, solange sie
+nicht unter `docs/analyse-fabrikdurchsatz.md` abgelegt ist. Bis dahin sind die
+mit [1] belegten Aussagen in diesem Dokument nicht nachprüfbar. Die Notiz
+zitiert außerdem selbst Quellen mit [1] bis [5], was mit der Nummerierung hier
+kollidiert — beim Ablegen umnummerieren.
+
+Auszüge aus der Notiz, die hier verwendet werden und aus dem Gedächtnis des
+Autors dieser Zeilen stammen, nicht aus dem Repo-Inhalt: das Kostenmodell
+(bezahlt wird pro Transfer und pro Entity-Interaktion pro Tick, nicht pro
+gespeichertem Item), der Zielbereich 1.000–5.000 Items/s pro Netzwerk, die
+Aussage „Durchsatz vor Kapazität" mit dem Rechenbeispiel, dass ein 256k-Drive
+bei 15 Items/s erst nach etwa 4,75 h voll ist, und die Forderung nach einem
+Zähler pro (Item, Quality) pro Netzwerk.
