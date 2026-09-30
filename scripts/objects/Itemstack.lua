@@ -21,6 +21,11 @@ function Itemstack:new(item)
     local offset = 0
     t.name = item.name
     t.type = item.type
+    --Quality is part of a stack's identity in 2.0, so it belongs in the dialect too.
+    --Without it the blueprint path would write a legendary stack as a plain one and
+    --read it back the same way -- a silent downgrade, which is the one thing the
+    --rejection at the drive input exists to prevent.
+    t.quality = item.quality ~= nil and item.quality.name or nil
     t.stack_export_string = (item.is_item_with_tags or item.is_blueprint or item.is_blueprint_book or item.is_deconstruction_item or item.is_upgrade_item) and item.export_stack() or nil
 
     t.health = item.health
@@ -180,6 +185,10 @@ end
 --Requires item1 and item2 to be instances of class Itemstack
 function Itemstack:compare_itemstacks(itemstack, exact, exact_exact)
     if self.name ~= itemstack.name then return false end
+    --Quality is part of a stack's identity now that the store keeps the levels apart.
+    --This sits outside the exact branch because it is never a matter of taste, and it
+    --is normalised so a stack that predates the field (nil) still matches "normal".
+    if (self.quality or "normal") ~= (itemstack.quality or "normal") then return false end
     --if self.prototype ~= itemstack.prototype then return false end
     --if self.type ~= itemstack.type then return false end
 

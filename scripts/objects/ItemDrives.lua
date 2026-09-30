@@ -3,9 +3,13 @@ ID = {
     entID = nil,
     networkController = nil,
     maxStorage = 0,
-    storedAmount = nil,
     powerUsage = 40,
-    storageArray = nil,
+    --The drive's contents. An engine inventory holds the full item identity --
+    --quality, ammo, durability, health, tags -- so the mod no longer serialises any
+    --of it. storedAmount stays as a tracked mirror of the store's count: the dump
+    --compares the two (truth), which is how a bookkeeping divergence is caught.
+    store = nil,
+    storedAmount = nil,
     connectedObjs = nil,
     cardinals = nil,
     guiFilters = nil,
@@ -26,7 +30,7 @@ function ID:new(object)
     t.maxStorage = Constants.Drives.ItemDrive[string.sub(object.name, 5)].max_size
     t.powerUsage = Constants.Drives.ItemDrive[string.sub(object.name, 5)].powerUsage
     t.whitelistBlacklist = settings.global[Constants.Settings.RNS_StorageDrive_Whitelist].value and "whitelist" or "blacklist"
-    t.storageArray = {}
+    t.store = ItemStore.new(t.maxStorage)
     t.storedAmount = 0
     t.filters = {}
     t.icons = {}
@@ -59,9 +63,15 @@ function ID:rebuild(object)
     local mt = {}
     mt.__index = ID
     setmetatable(object, mt)
+    --storage drops unregistered metatables, so the store's methods are gone after a
+    --load until they are restored here.
+    ItemStore.rebuild(object.store)
 end
 
 function ID:remove()
+    --Frees the chunk inventories. Without this the savegame leaks: a script
+    --inventory is not freed by dropping the reference.
+    if self.store ~= nil then self.store:destroy() end
     UpdateSys.remove_from_entity_table(self)
     BaseNet.postArms(self)
     --[[if self.networkController ~= nil then
@@ -177,56 +187,54 @@ function ID:createArms()
     end
 end
 
+--Reads a stack out of the store in the mod's own dialect, so the callers that
+--compare and transfer keep working unchanged. Itemstack:new is the exact inverse of
+--the bridge: it reads name, count, quality, ammo, durability, health, tags and the
+--export string off the live engine stack, so nothing is lost in this direction.
+--Returns nil when the store holds none of that item.
+function ID:getStoredStack(name, quality)
+    local live = self.store:getStack(name, quality)
+    if live == nil then return nil end
+    return Itemstack:new(live)
+end
+
+--The engine only ever holds valid prototypes, so the old sweep for item names that
+--no longer exist has nothing left to do. Kept because onInit calls it on every
+--object of the table.
 function ID:validate()
-    for k, v in pairs(self.storageArray) do
-        if prototypes.item[k] == nil then
-            self.storedAmount = self.storedAmount - v.amount
-            self.storageArray[k] = nil
-        end
-    end
+    self.storedAmount = self.store:getTotalItems()
 end
 
 function ID:add_or_merge_basic_item(itemstack_data, amount)
-    local inv = self.storageArray
-    local min = math.min(self:getRemainingStorageSize(), amount)
-    if min <= 0 then return 0 end
-    if inv[itemstack_data.name] ~= nil then
-        local data = Itemstack:reload(inv[itemstack_data.name])
-        data.count = data.count + min
-        if data.ammo ~= nil then
-            local a = (data.ammo+itemstack_data.ammo)%prototypes.item[data.name].magazine_size
-            data.ammo = a == 0 and prototypes.item[data.name].magazine_size or a
-        end
-        if data.durability ~= nil then
-            local d = (data.durability+itemstack_data.durability)%Util.getMaxDurability(data.name)
-            data.durability = d == 0 and Util.getMaxDurability(data.name) or d
-        end
-    else
-        inv[itemstack_data.name] = itemstack_data
-    end
-    self.storedAmount = self.storedAmount + min
-    return min
+    --The store bounds the insert by the remaining capacity itself, and the engine
+    --decides how the stack merges -- including ammo and durability, which the old
+    --path added with a modulo and thereby invented fill levels.
+    local inserted = self.store:insertItemstack(itemstack_data, amount)
+    self.storedAmount = self.store:getTotalItems()
+    return inserted
 end
 
+--Takes up to amount out of the store and hands back what came out, in the mod's
+--dialect. The values are read off the live stack before the removal, because the
+--removal is what shrinks it.
+--The exact flag is no longer needed: it used to steer split()'s ammo and durability
+--arithmetic, and callers now check the match themselves before calling this (see
+--BaseNet.transfer_from_network_to_inv). It is kept for the callers' sake.
 function ID:remove_item(itemstack_data, amount, exact)
-    local inv = self.storageArray
-    local data = Itemstack:reload(inv[itemstack_data.name])
-    if data == nil or amount <= 0 then return 0 end
-    local min = math.min(data.count, amount)
-    local split = data:split(itemstack_data, min, exact)
-    --[[if exact then
-        if itemstack_data.ammo ~= nil and data.ammo ~= itemstack_data.ammo and data.count > 1 then
-            local new_min = math.min(data.count - 1, min)
-            return new_min, data:split(itemstack_data, new_min)
-        else
-            return 0
-        end
-    end]]
-    if split == nil then return 0, nil end
-    if data.count <= 0 then inv[itemstack_data.name] = nil end
-    
-    self.storedAmount = self.storedAmount - split.count >= 0 and self.storedAmount - split.count or 0
-    return split.count, split
+    if itemstack_data == nil or amount == nil or amount <= 0 then return 0, nil end
+    local live = self.store:getStack(itemstack_data.name, itemstack_data.quality)
+    if live == nil then return 0, nil end
+
+    local out = Itemstack:new(live)
+    if out == nil then return 0, nil end
+
+    local removed = self.store:remove(itemstack_data.name, math.min(live.count, amount),
+        itemstack_data.quality)
+    if removed <= 0 then return 0, nil end
+
+    out.count = removed
+    self.storedAmount = self.store:getTotalItems()
+    return removed, out
 end
 
 --[[function ID:has_item(itemstack_data, getModified)
@@ -255,24 +263,22 @@ end
 
 
 function ID:getStorageSize()
-    local count = 0
-    local inv = self.storageArray
-    for _, v in pairs(inv) do
-        if v ~= nil then
-            count = count + v.count
-        end
-    end
-    return count
+    return self.store:getTotalItems()
 end
 
 function ID:getRemainingStorageSize()
-    --return self.maxStorage - self:getStorageSize()
-    return self.maxStorage - self.storedAmount
+    return self.store:getRemainingCapacity()
 end
 
 function ID:DataConvert_ItemToEntity(tag)
-    self.storageArray = tag.storage or {}
-    self.storedAmount = self:getStorageSize()
+    --Contents come back through the same bridge the transfer path uses. Both shapes
+    --are accepted: the list written below, and the name-keyed table from a blueprint
+    --made before this change.
+    local stored = tag.storage or {}
+    for _, entry in pairs(stored) do
+        self.store:insertItemstack(entry)
+    end
+    self.storedAmount = self.store:getTotalItems()
     if tag.filters ~= nil then
         self.filters = tag.filters
         self.guiFilters = tag.guiFilters
@@ -286,7 +292,14 @@ function ID:DataConvert_EntityToItem(tag)
     local tags = {}
     local description = {"", tag.prototype.localised_description}
 
-    tags.storage = self.storageArray
+    --The one path that still serialises, and it has to: an item tag holds basic data
+    --only, so an engine inventory cannot be written into one. Without this a mined or
+    --blueprinted drive would lose its contents.
+    local stored = {}
+    self.store:forEachStack(function(stack)
+        stored[#stored + 1] = Itemstack:new(stack)
+    end)
+    tags.storage = stored
     Util.add_list_into_table(description, {{"item-description.RNS_DriveTag_Storage", self:getStorageSize(), self.maxStorage}})
 
     tags.filters = self.filters

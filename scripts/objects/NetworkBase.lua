@@ -203,10 +203,15 @@ function BaseNet.addConnectables(source, connections, master)
             if string.match(con.thisEntity.name, "RNS_ItemDrive") ~= nil then
                 master.network.ItemDriveTable[1+Constants.Settings.RNS_Max_Priority-con.priority][con.entID] = con
                 master.network:delta_ItemDrive_Partition(con.storedAmount, con.maxStorage)
-                for n, v in pairs(con.storageArray) do
-                    master.network:increase_tracked_item_count(n, v.count)
-                    master.network:add_item_to_interface_cache(v)
-                end
+                --The store hands out live engine stacks; the network bookkeeping
+                --speaks the mod's dialect, so the bridge wraps each one.
+                con.store:forEachStack(function(stack)
+                    local wrapped = Itemstack:new(stack)
+                    if wrapped ~= nil then
+                        master.network:increase_tracked_item_count(wrapped.name, wrapped.count)
+                        master.network:add_item_to_interface_cache(wrapped)
+                    end
+                end)
         
             elseif string.match(con.thisEntity.name, "RNS_FluidDrive") ~= nil then
                 master.network.FluidDriveTable[1+Constants.Settings.RNS_Max_Priority-con.priority][con.entID] = con
@@ -967,8 +972,7 @@ function BaseNet.transfer_from_network_to_inv(network, to_inv, itemstack_master,
             if drive == nil or drive.valid == false or network:exists(drive.entID) == false then
                 network:remove_cache("export", "drive", itemstack_master.name)
             else
-                --Itemstack.check_instance(drive.storageArray[itemstack_master.name])
-                local storedItem = drive.storageArray[itemstack_master.name]
+                local storedItem = drive:getStoredStack(itemstack_master.name, itemstack_master.quality)
                 if drive:interactable() and storedItem ~= nil and itemstack_master:compare_itemstacks(storedItem, exact) then
                     transferCapacity = network:extract_item_from_drive(drive, inv, itemstack_master, storedItem, transferCapacity, exact)
                     if transferCapacity <= 0 then goto fin end
@@ -1003,9 +1007,7 @@ function BaseNet.transfer_from_network_to_inv(network, to_inv, itemstack_master,
             if itemstack_master.modified == false then
                 for _, drive in pairs(priorityD) do
                     if network:is_ItemDrivePartitions_Empty() then b = b + 1 break end
-                    --ID:rebuild(drive)
-                    --drive.storageArray[itemstack_master.name] = Itemstack.check_instance(drive.storageArray[itemstack_master.name])
-                    local storedItem = drive.storageArray[itemstack_master.name]
+                    local storedItem = drive:getStoredStack(itemstack_master.name, itemstack_master.quality)
                     if drive:interactable() and storedItem ~= nil and itemstack_master:compare_itemstacks(storedItem, exact) then
                         transferCapacity = network:extract_item_from_drive(drive, inv, itemstack_master, storedItem, transferCapacity, exact)
                         if transferCapacity <= 0 then

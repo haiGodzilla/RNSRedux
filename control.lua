@@ -259,12 +259,15 @@ local function driveTotals(network)
     local drives, claimed, actual = 0, 0, 0
     local fluidClaimed, fluidActual = 0, 0
     for _, obj in pairs(network.connectedEntities or {}) do
-        if obj.storageArray ~= nil then
+        if obj.store ~= nil then
             drives = drives + 1
             claimed = claimed + (obj.storedAmount or 0)
-            for _, stack in pairs(obj.storageArray) do
-                actual = actual + (stack.count or 0)
-            end
+            --Summed off the slots, not from the store's own counter: this number is
+            --the independent side of the truth comparison, and a tracked counter
+            --would agree with itself.
+            obj.store:forEachStack(function(stack)
+                actual = actual + stack.count
+            end)
         elseif obj.fluidArray ~= nil then
             fluidClaimed = fluidClaimed + (obj.storedAmount or 0)
             for _, fluid in pairs(obj.fluidArray) do
