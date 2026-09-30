@@ -258,8 +258,7 @@ Engine.
 **P0 — GUI-Throttle.** Eine Zeile, bereits umgesetzt. Größter Einzelposten, kein
 Risiko.
 
-**P1 — Netzwerk-Accounting. Umgesetzt in `a5add2b`, Abnahme erfüllt am
-30.09.2026.**
+**P1 — Netzwerk-Accounting. Umgesetzt in `a5add2b`, abgenommen am 30.09.2026.**
 Die Zählertabelle existiert (3.1), offen war nur ihr Auslöser: der periodische
 Vollaufbau. Der ist gestrichen — jeder Beitritt und Austritt setzt
 `shouldRefresh` selbst, geprüft an allen `:remove()`- und `new()`-Funktionen
@@ -280,19 +279,29 @@ Typenzahl), `cache`, `drive` und `external`. **Erfüllt** (Detail in
 und nachher, dazwischen der erzwungene Vollaufbau. Die Dumps sind identisch, der
 inkrementelle Pfad und der Rebuild stimmen überein.
 
-Offen und ungemessen bleiben zwei Randpfade: die **Entnahme**
-(`NetworkBase.lua:888`, auf einem Phantom-Spielstand nicht prüfbar, siehe
-`docs/projektstand.md` 5.6 und 5.8) und Save/Load mit einem Transfer dazwischen.
+Offen und ungemessen bleibt ein Punkt: Save/Load mit einem Transfer dazwischen.
 Der **Austritt** ist geprüft (`docs/projektstand.md` 5.7): ein Abbau setzt den
 Flag selbst, das Mitglied verschwindet, alle Zähler sinken konsistent — und das
 lässt sich gegen das Zwei-Minuten-Netz abgrenzen, weil dessen Termine für die
-vorliegenden `entID`s außerhalb des Messfensters liegen.
+vorliegenden `entID`s außerhalb des Messfensters liegen. Die **Entnahme** ist
+ebenfalls geprüft (`docs/projektstand.md` 5.13), mit dem Zusatz, dass die
+Spielerklick-Grenze im Inventar liegt und nicht in der Mod.
 
 Betrifft `NetworkController.lua` (geändert) und `NetworkBase.lua` (unverändert).
 
 **P2 — ItemStore mit Chunks.** Ausbau des begonnenen Moduls um dynamische
 Chunks, Item- und Quality-Schlüssel, O(1)-Abfragen. Drives darauf umstellen.
 Testbefehl erweitert um Vielfach-Chunks und Save/Load.
+
+Vorbedingung aus der P1-Abnahme: `Itemstack` speichert Stapel als Lua-Tabellen,
+und ob ein Feld leer (leere Tabelle) oder gar nicht vorhanden (`nil`) ist,
+entscheidet über die Gleichheit — `compare_tags` prüft das zweite Argument per
+`type`, bevor es das erste durchläuft (`Itemstack.lua:207–209`). Der echte
+Einlagerungspfad erzeugt `nil` (die Kopie über `Util.copy` fällt dort
+zusammen), `Itemstack.create_template` erzeugt `{}`. Wer dort `exact=true`
+übergibt, muss denselben Weg benutzen wie der Einlagerungspfad. Mit dem
+ItemStore verschwindet die Frage, weil Stapel dann von der Engine gehalten
+werden.
 
 **P3 — Chargentransfer.** Alle Transferpfade auf Stack-Tabellen umstellen,
 Buchhaltung pro Charge. Betrifft die zehn Aufrufstellen in `NetworkBase` und
@@ -304,16 +313,17 @@ Buchhaltung pro Charge. Betrifft die zehn Aufrufstellen in `NetworkBase` und
 Siehe 6a zur Reihenfolge.
 
 **P6 — Aufräumen.** `Itemstack.lua` entfernen, tote Kommentarblöcke, Debug-
-Befehle, `port_*.py`, `data-final-fixes`-Ersatzlogik prüfen.
+Befehle (`/rns-debug`, `/rns-debug-nc`, `/rns-debug-refresh`,
+`/rns-debug-extract`, `rns-store-test`), `port_*.py`,
+`data-final-fixes`-Ersatzlogik prüfen.
 
-### 6a Offene Priorisierungsfrage: IO-Bus vor P1?
+### 6a Priorisierung nach P1
 
-Der IO-Bus ist die einzige Kostenquelle im Dauerbetrieb, die dauerhaft und
-vielfach pro Sekunde anfällt. Der Refresh-Posten (P1) läuft alle 600 Ticks.
-Beide betreffen dasselbe Netz, aber nicht dieselbe Größenordnung: Ein
-Phasen-Offset auf die IO-Busse (Punkt i, eine Ebene tiefer) kostet keinen
-Durchsatz und senkt die Spitze auf ein Viertel, während die eigentliche
-Kontaktkosten-Senkung ein größerer Umbau ist.
+P1 ist durch. Der IO-Bus ist damit der nächste Posten: Er ist die einzige
+Kostenquelle, die dauerhaft und vielfach pro Sekunde anfällt, während der
+Refresh-Posten mit `a5add2b` auf Strukturänderungen zusammengeschrumpft ist.
+Die Frage lautet nicht mehr „IO-Bus vor P1?", sondern „Phasen-Offset vor
+Kontaktkosten?".
 
 Entscheidungsrelevante Trennung:
 
