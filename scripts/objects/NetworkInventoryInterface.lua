@@ -667,27 +667,46 @@ function NII.transfer_from_idinv(RNSPlayer, NII, tags, count)
 		.. " netBefore=" .. tostring(rawName ~= nil and network.Contents.item[rawName] or nil) .. "\n", true)
 	local itemstack = Itemstack:reload(tags.stack)
 
-	--TEMPORARY DIAGNOSTIC: does the stack the click carries still match what the
-	--drives hold? The transfer looks for a drive whose stored stack matches this
-	--one exactly; if that comparison fails, the search finds nothing and the call
-	--returns without a message. Loose and exact side by side tell which field does
-	--it, should this be the cause.
-	local probe = nil
+	--TEMPORARY DIAGNOSTIC. The transfer only proceeds when its exact comparison
+	--passes, and that comparison walks name, health, ammo, durability, modified,
+	--tags and extras. So dump every field of both stacks, from a drive that
+	--actually holds the item -- the first drive in the table need not, and probing
+	--that one produced a useless `stored=false` in an earlier run.
+	local function fieldList(stack)
+		if stack == nil then return "nil" end
+		local parts = {}
+		for key, value in pairs(stack) do
+			if type(value) == "table" then
+				local entries = 0
+				for _ in pairs(value) do entries = entries + 1 end
+				parts[#parts + 1] = key .. "=table(" .. entries .. ")"
+			else
+				parts[#parts + 1] = key .. "=" .. tostring(value)
+			end
+		end
+		table.sort(parts)
+		return table.concat(parts, ",")
+	end
+
+	local held = nil
 	for p = 1, Constants.Settings.RNS_Max_Priority*2 + 1 do
-		for _, drive in pairs(network.ItemDriveTable[p]) do probe = drive break end
-		if probe ~= nil then break end
+		for _, drive in pairs(network.ItemDriveTable[p]) do
+			if drive.storageArray[itemstack.name] ~= nil then
+				held = drive.storageArray[itemstack.name]
+				break
+			end
+		end
+		if held ~= nil then break end
 	end
-	if probe ~= nil then
-		local stored = probe.storageArray[itemstack.name]
-		helpers.write_file("rns-click.txt", "idinv match stored=" .. tostring(stored ~= nil)
-			.. " storedCount=" .. tostring(stored ~= nil and stored.count or nil)
-			.. " loose=" .. tostring(stored ~= nil and itemstack:compare_itemstacks(stored, false))
-			.. " exact=" .. tostring(stored ~= nil and itemstack:compare_itemstacks(stored, true))
-			.. " clickedModified=" .. tostring(itemstack.modified)
-			.. " storedModified=" .. tostring(stored ~= nil and stored.modified or nil)
-			.. " clickedExtras=" .. tostring(itemstack.extras ~= nil and next(itemstack.extras) ~= nil)
-			.. " storedExtras=" .. tostring(stored ~= nil and stored.extras ~= nil and next(stored.extras) ~= nil) .. "\n", true)
+	local loose, exact = nil, nil
+	if held ~= nil then
+		loose = itemstack:compare_itemstacks(held, false)
+		exact = itemstack:compare_itemstacks(held, true)
 	end
+	helpers.write_file("rns-click.txt", "idinv probe holdingDrive=" .. tostring(held ~= nil)
+		.. " loose=" .. tostring(loose) .. " exact=" .. tostring(exact)
+		.. "\n  clicked[" .. fieldList(itemstack) .. "]"
+		.. "\n  stored [" .. fieldList(held) .. "]\n", true)
 	if count == -1 then count = prototypes.item[itemstack.name].stack_size end
 	if count == -2 then count = math.ceil(math.max(1, prototypes.item[itemstack.name].stack_size/2)) end
 	if count == -3 then count = prototypes.item[itemstack.name].stack_size*10 end
