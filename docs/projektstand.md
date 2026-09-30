@@ -1917,6 +1917,48 @@ bliebe bei 64, ein 256k wüchse über sechs Resizes auf 4.096. **Vorgemerkt für
 eigenen Schritt nach der Abnahme** — zwei offene Flanken in einer Runde wären
 genau der Fehler, den diese Sitzung mehrfach gezeigt hat.
 
+### 7.16 Fehlschlag: ein gefüllter Drive verliert beim Abbau seinen Inhalt
+
+**Das ist Datenverlust, und er wiegt schwerer als alles, was diese Sitzung sonst
+gefunden hat.** Der Ablauf aus Andres Test:
+
+| Schritt | Ergebnis |
+|---|---|
+| Drive füllen | 3000/4000 ✓ |
+| Drive minen | Item korrekt ✓ |
+| Item wieder aufbauen | ✓ |
+| **Füllstand danach** | **0/4000** ✗ |
+
+**Und die Buchhaltung hat den Verlust mitgebucht:** NC 27 las nach dem Test 2999
+Items weniger als die neun übrigen Netze. Die Items waren beim Austritt also
+korrekt abgezogen worden — und kamen beim Wiedereintritt mit **null** zurück. Das
+schließt die Netzwerkseite als Ursache aus: `truth` behauptet = tatsächlich in allen
+zehn Netzen. **Es fehlt genau das, was im Item-Tag transportiert werden müsste.**
+
+**Zwei Stellen sind ausgeschlossen, beide geprüft:**
+
+- Der Item-Typ stimmt. `prototypes/Drives.lua:3` setzt `driveI.type =
+  "item-with-tags"`, die Prüfung in `Event.placed` greift also.
+- `rebuild` läuft für Drives. `createObjectTables` registriert sie mit
+  `tableName = "ItemDriveTable"`, und `onLoad` ruft `_G["ID"]:rebuild(entry)`.
+
+**Zwei Hypothesen, und eine Messung entscheidet sie** (Commit `52d15b8`, temporär):
+
+| Hypothese | Befund im Trace |
+|---|---|
+| **H1: Die Schreibseite liefert nichts.** `forEachStack` gibt keine Stapel her, obwohl `used` 3000 sagt. | `EntityToItem: used=3000 yielded=0 stored=0` |
+| **H2: Die Leseseite erreicht die Daten nicht.** Der Tag trägt sie, aber `DataConvert_ItemToEntity` wird nie gerufen oder findet nichts. | `EntityToItem` mit Werten, **keine** `ItemToEntity`-Zeile — oder eine mit `keys=0` |
+
+Der Trace schreibt beide Seiten nach `script-output/rns-store-trace.txt`.
+
+**Eine Umfangsbemerkung, die ich offenlegen muss:** Die Zählertabelle, die
+Transferpfade, die Entnahme, die Politik-Prüfung und der Ladezyklus sind alle
+gemessen und halten (7.14). **Der Blueprint-Pfad ist der eine Teil des Umbaus, für
+den es bis jetzt keinen Test gab** — und genau dort sitzt der Fehler. Ob er vor dem
+Umbau funktioniert hat, weiß ich nicht: In `docs/projektstand.md` ist „Save/Load"
+als geprüft vermerkt, „Blueprint-Inhalt" **nicht**. **Ich behaupte nicht, dass es
+ein Altfehler ist** — dafür fehlt der Beleg.
+
 ## 8. Offene technische Schulden
 
 - `NetworkBase.addConnectables`, Zeilen 183/186/191: drei Prüfungen mit `and`
