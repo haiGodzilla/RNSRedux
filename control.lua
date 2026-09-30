@@ -566,22 +566,24 @@ commands.add_command("rns-store-test", "RNSRedux: P2 store probe. First call bui
         store:insert{name = "iron-plate", count = 50}
         store:insert{name = "copper-plate", count = 7}
 
-        --Engine probes on a throwaway inventory, so the store's own counters stay
-        --clean and each answer is unambiguous.
+        --The array question on a throwaway inventory, so the store's counters stay
+        --clean. pcall so the API message becomes data rather than an error.
         local probeInv = game.create_inventory(10)
-        --Quality, straight into the inventory: is the engine able to keep it apart?
-        local legendaryAccepted = probeInv.insert{name = "iron-plate", count = 3, quality = "legendary"}
-        --Does a bare name count every quality, or only normal? This decides which
-        --form the store's getCount may use.
-        local bareNameCount = probeInv.get_item_count("iron-plate")
-        local normalCount = probeInv.get_item_count{name = "iron-plate", quality = "normal"}
-        --An array, to see what the API does with it. pcall so the message is data.
         local arrayOk, arrayResult = pcall(function()
             return probeInv.insert{{name = "coal", count = 5}, {name = "stone", count = 5}}
         end)
         local arrayCoal = probeInv.get_item_count("coal")
         local arrayStone = probeInv.get_item_count("stone")
         probeInv.destroy()
+
+        --The quality question needs both qualities of the same item in one
+        --inventory, and it has to survive the save. The first attempt put the
+        --legendary stack in a throwaway inventory and destroyed it, so phase 2 could
+        --not say whether quality survives -- and with only one quality present, a
+        --count of zero on both forms was ambiguous.
+        local chunkC = game.create_inventory(64)
+        chunkC.insert{name = "iron-plate", count = 4, quality = "normal"}
+        local legendaryAccepted = chunkC.insert{name = "iron-plate", count = 9, quality = "legendary"}
 
         --Two standalone inventories, distinguishable by content, for the multi
         --inventory save/load case.
@@ -594,13 +596,15 @@ commands.add_command("rns-store-test", "RNSRedux: P2 store probe. First call bui
             store = store,
             chunkA = chunkA,
             chunkB = chunkB,
+            chunkC = chunkC,
             legendaryAccepted = legendaryAccepted,
             arrayOk = tostring(arrayOk),
             arrayResult = tostring(arrayResult),
             arrayCoal = arrayCoal,
             arrayStone = arrayStone,
-            bareNameCount = bareNameCount,
-            normalCount = normalCount,
+            beforeBare = chunkC.get_item_count("iron-plate"),
+            beforeNormal = chunkC.get_item_count{name = "iron-plate", quality = "normal"},
+            beforeLegendary = chunkC.get_item_count{name = "iron-plate", quality = "legendary"},
         }
 
         table.insert(lines, "phase 1: built")
@@ -610,12 +614,13 @@ commands.add_command("rns-store-test", "RNSRedux: P2 store probe. First call bui
             .. " iron=" .. store:getCount("iron-plate")
             .. " copper=" .. store:getCount("copper-plate")
             .. " used=" .. store:getTotalItems())
-        table.insert(lines, "legendary insert accepted=" .. tostring(legendaryAccepted)
-            .. " bare count=" .. bareNameCount
-            .. " explicit normal=" .. normalCount
-            .. " (equal means a bare name means normal only)")
         table.insert(lines, "array insert ok=" .. tostring(arrayOk) .. " result=" .. tostring(arrayResult)
             .. " coal=" .. arrayCoal .. " stone=" .. arrayStone)
+        table.insert(lines, "quality: legendary insert accepted=" .. tostring(legendaryAccepted)
+            .. " bare=" .. chunkC.get_item_count("iron-plate")
+            .. " normal=" .. chunkC.get_item_count{name = "iron-plate", quality = "normal"}
+            .. " legendary=" .. chunkC.get_item_count{name = "iron-plate", quality = "legendary"}
+            .. " (4 normal + 9 legendary inserted)")
         table.insert(lines, "chunkA steel=" .. chunkA.get_item_count("steel-plate")
             .. " chunkB plastic=" .. chunkB.get_item_count("plastic-bar"))
         table.insert(lines, "NOW SAVE, RETURN TO MENU, LOAD, THEN RUN /rns-store-test AGAIN")
@@ -635,11 +640,22 @@ commands.add_command("rns-store-test", "RNSRedux: P2 store probe. First call bui
             .. " first present=" .. tostring(first ~= nil)
             .. " valid=" .. tostring(first ~= nil and first.valid == true))
         if first ~= nil and first.valid == true then
-            table.insert(lines, "iron=" .. first.get_item_count("iron-plate")
-                .. " copper=" .. first.get_item_count("copper-plate")
-                .. " legendary=" .. first.get_item_count{name = "iron-plate", quality = "legendary"})
+            table.insert(lines, "store contents iron=" .. first.get_item_count("iron-plate")
+                .. " copper=" .. first.get_item_count("copper-plate"))
             table.insert(lines, "coal=" .. first.get_item_count("coal")
                 .. " stone=" .. first.get_item_count("stone"))
+        end
+
+        --The quality answer, and the one that matters for P2: two qualities were
+        --placed before the save, so both counts here are meaningful.
+        local chunkC = probe.chunkC
+        table.insert(lines, "chunkC present=" .. tostring(chunkC ~= nil)
+            .. " valid=" .. tostring(chunkC ~= nil and chunkC.valid == true))
+        if chunkC ~= nil and chunkC.valid == true then
+            table.insert(lines, "quality after load: bare=" .. chunkC.get_item_count("iron-plate")
+                .. " normal=" .. chunkC.get_item_count{name = "iron-plate", quality = "normal"}
+                .. " legendary=" .. chunkC.get_item_count{name = "iron-plate", quality = "legendary"}
+                .. " (placed: " .. probe.beforeBare .. "/" .. probe.beforeNormal .. "/" .. probe.beforeLegendary .. ")")
         end
 
         for _, name in pairs{"chunkA", "chunkB"} do
@@ -670,7 +686,7 @@ commands.add_command("rns-store-reset", "RNSRedux: drop the P2 store probe and i
     local probe = storage.storeProbe
     if probe ~= nil then
         if probe.store ~= nil then probe.store:destroy() end
-        for _, key in pairs{"chunkA", "chunkB"} do
+        for _, key in pairs{"chunkA", "chunkB", "chunkC"} do
             local chunk = probe[key]
             if chunk ~= nil and chunk.valid == true then chunk.destroy() end
         end
