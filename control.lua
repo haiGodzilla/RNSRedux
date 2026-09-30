@@ -372,7 +372,13 @@ commands.add_command("rns-debug-nc", "RNSRedux: dump only the controller counter
     for _, entry in pairs(entries) do
         lines[#lines + 1] = entry.text
     end
-    game.print(table.concat(lines, "\n"))
+    local text = table.concat(lines, "\n")
+    game.print(text)
+    --The chat scrolls away and cannot be piped out of the game, so the same dump
+    --goes to script-output/rns-debug-nc.txt as well. Appended with the tick as a
+    --header: the acceptance check compares two consecutive runs of this command.
+    game.print("rns-debug-nc: appended to script-output/rns-debug-nc.txt")
+    helpers.write_file("rns-debug-nc.txt", "\n# tick " .. game.tick .. "\n" .. text .. "\n", true)
 end)
 
 --Debug command for M1: exercises ItemStore against a scratch inventory, without
