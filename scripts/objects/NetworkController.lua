@@ -2,7 +2,7 @@
 NC = {
     thisEntity = nil,
     entID = nil,
-    updateTick = 600,
+    updateTick = 7200, --Safety-net refresh period; a structural change rebuilds on its own.
     lastUpdate = 0,
     stable = false,
     state = nil,
@@ -89,13 +89,18 @@ function NC:update()
     end
     if self.thisEntity.to_be_deconstructed() == true then return end
     --if game.tick % 25 then self:createArms() end
-    --Spread the periodic refresh across the cycle. A bare `game.tick %
-    --updateTick` is true for every controller in the same tick, so a large base
-    --pays the entire rebuild of all networks in one frozen tick. The unit
-    --number gives each network a stable phase; saves written before this change
-    --do not carry the field and fall back to it lazily.
+    --The rebuild follows the network, not the clock: every join and leave sets
+    --shouldRefresh through update_network_controller, because each object's new()
+    --and remove() calls it and every removal event routes through remove(). What
+    --is left of the timer is only a safety net, in case a change slips past the
+    --flag.
+    --The net is spread across the cycle: a bare `game.tick % updateTick` would be
+    --true for every controller in the same tick, so a large base would pay the
+    --entire rebuild of all networks in one frozen tick. The unit number gives
+    --each network a stable phase; saves written before this change do not carry
+    --the field and fall back to it lazily.
     self.refreshOffset = self.refreshOffset or self.entID % self.updateTick
-    if (game.tick + self.refreshOffset) % self.updateTick == 0 or self.network.shouldRefresh == true then --Refreshes connections every 10 seconds
+    if (game.tick + self.refreshOffset) % self.updateTick == 0 or self.network.shouldRefresh == true then --Safety net every two minutes; structural changes rebuild immediately
         self.network:doRefresh(self)
         self.powerDraw = self.network:getTotalObjects()
         --1.8MW buffer but 15KW energy at 900KMW- input
