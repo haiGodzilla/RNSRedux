@@ -1556,6 +1556,81 @@ P1-Abnahme abdeckt. Der Abnahmetest dafür existiert bereits
 (`/rns-debug-nc` → `/rns-debug-refresh` → `/rns-debug-nc`), und `truth` im Dump
 vergleicht den behaupteten gegen den tatsächlichen Stand.
 
+### 7.6 Der Befund, der P2 trägt: `ItemStackDefinition` nimmt alles an
+
+Geprüft in der API-Doku, nicht vermutet [4]:
+
+```
+ItemStackDefinition :: table
+  name :: string
+  count :: ItemCountType?
+  quality :: string?
+  health :: float?
+  durability :: double?
+  ammo :: float?
+  tags :: Tags?
+  custom_description :: LocalisedString?
+  spoil_percent :: double?
+```
+
+**Damit ist der Grund für die Handserialisierung weg.** Der Mod speichert
+Munition, Haltbarkeit, Gesundheit und Tags von Hand, weil er sie sonst nirgends
+unterbringt — und genau diese Felder nimmt die Engine entgegen. `Itemstack.lua`
+mit seinen handgeschriebenen Feldern und seinem `split`-Modulo für Munition wird
+damit überflüssig, sobald die Drives umgestellt sind.
+
+**Und die Qualität ist keine Ausnahme mehr:** `quality :: string?` ist Teil der
+Definition, kein Sonderfall.
+
+**Die Brücke (Commit `7c4a3af`)** in `ItemStore`:
+
+- `ItemStore.definitionFrom(itemstack)` — baut die Definition aus einem Stapel,
+  den der Mod als `Itemstack` hält. Nur die **echten** Tags wandern mit;
+  `Itemstack.extras` ist der eigene Beutel des Mods für Blueprint-Daten und
+  Ausrüstungsgitter und etwas anderes als das `tags`-Feld der Engine.
+- `ItemStore:insertItemstack(itemstack, amount)` — legt ihn ab und stellt die
+  Sonderfälle über `LuaItemStack::import_stack` wieder her, wenn der Stapel eine
+  Export-Zeichenkette trägt (Blueprint, Blueprint-Buch, Dekonstruktions- und
+  Upgradep laner, Item-with-Tags). Die lassen sich aus einer Definition **nicht**
+  rekonstruieren.
+- `ItemStore:forEachStack(callback)` — gibt jeden belegten Slot als lebenden
+  `LuaItemStack` heraus. Das ist die Richtung, die Anzeige und Netzwerkbuchhaltung
+  brauchen; `Itemstack:new` liest Munition, Haltbarkeit, Gesundheit und die
+  Export-Zeichenkette selbst, in dieser Richtung geht also nichts verloren.
+
+**Eine Lücke, die ich benennen muss.** `Itemstack.extras` hält
+Blueprint-Entities, Tiles, Gitter und Labels — dafür gibt es **kein Feld** in
+`ItemStackDefinition`. Die Export-Zeichenkette deckt die unterstützten Item-Typen
+ab; alles andere in `extras` fiele weg. Plan-Abschnitt 5 sagt dazu „Stacks mit
+weiteren Zusatzdaten … werden von der Engine verwaltet" — **das trägt für die
+Export-Typen und für Munition, Haltbarkeit und Gesundheit, aber nicht für
+`extras` im Allgemeinen.** Der genaue Rand ist ungemessen; der Probelauf in 7.7
+prüft die Munition, nicht die Blueprint-Daten.
+
+### 7.7 Was der nächste Probelauf prüft
+
+Der Test ist um die Brücke erweitert, und die Frage ist bewusst gewählt: **eine
+halbvolle Magazine.** Eine Anzahl verrät nicht, dass sie halbvoll ist — kommen die
+vier Schuss zurück, hat die Definition sie getragen.
+
+Vier Zeilen sind neu:
+
+| Zeile | was sie entscheidet |
+|---|---|
+| `bridge: partial magazine inserted=1 ammo back=4` | Trägt `ItemStackDefinition.ammo` den Ladezustand? |
+| `bridge after load: magazine present=true ammo=4` | Übersteht er auch den Ladezyklus? |
+| `forEachStack occupied=N used=M` | Liefert die Ausgangsbrücke jeden belegten Slot? `N` muss der Slot-Zahl entsprechen, `M` der Item-Summe — die beiden sind **nicht** gleich, das ist die Kontrolle. |
+| `quality after load: bare=4 normal=4 legendary=9` | Steht aus 7.4, jetzt als Regressionsprüfung. |
+
+**Fällt `ammo` auf 0 oder 10**, nimmt die Engine das Feld nicht so an, wie die
+Doku es beschreibt — dann braucht die Brücke einen anderen Weg (Insert plus
+nachträgliches Setzen am Stapel), und das ist vor der Drive-Umstellung zu klären.
+
+**Und `occupied` gegen `used` ist die schärfere Prüfung als sie aussieht:** Beide
+Zahlen beschreiben denselben Store aus verschiedenen Richtungen. Gehen sie
+auseinander, zählt der geführte `used`-Wert anders als der tatsächliche Inhalt —
+genau der Fehler, den P1 für das Netz ausgeschlossen hat.
+
 ## 8. Offene technische Schulden
 
 - `NetworkBase.addConnectables`, Zeilen 183/186/191: drei Prüfungen mit `and`
