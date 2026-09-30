@@ -259,10 +259,24 @@ function ItemStore:getCount(name, quality)
     return total
 end
 
+--Whether the store holds any of this item. The index makes that exact: it is set on
+--the first insert and cleared only when the count reaches zero, so a key that is
+--present means a positive count.
+--This matters more than it looks. The transfer path asks every drive for every item
+--it wants to move, and the answer is no almost every time -- a drive holds a handful
+--of types and the loop covers all of them. Without this check the engine has to
+--search the chunk's slots to find that out, up to 1024 of them per drive, where the
+--old storageArray lookup was a single hash access.
+function ItemStore:hasAny(name, quality)
+    if name == nil then return false end
+    return self.index[ItemStore.key(name, ItemStore.qualityOf(quality))] ~= nil
+end
+
 --The stack as the engine holds it, so callers get ammo, durability and tags back
 --without the mod having stored them itself.
 function ItemStore:getStack(name, quality)
     if name == nil then return nil end
+    if not self:hasAny(name, quality) then return nil end
     local found = nil
     for i = 1, #self.chunks do
         found = self.chunks[i].find_item_stack{
