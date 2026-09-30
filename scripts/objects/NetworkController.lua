@@ -89,7 +89,13 @@ function NC:update()
     end
     if self.thisEntity.to_be_deconstructed() == true then return end
     --if game.tick % 25 then self:createArms() end
-    if game.tick % self.updateTick == 0 or self.network.shouldRefresh == true then --Refreshes connections every 10 seconds
+    --Spread the periodic refresh across the cycle. A bare `game.tick %
+    --updateTick` is true for every controller in the same tick, so a large base
+    --pays the entire rebuild of all networks in one frozen tick. The unit
+    --number gives each network a stable phase; saves written before this change
+    --do not carry the field and fall back to it lazily.
+    self.refreshOffset = self.refreshOffset or self.entID % self.updateTick
+    if (game.tick + self.refreshOffset) % self.updateTick == 0 or self.network.shouldRefresh == true then --Refreshes connections every 10 seconds
         self.network:doRefresh(self)
         self.powerDraw = self.network:getTotalObjects()
         --1.8MW buffer but 15KW energy at 900KMW- input
