@@ -204,12 +204,20 @@ function StressTest.fill(typesPerDrive, amountPerType)
                 local name = available[t]
                 local template = Itemstack.create_template(name)
                 if template ~= nil then
-                    --The stack has to carry the count that is booked as
-                    --inserted. add_or_merge_basic_item stores the first stack
-                    --as given but adds `amount` to storedAmount, so a
-                    --placeholder count of 1 makes the drive claim a full load
-                    --while holding a single item.
+                    --Two things this stack has to get right.
+                    --Its count: add_or_merge_basic_item stores the first stack as
+                    --given but adds `amount` to storedAmount, so a placeholder
+                    --count of 1 makes the drive claim a full load while holding a
+                    --single item.
+                    --Its shape: the real insert path stores a copy, and Util.copy
+                    --collapses an empty table to nil, so an inserted stack carries
+                    --neither tags nor extras. create_template leaves both as empty
+                    --tables, and driving on that shape yields drives the game never
+                    --produces. Extraction by clicking the network display then fails
+                    --silently, because the exact comparison reaches
+                    --compare_tags(nil, {}) and that is false.
                     local chunk = math.min(amountPerType, room)
+                    template = template:copy()
                     template.count = chunk
                     added = added + obj:add_or_merge_basic_item(template, chunk)
                 end

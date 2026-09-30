@@ -419,6 +419,12 @@ commands.add_command("rns-debug-extract", "RNSRedux: extract items from a networ
         game.print("rns-debug-extract: no prototype for '" .. name .. "'")
         return
     end
+    --Use the shape the real insert path stores. create_template leaves tags and
+    --extras as empty tables, an inserted stack carries neither, and the exact
+    --comparison treats an empty table and nil as different. Without this the
+    --command only matches drives filled by the stress build -- which have the same
+    --unnatural shape -- and fails on a network filled by playing.
+    master = master:copy()
     master.count = count
 
     local networkBefore = network.Contents.item[name] or 0
