@@ -385,43 +385,86 @@ Drei Befunde:
 daher `stored=false`. Bei 16 Typen zyklisch über vier Größen bekommen nur die 15
 größeren Drives diesen Typ; die 15.000 sind 15 × 1.000.
 
-### 5.11 Der Test, der die Ursache festnagelt
+### 5.11 Ursache gefunden: der Fill erzeugt eine Stapelform, die das Spiel nicht herstellt
 
-Die Spur (Commit `b3b33f3`) sucht jetzt einen Drive, der das Item **wirklich**
-hält, und schreibt **alle Felder beider Stapel** heraus, Tabellenfelder mit der
-Anzahl ihrer Einträge. Damit ist die Vergleichsprüfung vollständig sichtbar.
+Die Spur aus 5.10 (Commit `b3b33f3`) nennt beide Seiten im Klartext:
 
-Die These, die das prüft: Die beiden Wege erzeugen Stapel unterschiedlich.
-`/rns-debug-extract` baut den Master über `Itemstack.create_template`, und das
-setzt `tags = {}` und `extras = {}` (`Itemstack.lua:175–176`). Der Klick übergibt
-einen Stapel aus dem `interfaceCache`, erzeugt über `Itemstack:new`, das für
-gewöhnliche Items `tags = nil` setzt (`Itemstack.lua:33`). Und
-`Itemstack.compare_tags` wertet `nil` gegen `{}` als ungleich
-(`Itemstack.lua:207–209`):
-
-```lua
-if tag1 == nil and tag2 == nil then return true end
-if type(tag1) ~= "table" or type(tag2) ~= "table" then return false end
+```
+idinv stack name=advanced-circuit count=15000 netBefore=15000
+idinv probe holdingDrive=true loose=true exact=false
+  clicked[count=15000,health=1,modified=false,name=advanced-circuit,type=item]
+  stored [count=1000,extras=table(0),health=1,modified=false,name=...,tags=table(0),type=item]
+idinv result amount=1 net 15000->15000 player 0->0
 ```
 
-Ein `nil` gegen ein leeres `{}` fällt in die zweite Zeile und liefert `false`.
-Unterscheiden sich die Wege in genau diesem Punkt, erklärt das die Beobachtung
-vollständig: Befehl funktioniert, Klick nicht.
+Und dieselbe Datei liefert das Gegenbeispiel, das die Sache entscheidet:
 
-**Falls das zutrifft, ist es wieder der Aufbau, nicht der Produktivpfad.** Ein
-Spieler legt Items über `Itemstack:new` ab, das `tags = nil` setzt. Der Fill
-benutzt `create_template` und erzeugt `tags = {}` — eine Form, die das Spiel so
-nicht herstellt. Dann wären gefüllte Drives die Ausnahme und eine handgelegte
-Einlagerung die Regel.
+```
+idinv stack name=copper-ore count=100 netBefore=100
+idinv probe holdingDrive=true loose=true exact=true
+  clicked[count=100,health=1,modified=false,name=copper-ore,type=item]
+  stored [count=100,health=1,modified=false,name=copper-ore,type=item]
+idinv result amount=1 net 100->99 player 0->1
+```
 
-In einem Zug mitgemessen:
+Kupfererz wurde über den echten Pfad eingelagert (Inventar → Insert, dann
+entnommen) und geht durch: `loose=true exact=true`, Buchung `net 100->99`,
+`player 0->1`. `advanced-circuit` kam aus dem Fill und geht nicht durch.
 
-1. Ein Item einlagern, das **nicht** in `FILL_ITEMS` steht — nur dann entsteht ein
-   neuer Stapel über den echten Pfad. Vorschlag: `copper-ore`.
-2. Dasselbe Item wieder entnehmen.
+**Die Ursache, in vier Schritten gelesen:**
 
-Geht das, ist die Ursache eingegrenzt und der Produktivpfad nachweislich intakt.
-Geht es nicht, sitzt der Fehler tiefer, und die Feldliste aus der Spur zeigt, wo.
+1. `Itemstack.create_template` setzt `tags = {}` und `extras = {}` — und danach
+   nur noch Zuweisungen, die für gewöhnliche Items `nil` sind
+   (`Itemstack.lua:175–176`, `38–114`). Beide Felder bleiben also leere Tabellen.
+2. `ID:add_or_merge_basic_item` legt den ersten Stapel **wie übergeben** ab
+   (`inv[itemstack_data.name] = itemstack_data`, `ItemDrives.lua:205`). Die leeren
+   Tabellen landen damit in den Drives.
+3. Der echte Einlagerungspfad legt dagegen eine **Kopie** ab (`inv_item:split(...)`,
+   `NetworkBase.lua:1048`), und `split` beginnt mit `self:copy()`
+   (`Itemstack.lua:232`). `Util.copy` baut sein Ergebnis **innerhalb** der Schleife
+   (`copy = copy or {}` in `Util.lua:122`), eine leere Tabelle wird deshalb zu
+   `nil`. Ein echter Stapel trägt weder `tags` noch `extras`.
+4. `compare_itemstacks(..., exact=true)` prüft beide Felder, und
+   `compare_tags` typprüft das **zweite** Argument, bevor es das erste
+   durchläuft (`Itemstack.lua:207–209`). `nil` gegen `{}` ergibt `false` — der
+   Transfer findet keinen passenden Drive und kehrt ohne Meldung zurück.
+
+Nachgerechnet: Der Faktor `amountPerType` in `stored[count=1000]` gegen
+`clicked[count=15000]` ist bedeutungslos — `count` wird in der Prüfung gar nicht
+verglichen. Der einzige Unterschied sind `tags` und `extras`.
+
+**Damit ist es wieder der Aufbau, kein Produktivfehler.** Die Feldliste aus 5.10
+hat den falschen Drive geprüft (`stored=false`) und war insofern irreführend.
+
+### 5.12 Was korrigiert ist, und die offene Kante dabei
+
+Commit `b78f3e0`, beide Seiten auf die Form des echten Pfads gebracht:
+
+- `StressTest.fill` kopiert die Vorlage vor dem Ablegen (`template:copy()`), womit
+  `Util.copy` die leeren Tabellen genauso zu `nil` macht wie im Spiel.
+- `/rns-debug-extract` kopiert seinen Master aus demselben Grund. **Der Befehl
+  hatte denselben Fehler in der anderen Richtung:** Sein Master war
+  `create_template`-förmig und passte deshalb nur auf gefüllte Drives. Auf einem
+  im Spiel befüllten Netz hätte er versagt.
+
+Produktivcode ist unberührt. Die Stellen, die `exact=true` übergeben, bekommen
+ihren Master aus einem echten Stapel; die Stellen, die einen Master über
+`create_template` bauen (`ItemIOV3.lua:525`, `NetworkBase.lua:1120`,
+`RNSPlayer.lua:110/131`), geben `exact=false` — dort wird `tags`/`extras` gar
+nicht verglichen. Gelesen, nicht gemessen; jede dieser Stellen ist eine Falle für
+den nächsten, der dort `exact=true` setzt.
+
+**Offene Kante, nicht angefasst:** `compare_tags` hält eine leere Tabelle und
+`nil` für verschieden. Das ist unsymmetrisch — `compare_tags({}, {a=1})` liefert
+`true`, weil die Schleife über das erste Argument läuft. Eine Korrektur daran
+ändert die Vergleichssemantik im ganzen Transferpfad und gehört damit nicht in
+diese Runde. Vorgemerkt für P3 (Chargentransfer), wo die Vergleiche ohnehin
+angefasst werden.
+
+An derselben Stelle bleibt eine Beobachtung, die ohne Not nicht korrigiert wird:
+`ID:add_or_merge_basic_item` legt den übergebenen Stapel unverändert ab, statt wie
+der echte Pfad zu kopieren. Der Fill nutzt das aus; im Produktivpfad ist die
+übergebene Form bereits die des echten Pfads, deshalb fällt es dort nicht auf.
 
 **Zwei Stellen, die beim Lesen aufgefallen und weiterhin ungemessen sind:**
 `NII.interaction` hat keinen Zweig für `RNS_NII_PInv_*` — die Buttons der
@@ -430,11 +473,6 @@ Spielerinventar-Spalte erzeugt das GUI, aber kein Klick-Handler liest sie
 `RNS_NII_SortOrder` wird im Klick-Pfad behandelt, während ein Schalter
 `on_gui_element_changed` auslöst, wo der `RNS_NII`-Zweig fehlt
 (`Gui.lua:170–215`).
-
-Nicht geprüft und bewusst offen: Save/Load mit einem Transfer dazwischen. Der
-Wert in `storage` übersteht den Ladezyklus, weil `DataConvert` für Blueprints
-greift und die Objekte ansonsten unverändert in `storage` liegen — aber das ist
-gelesen, nicht gemessen.
 
 Danach ist der IO-Bus der nächste Posten (Abschnitt 6, offene Reihenfolge in
 `docs/ups-architektur.md` Abschnitt 6a).
