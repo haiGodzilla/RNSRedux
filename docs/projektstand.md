@@ -169,78 +169,105 @@ in diesem Moment zahlt der Baupfad ohnehin ein Vielfaches davon (Punkt g,
 Beitrittskaskade). Dafür müsste jede Austrittsbuchung die Beitrittsbuchung
 exakt spiegeln. Ohne messbaren Gewinn ist das nur zusätzliche Fehlerfläche.
 
-### 5.4 Zweiter Abnahmelauf: konsistent
+### 5.4 Zweiter Abnahmelauf: der Vollaufbau ist deterministisch
 
-Frischer Aufbau `10 20`, Stand ab Commit `61d0a0a`, zwei Dumps 1.337 Ticks
-auseinander mit `/rns-debug-refresh` dazwischen. Alle zehn Netze, beide Dumps
-bitgleich:
+Vor dem Transfer-Test in 5.5 noch ein Lauf mit demselben `10 20`-Aufbau, zwei
+Dumps 1.337 Ticks auseinander mit `/rns-debug-refresh` dazwischen. Alle drei
+Zähler lesen 260000 (`tracked`, `drive` und `truth`), beide Dumps bitgleich.
 
-```
-NC 27 members=64 shouldRefresh=false powerDraw=17020 tracked=260000/16 cache=16
-      drive=260000/1700000 external=0/0 truth=20/260000/260000 fluidTruth=0/0
-```
+Damit ist der Vollaufbau deterministisch und stimmt mit dem tatsächlichen Inhalt
+der Drives überein. Was dieser Lauf allein **nicht** zeigt: dass der
+inkrementelle Pfad zwischen zwei Aufbauten dieselben Werte hält — beide Dumps
+kamen aus einem Rebuild, weil der Fill `shouldRefresh` setzt. Das leistet erst
+der Transfer in 5.5.
 
-Alle drei Zähler stimmen überein: `tracked` (aus `Contents.item`), `drive`
-(aus `StoredPartition.itemDrive`) und `truth` (direkt aus den
-`storageArray`-Tabellen der 20 Mitglieds-Drives) lesen 260000.
+Nachgerechnet: 5×4.000 + 15×16.000 = 260.000 bei 20 Drives zyklisch über vier
+Größen. Kapazität 1.700.000 = 5×(4.000 + 16.000 + 64.000 + 256.000).
 
-Nachgerechnet und bestätigt:
-
-- **`tracked=260000`** — der Fill gibt jedem Drive bis zu 16 Typen à 1.000. Ein
-  4k-Drive läuft nach vier Typen voll (4.000), die drei größeren nehmen alle
-  16.000. Bei 20 Drives zyklisch über vier Größen: 5×4.000 + 15×16.000 =
-  260.000. Exakt.
-- **`drive`-Kapazität 1.700.000** — 5×(4.000 + 16.000 + 64.000 + 256.000).
-  Bestätigt die Beziehung Kapazität = Summe der `maxStorage`.
-- **`tracked=260000/16`** — die Typenzahl ist 16, weil `FILL_ITEMS` sechzehn
-  Einträge hat und jeder Drive mit Platz alle davon bekommt. Die 4k-Drives
-  füllen nach den ersten vier und tragen damit nur eine Teilmenge bei, was die
-  Vereinigungsmenge nicht erhöht.
-
-Damit ist der erste Lauf erklärt, und beide Auffälligkeiten lagen im Aufbau,
-nicht im Produktivcode:
+Zwei Auffälligkeiten aus früheren Läufen lagen im Aufbau, nicht im
+Produktivcode:
 
 - Die sieben Netze mit `tracked=0 cache=0 drive=0` waren der Fill, der die
   Netzwerkbuchhaltung nie berührt. Behoben: `StressTest.fill` setzt
   `shouldRefresh` auf jedem berührten Controller.
-- Der Widerspruch `drive=420000` statt `260000` kam aus dem alten Spielstand.
-  Dessen `20 50`-Netze lasen `tracked=644` bei `drive=644000` — Faktor 1.000,
-  genau die Signatur des Fills vor `bfc0618`, der `count = 1` speicherte und die
-  gebuchte Menge mitzählte. Der neue Aufbau liest 260000, was der Handrechnung
-  entspricht. **Der alte Spielstand ist als Beweisstück verworfen.**
+- Der Widerspruch `drive=420000` statt `260000` kam aus einem Spielstand, dessen
+  Netze `tracked=644` bei `drive=644000` lasen — Faktor 1.000, die Signatur des
+  Fills vor `bfc0618`, der `count = 1` speicherte und die gebuchte Menge
+  mitzählte. **Als Beweisstück verworfen.**
 
-### 5.5 Was dieser Lauf nicht belegt
+### 5.5 Dritter Lauf: Transfer geprüft — P1 abgenommen
 
-**Beide Dumps entstanden durch einen Vollaufbau, nicht durch den inkrementellen
-Pfad.** Der Fill setzt `shouldRefresh`, der Controller baut daraufhin neu auf —
-Dump A ist also schon das Ergebnis eines Rebuilds, Dump B nach dem erzwungenen
-Refresh ebenfalls. Der Vergleich prüft damit:
+Derselbe `10 20`-Aufbau, drei Dumps. Dazwischen: eine Einlagerung von drei Items
+über das NII eines Controllers (NC 27), danach ein erzwungener Vollaufbau.
 
-- dass der Vollaufbau deterministisch ist (zweimal dasselbe Ergebnis), und
-- dass der Vollaufbau mit dem tatsächlichen Inhalt der Drives übereinstimmt.
+| Dump | NC 27 |
+|---|---|
+| A (Tick 7902) | `tracked=260/16 cache=16 drive=260000/1700000 truth=20/260000/260` |
+| B nach Einlagerung (10195) | `tracked=263/19 cache=19 drive=260003/1700000 truth=20/260003/263` |
+| C nach Vollaufbau (11398) | `tracked=263/19 cache=19 drive=260003/1700000 truth=20/260003/263` |
 
-Er prüft **nicht**, was P1 eigentlich behauptet: dass der inkrementelle Pfad
-zwischen zwei Aufbauten dieselben Werte hält. Dafür müsste eine echte Buchung
-stattfinden, und die passiert nur bei einem Transfer.
+Die neun übrigen Netze lesen in allen drei Dumps unverändert
+`tracked=260/16 drive=260000/1700000 truth=20/260000/260`.
 
-**Der entscheidende Test ist deshalb ein Transfer.** Buchungsstellen sind genau
-zwei (`NetworkBase.lua:888`, `1055`), erreichbar über die vier Shortcuts am
-Network Inventory Interface und über den IO-Bus. Reihenfolge:
+**B = C. Das ist der Abnahmemaßstab aus Abschnitt 6 des Plans, und er ist grün.**
+Der inkrementelle Pfad hat die Einlagerung gebucht (A → B: `tracked` +3, `drive`
++3, `truth` behauptet +3, tatsächlicher Inhalt +3, `cache` und Typenzahl je +3),
+und der Vollaufbau hat danach exakt dieselben Werte erzeugt.
 
-1. `/rns-debug-nc` — Dump A
-2. Im NII **eines** Controllers Items einlagern (Drag aus dem Inventar oder
-   Shortcut). Menge beliebig, sie muss nur größer null sein.
-3. `/rns-debug-nc` — Dump B. **B muss sich von A unterscheiden**, und der
-   Zuwachs in `tracked` und `drive` muss gleich groß sein. Ist B = A, hat der
-   Transfer nicht gegriffen und der Test ist ungültig.
-4. `/rns-debug-refresh`
-5. `/rns-debug-nc` — Dump C
-6. **B = C** → der inkrementelle Pfad ist exakt, P1 ist abgenommen.
-   **B ≠ C** → die Differenz ist der Fehler, und wir haben ihn, bevor
-   Produktivcode umgebaut wurde.
-7. Zur Gegenprobe dasselbe für die Entnahme: Items aus dem NII zurück ins
-   Inventar, dann Dump, dann Refresh, dann Dump. Beide Richtungen buchen
-   getrennt.
+Nachgerechnet: drei neue Item-Typen mit je einem Item. Deshalb steigen
+Typenzahl und Cache um drei, und die Summen um drei. Die neun übrigen Netze
+bleiben unberührt — die Buchung landet nur im Netz des benutzten Controllers,
+und die Einlagerung bucht in beide Zähler übereinstimmend.
+
+Damit ist die Behauptung aus 5.3 belegt, nicht mehr nur gelesen:
+
+- Der periodische Vollaufbau war verzichtbar (beide Pfade stimmen überein).
+- `Contents.item` und `StoredPartition` werden an der Buchungsstelle
+  (`NetworkBase.lua:1055`) konsistent geführt.
+
+### 5.6 Der geladene Spielstand ist Datenmüll — kein Codebefund
+
+In diesem Lauf liest `truth` behauptet 260000 gegen tatsächlich 260, also Faktor
+1.000: 260 Stapel mit je einem Item gegen 260000 gebuchte Items. Das ist die
+Signatur des Fills vor `bfc0618`, der `count = 1` speicherte und in
+`storedAmount` die Menge buchte — der geladene Spielstand stammt also aus einem
+Aufbau mit der alten Fassung.
+
+Welcher der beiden letzten Läufe welchen Spielstand geladen hat, kann ich aus den
+Dumps nicht ableiten: die Controller-`entID`s sind in beiden identisch, weil
+derselbe Aufbaubefehl an derselben Position dieselbe Entity-Reihenfolge erzeugt.
+Für die Abnahme ist das ohne Belang, und in beiden Läufen stimmt `tracked` mit
+`truth` tatsächlich überein.
+
+Zwei Konsequenzen daraus:
+
+- **`tracked` ≠ `drive` ist in einem gesunden Netz kein Widerspruch, sondern
+  normal.** `tracked` summiert die Stapel selbst, `drive` führt `storedAmount`.
+  Die beiden fallen nur zusammen, wenn in jedem Stapel die Anzahl steht, die
+  gebucht wurde — genau das stellt `bfc0618` für den Testaufbau her.
+- **Dieser Spielstand taugt nicht zum Spielen.** Er hat 259.740 Phantom-Items
+  pro Netz: entnehmen lässt sich nur, was in den Stapeln liegt. Für
+  GUI-Prüfungen und für die IO-Bus-Messung ist ein frischer Aufbau zu bauen.
+
+### 5.7 Offene Randpfade
+
+Der Abnahmemaßstab aus Abschnitt 6 des Plans ist erfüllt. Zwei Randpfade der
+Änderung `a5add2b` haben noch keine Messung; beide sind billig zu prüfen und
+gehören zusammen in einen Lauf:
+
+1. **Austritt.** Dass ein Abbau `shouldRefresh` setzt und der Rebuild das
+   Mitglied entfernt. Das ist der Teil von P1, der vorher durch den Takt gedeckt
+   war und es nicht mehr ist. Prüfung: `/rns-debug-nc`, einen Drive abbauen
+   (`/rns-debug-nc` → `members` muss um eins fallen), dann
+   `/rns-debug-refresh` und erneut `members`.
+2. **Entnahme** (`NetworkBase.lua:888`). Beide Richtungen buchen getrennt; ein
+   Fehler in einer Richtung bleibt sonst unsichtbar. Prüfung wie oben, Items aus
+   dem NII zurück ins Inventar.
+
+Nicht geprüft und bewusst offen: Save/Load mit einem Transfer dazwischen. Der
+Wert in `storage` übersteht den Ladezyklus, weil `DataConvert` für Blueprints
+greift und die Objekte ansonsten unverändert in `storage` liegen — aber das ist
+gelesen, nicht gemessen.
 
 Danach ist der IO-Bus der nächste Posten (Abschnitt 6, offene Reihenfolge in
 `docs/ups-architektur.md` Abschnitt 6a).

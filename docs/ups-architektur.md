@@ -258,7 +258,8 @@ Engine.
 **P0 — GUI-Throttle.** Eine Zeile, bereits umgesetzt. Größter Einzelposten, kein
 Risiko.
 
-**P1 — Netzwerk-Accounting. Umgesetzt in `a5add2b`, Abnahme offen.**
+**P1 — Netzwerk-Accounting. Umgesetzt in `a5add2b`, Abnahme erfüllt am
+30.09.2026.**
 Die Zählertabelle existiert (3.1), offen war nur ihr Auslöser: der periodische
 Vollaufbau. Der ist gestrichen — jeder Beitritt und Austritt setzt
 `shouldRefresh` selbst, geprüft an allen `:remove()`- und `new()`-Funktionen
@@ -274,9 +275,14 @@ dann ist die Prüfliste der nächste Schritt.
 
 Abnahmemaßstab: `/rns-debug` liefert vor und nach erzwungenem
 `/rns-debug-refresh` identische Werte. Geprüft werden `tracked` (Summe und
-Typenzahl), `cache`, `drive` und `external` — nicht mehr nur die
-Mitgliedszahlen. Neu belastet wird dieser Vergleich dadurch, dass das Netz
-vorher alle 600 Ticks deckte und es jetzt erst nach 7200 Ticks tut.
+Typenzahl), `cache`, `drive` und `external`. **Erfüllt** (Detail in
+`docs/projektstand.md` 5.5): Einlagerung von drei Items, `/rns-debug-nc` vorher
+und nachher, dazwischen der erzwungene Vollaufbau. Die Dumps sind identisch, der
+inkrementelle Pfad und der Rebuild stimmen überein.
+
+Offen bleiben zwei Randpfade, beide ungemessen: der Austritt (Abbau setzt
+`shouldRefresh`, der Rebuild entfernt das Mitglied) und die Entnahme
+(`NetworkBase.lua:888`). Siehe `docs/projektstand.md` 5.7.
 
 Betrifft `NetworkController.lua` (geändert) und `NetworkBase.lua` (unverändert).
 
