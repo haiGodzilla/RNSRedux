@@ -143,6 +143,8 @@ function GUI.on_gui_clicked(event)
         and string.match(event.element.name, "RNS_") ~= nil then
         helpers.write_file("rns-click.txt", "click '" .. event.element.name
             .. "' button=" .. tostring(event.button)
+            .. " left=" .. tostring(defines.mouse_button_type.left)
+            .. " right=" .. tostring(defines.mouse_button_type.right)
             .. " shift=" .. tostring(event.shift)
             .. " ctrl=" .. tostring(event.control) .. "\n", true)
     end
