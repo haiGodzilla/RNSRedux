@@ -109,11 +109,17 @@ function ID:serialize_settings()
     return tags
 end
 
+--Sets the drive up from a tag. Entity tags are not necessarily ours: on_built_entity
+--fills event.tags with the entity's tags, which can exist without a single RNS key.
+--Writing those straight into the drive set filters to nil, and regenerate_icons then
+--threw on pairs(nil) -- which took the whole placement down. Control.placed destroys
+--the entity when its handler fails, so the drive vanished from the map instead of
+--appearing with default settings.
 function ID:deserialize_settings(tags)
-    self.priority = tags["priority"]
-    self.whitelistBlacklist = tags["whitelistBlacklist"]
-    self.filters = tags["filters"]
-    self.guiFilters = tags["guiFilters"]
+    if tags["priority"] ~= nil then self.priority = tags["priority"] end
+    if tags["whitelistBlacklist"] ~= nil then self.whitelistBlacklist = tags["whitelistBlacklist"] end
+    if type(tags["filters"]) == "table" then self.filters = tags["filters"] end
+    if type(tags["guiFilters"]) == "table" then self.guiFilters = tags["guiFilters"] end
     self:regenerate_icons()
 end
 

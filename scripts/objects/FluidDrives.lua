@@ -112,11 +112,14 @@ function FD:serialize_settings()
     return tags
 end
 
+--See ID:deserialize_settings for why every field is guarded: an entity tag that is
+--not ours would otherwise set filters to nil and regenerate_icons would throw, after
+--which Control.placed destroys the entity.
 function FD:deserialize_settings(tags)
-    self.priority = tags["priority"]
-    self.whitelistBlacklist = tags["whitelistBlacklist"]
-    self.filters = tags["filters"]
-    self.guiFilters = tags["guiFilters"]
+    if tags["priority"] ~= nil then self.priority = tags["priority"] end
+    if tags["whitelistBlacklist"] ~= nil then self.whitelistBlacklist = tags["whitelistBlacklist"] end
+    if type(tags["filters"]) == "table" then self.filters = tags["filters"] end
+    if type(tags["guiFilters"]) == "table" then self.guiFilters = tags["guiFilters"] end
     self:regenerate_icons()
 end
 
