@@ -378,7 +378,7 @@ Punkt 3 kam trotzdem zuerst, mit Absicht: Er ist der kleinste Eingriff, ändert
 nicht, was transferiert wird, und braucht keine neue Vergleichsgrundlage. Punkt 1
 ist der größere Umbau, weil er den Slot-Index als Vergleichsbasis aufgibt.
 
-**Zwei Eingriffe umgesetzt** (`0db27d7` Lesekürzung, `??` Slot-Fingerabdruck),
+**Zwei Eingriffe umgesetzt** (`0db27d7` Lesekürzung, `59871da` Slot-Fingerabdruck),
 beide am External-Bus, weil er 82 % der gemessenen Buskosten trägt:
 
 - Der Container wird nur noch gelesen, wenn sich seine Gesamtzahl geändert hat

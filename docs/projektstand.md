@@ -1180,7 +1180,7 @@ Bussen, 48 Slots und 12 Sweeps pro Sekunde sind das **rund 23.000 Itemstacks und
 46.000 Tabellen pro Sekunde** — für einen Container, an dem sich meist nichts
 geändert hat.
 
-**Umgesetzt (Commit `??`): ein Fingerabdruck-Vergleich vor dem Neuaufbau.** Vier
+**Umgesetzt (Commit `59871da`): ein Fingerabdruck-Vergleich vor dem Neuaufbau.** Vier
 Feldvergleiche ersetzen den Neubau, wenn der Slot unverändert ist. Verglichen
 werden genau die Felder, die sich in einem Container von selbst ändern können:
 
@@ -1214,7 +1214,7 @@ soll `full` auf die Zahl der tatsächlichen Änderungen zusammenschrumpfen.
 
 ### 6.18 Was der Lauf klären muss
 
-**Der Schalter** (Commit `??`):
+**Der Schalter** (Commit `59871da`):
 
 ```
 /rns-bus-scan off     -- alter Pfad
