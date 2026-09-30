@@ -766,6 +766,23 @@ function NII.interaction(event, RNSPlayer)
 	if event.button == defines.mouse_button_type.right and event.shift == true then count = -3 end --10 Stacks
 	if event.button == defines.mouse_button_type.left and event.control == true then count = -4 end --All Stacks
 
+	--TEMPORARY DIAGNOSTIC, remove once the NII click path is settled. Prints the
+	--values every branch below depends on, before any of them can return quietly.
+	if string.match(event.element.name, "RNS_NII") ~= nil then
+		local decision = "nii '" .. event.element.name .. "' count=" .. count
+			.. " tags=" .. (event.element.tags ~= nil and "yes" or "nil")
+		if event.element.tags ~= nil then
+			decision = decision .. " id=" .. tostring(event.element.tags.ID)
+				.. " stack=" .. tostring(event.element.tags.stack ~= nil)
+		end
+		local target = storage.entityTable[event.element.tags ~= nil and event.element.tags.ID or nil]
+		decision = decision .. " obj=" .. (target ~= nil and "yes" or "nil")
+		if target ~= nil then
+			decision = decision .. " inNetwork=" .. tostring(BaseNet.exists_in_network(target.networkController, target.entID))
+		end
+		helpers.write_file("rns-click.txt", decision .. "\n", true)
+	end
+
 	
 	local obj = storage.entityTable[event.element.tags.ID]
 	if BaseNet.exists_in_network(obj.networkController, obj.entID) == false then return end

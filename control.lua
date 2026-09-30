@@ -437,9 +437,12 @@ commands.add_command("rns-debug-extract", "RNSRedux: extract items from a networ
     }
     local left = BaseNet.transfer_from_network_to_inv(network, wrapper, master, count, true, true, true)
 
+    local driveCount, driveClaimed, driveActual = driveTotals(network)
     game.print("rns-debug-extract: left=" .. tostring(left)
         .. " network " .. networkBefore .. "->" .. (network.Contents.item[name] or 0)
-        .. " player " .. playerBefore .. "->" .. inventory.get_item_count(name))
+        .. " player " .. playerBefore .. "->" .. inventory.get_item_count(name)
+        .. " drive=" .. tostring(network.StoredPartition.itemDrive.storedAmount)
+        .. " truth=" .. driveCount .. "/" .. driveClaimed .. "/" .. driveActual)
 end)
 
 --Debug command: the same controller counters without the per-entity noise. Two
