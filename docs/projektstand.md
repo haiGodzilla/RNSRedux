@@ -4,7 +4,7 @@ Einstiegspunkt für die Weiterarbeit. Technischer Plan und Begründungen:
 `docs/ups-architektur.md`. Dieses Dokument beantwortet „wo stehen wir, was ist
 verifiziert, was ist der nächste Schritt".
 
-Stand: Commit `??`, Branch `port/2.0`, Version 2.0.0.
+Stand: Commit `bb5ad52`, Branch `port/2.0`, Version 2.0.0.
 P0 und P1 sind durch, P5 ist bis auf den Item-Bus-Restposten abgeräumt (2,5 % des
 Tick-Budgets bei 40 Bussen). **Laufender Posten: P2, ItemStore.**
 
@@ -1383,7 +1383,7 @@ aber die **Politik bleibt** — der Store und die Zählertabelle führen `name|q
 der Drive-Eingang weist Qualitäts-Items weiterhin ab. Und: **erst das Modul**, die
 Drives bleiben in dieser Runde unangetastet.
 
-### 7.2 Das Modul (Commit `??`)
+### 7.2 Das Modul (Commit `bb5ad52`)
 
 `scripts/objects/ItemStore.lua` neu geschrieben:
 
