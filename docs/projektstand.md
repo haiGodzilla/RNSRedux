@@ -1849,6 +1849,74 @@ Eingang. **Und der Stresstest umgeht sie ebenfalls**, weil er
 `add_or_merge_basic_item` direkt ruft — er füllt nur normale Items, und er ist ein
 Werkzeug.
 
+### 7.14 Die Umstellung hält auf einem echten Save
+
+Save `rns-mixed-10-20` (`10 20 4 mixed`), 40 Busse, 20 Drives je Station. Zwei
+Dumps aus einem Lauf, dazwischen `/rns-debug-refresh`:
+
+```
+# tick 2728  tracked=268354/16 drive=258754/1700000 external=96/96 truth=20/258754/258754 busTruth=2/9600/9600
+# tick 3880  tracked=267202/16 drive=257602/1700000 external=96/96 truth=20/257602/257602 busTruth=2/9600/9600
+```
+
+**Beide Dumps gehen innen auf:**
+
+- `tracked` = `drive` + External: 258754 + 9600 = 268354, und 257602 + 9600 = 267202.
+- `truth` behauptet = tatsächlich: 258754/258754 und 257602/257602.
+- `drive`-Kapazität 1.700.000 = 5 × (4k + 16k + 64k + 256k).
+- `members=72` = 20 Drives + 42 Kabel + 8 Bus-Entities + 2.
+- Kein `RNSRedux error` im Log
+
+**Die entscheidende Zahl ist `truth`.** Sie vergleicht den geführten Zähler
+(`storedAmount`) gegen die Summe der Engine-Slots (`forEachStack`) — **zwei Wege,
+die seit dem Umbau verschieden sind.** Dass sie übereinstimmen, ist der Beweis,
+dass die Umstellung die Buchhaltung nicht verschoben hat.
+
+**Die Dumps sind nicht identisch, und das ist erwartet:** `tracked` fällt um 1152
+zwischen ihnen, weil die Item-Busse weiter exportieren. Der Vergleich über die Zeit
+trägt hier nicht (siehe 6.18); die innere Prüfung trägt.
+
+**Und die Bus-Zahlen sind unverändert:** `busSkips` 602/634 und 1040/1096, also
+95 % übersprungen und ein Sicherheitsabruf alle 20 Sweeps — der Zustand `r = 0`,
+wie in 6.13 gemessen. Der Umbau hat den Buspfad nicht berührt.
+
+**Was dieser Lauf nicht zeigt:** den Transfer (weder Cursor noch NII noch
+`/rns-debug-extract`), die GUI-Anzeige, den Blueprint-Pfad, und ob ein
+Speichern-/Ladezyklus dazwischen lag. Der Log ist leer, was einen Fehler in
+`ID:rebuild` oder `ID:validate` ausschließt — für den behaupteten Laufzyklus ist
+das aber kein Beweis, sondern nur das Fehlen eines Gegenbeweises.
+
+### 7.15 Befund: jeder Drive legt 1024 Slots an, unabhängig von seiner Größe
+
+`ItemStore.newChunk` startet mit `CHUNK_INITIAL = 1024`. Bei Stackgröße 100 braucht
+ein Drive aber:
+
+| Tier | Items | Slots bei Stack 100 | angelegt |
+|---|---|---|---|
+| 4k | 4.000 | 40 | 1024 |
+| 16k | 16.000 | 160 | 1024 |
+| 64k | 64.000 | 640 | 1024 |
+| 256k | 256.000 | 2.560 | 1024 |
+
+**Für den Testaufbau heißt das 200 × 1024 = 204.800 Slots.** Gebraucht werden davon
+im gefüllten Zustand rund 26.000 (die 4k-Drives halten bei `fill 16 1000` ihre
+4.000, die anderen 16.000), also **achtfach zu viel**. Erst wenn die Drives sich
+ihrer Kapazität nähern, schrumpft der Überhang auf ein Fünftel (170.000 gebraucht).
+
+**Wo es weh tut und wo nicht.** Nicht im Tick: `is_full` ist über `used` gelöst und
+O(1), `getRemainingCapacity` ebenfalls, und `getEmptySlots`/`getUsedSlots` werden
+**nirgends gerufen** (nachgeprüft mit einem `grep`). Es kostet **Savegröße** und
+**Bauzeit** — 200 bis 1.000 `create_inventory`-Aufrufe mit je 1024 Slots.
+
+**Und mein erster Aufschlag war falsch.** Ich hatte „gebraucht wären rund 68.000"
+geschrieben. Richtig sind 26.000 im Testzustand und 170.000 im vollen Zustand; die
+68.000 waren eine Zwischenrechnung, die ich nicht zu Ende geführt habe.
+
+**Der Fix wäre klein:** mit 64 beginnen statt 1024 und verdoppeln. Ein 4k-Drive
+bliebe bei 64, ein 256k wüchse über sechs Resizes auf 4.096. **Vorgemerkt für einen
+eigenen Schritt nach der Abnahme** — zwei offene Flanken in einer Runde wären
+genau der Fehler, den diese Sitzung mehrfach gezeigt hat.
+
 ## 8. Offene technische Schulden
 
 - `NetworkBase.addConnectables`, Zeilen 183/186/191: drei Prüfungen mit `and`
