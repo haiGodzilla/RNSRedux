@@ -447,15 +447,22 @@ Ebenso gestrichen: die Slot-Umrechnung „1 Slot je 100 Items".
 
 ## 8. Unverifiziert und offen
 
+**Beantwortet (Commit `bb5ad52`, Probelauf in `docs/projektstand.md` 7.3):** Ob
+Script-Inventar-Referenzen in `storage` den Ladezyklus überstehen (P2). Die
+Storage-Doku erlaubt Referenzen auf LuaObjects und entfernt nur unregistrierte
+**Metatables**. Beides ist gemessen: Die Referenz und der Inhalt überstehen den
+Ladezyklus, die Metatable ist danach weg, und ein `rebuild` stellt sie wieder her.
+
 - **Beantwortet:** Ob `LuaInventory::insert` ein Stack-Array annimmt (P2). Nein —
   `ItemStackIdentification` ist ein Union aus `string`, `ItemStackDefinition` und
   `LuaItemStack`, also drei Einzelstapel-Formen; ein Array-Member gibt es nicht.
+  Gemessen: `ok=false`, Meldung `value for required field 'name' is missing`.
   Chargentransfers in P3 müssen als Schleife gehen.
-- **Beantwortet (Doku, Test offen):** Ob Script-Inventar-Referenzen in `storage`
-  den Ladezyklus überstehen (P2). Die Storage-Doku erlaubt Referenzen auf
-  LuaObjects und entfernt nur unregistrierte **Metatables**. Ein Store braucht
-  deshalb ein `rebuild`. Der Probe-Test (`docs/projektstand.md` 7.3) bestätigt es
-  empirisch.
+- **Beantwortet (Engine):** Ein Inventar kann Qualität halten und unterscheiden
+  (`legendary insert accepted=3`). Offen bleibt, was ein **blanker** Item-Name
+  zählt, wenn zwei Qualitäten im selben Inventar liegen — der zweite Probelauf
+  (`docs/projektstand.md` 7.4) entscheidet es, und ob Qualität den Speicher
+  übersteht.
 - Ob `count_empty_stacks` auf einem 65.535-Slot-Inventar teuer ist (P2, Messung).
   Nachtrag: Es steht bereits im Hot Path der External-IO (`NetworkBase.lua:1068`),
   einmal pro Insert-Versuch. Der Posten ist damit nicht mehr hypothetisch.

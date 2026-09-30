@@ -1418,30 +1418,77 @@ in Verbindung mit kleiner Stackgröße** — genau der Mod-Fall, den Plan-Abschn
 nennt („Mit Stackgröße 1 wären 256k Items sonst 256.000 Slots"). Der Aufwand ist
 damit Versicherung gegen Stack-Size-Mods, nicht gegen Vanilla.
 
-### 7.3 Was der Test klären muss
+### 7.3 Erster Probelauf: alle drei Engine-Annahmen bestätigt
 
-`/rns-store-test` läuft in zwei Phasen über einen Marker: Der erste Aufruf baut,
-dann wird gespeichert und geladen, der zweite Aufruf prüft. `/rns-store-reset`
-räumt auf.
+Commit `??`. Zwei Aufrufe von `/rns-store-test` um einen Speicher-/Ladezyklus.
+Ausgabe des Laufs, wörtlich:
 
-**Drei Engine-Annahmen, die der Lauf beantwortet:**
+```
+phase 1: built
+chunks=1 first slots=1024 capacity=4000 iron=50 copper=7 used=57
+legendary insert accepted=3 bare count=0 explicit normal=0 (equal means a bare name means normal only)
+array insert ok=false result value for required field 'name' is missing coal=0 stone=0
+chunkA steel=30 chunkB plastic=20
 
-| Frage | Warum sie zählt |
-|---|---|
-| Übersteht die `LuaInventory`-Referenz in `storage` den Ladezyklus? | Die Doku erlaubt LuaObject-Referenzen, aber das ist genau der Punkt, den der Plan als unverifiziert führt. Fällt er, braucht der Store einen Schlüssel statt einer Referenz — das ändert die Architektur. |
-| Was passiert mit der Metatable? | Erwartet: weg. Bestätigt das den `rebuild`-Fix. |
-| Überleben zwei getrennte Inventare? | Belegt den Mehrfach-Chunk-Fall, den die Store-Logik mit Vanilla-Stackgrößen nicht erreichen kann. |
+phase 2: after load
+store table present=true
+store.insert is a function=false
+chunk count=1 first present=true valid=true
+store contents iron=50 copper=7
+chunkA present=true valid=true steel=30 plastic=0
+chunkB present=true valid=true steel=0 plastic=20
+after ItemStore.rebuild, store.insert is a function=true
+getCount via method=50 used=57
+```
 
-**Dazu zwei API-Fragen**, deren Antworten das Modul festlegen:
+**1. Die `LuaInventory`-Referenz übersteht den Ladezyklus.** `valid=true`,
+`iron=50`, `copper=7`, `used=57` — Inhalt und geführter Zähler kommen beide
+zurück. Damit ist die Frage aus Plan-Abschnitt 8 beantwortet: Der Store braucht
+**keinen** Schlüssel statt einer Referenz, die Architektur trägt.
 
-- Zählt `get_item_count("iron-plate")` **alle** Qualitäten oder nur `normal`? Der
-  Store fragt heute explizit mit `quality = "normal"` ab, um sich nicht auf die
-  Antwort zu verlassen. Fällt die Antwort „alle", kann er vereinfachen — und die
-  Zählertabelle muss es wissen.
-- Was tut `insert` mit einem Array? Erwartet: Fehler. Die Antwort steht als
-  Tabelle im Speicher, weil `pcall` die Meldung als Wert zurückgibt.
+**2. Die Metatable ist weg, und `rebuild` heilt es.** `store.insert is a
+function=false` vor, `=true` nach `ItemStore.rebuild`. Das war die Erwartung aus
+der Storage-Doku [2], jetzt gemessen. **Der Fix greift — bevor er an den Drives
+hängt.**
 
-### 7.4 Und danach: die Umstellung der Drives
+**3. Mehrere Inventare überleben, beide mit Inhalt.** `chunkA steel=30`,
+`chunkB plastic=20`. Der Mehrfach-Chunk-Fall ist damit auf der Speicherseite
+belegt, auch wenn er mit Vanilla-Stackgrößen nicht erreichbar ist (7.2).
+
+**Und die Array-Frage ist beantwortet:** `ok=false`, Meldung `value for required
+field 'name' is missing`, `coal=0 stone=0`. Ein Array wird nicht angenommen — die
+Erwartung aus der Doku [3] ist bestätigt. **P3 muss Chargen als Schleife bauen.**
+
+**Und der Engine-seitige Qualitätsträger:** `legendary insert accepted=3`. Ein
+Inventar **kann** Qualität halten und unterscheiden. Was der Lauf **nicht** sagt,
+ist die Zeile darunter: `bare count=0 explicit normal=0` bei drei legendären Items
+im Inventar ist mehrdeutig, und ob Qualität den Speicher übersteht, hat der Lauf
+gar nicht gefragt. Das ist 7.4.
+
+### 7.4 Eine Lücke im ersten Test, und ihre Schließung
+
+**`bare count=0 explicit normal=0` bei `legendary=3` war mehrdeutig, und der Test
+hat sie nicht geschlossen.** Beide Zählformen lasen null, obwohl drei legendäre
+Items im Inventar lagen — die Probe sah das nur nicht, weil sie den blanken Namen
+und `normal` abfragte, nicht `legendary`. Zwei Lesarten blieben: „ein blanker
+Item-Name zählt nur `normal`" oder „ein blanker Item-Name zählt gar nichts".
+
+**Und schlimmer:** Der Test konnte die **wichtigere** Frage gar nicht stellen —
+**ob Qualität einen Speicher-/Ladezyklus übersteht.** Der legendäre Stapel lag in
+einem Wegwerf-Inventar, das ich vor dem Speichern zerstört habe. Die Probe stand
+dort, wo sie nicht überleben konnte.
+
+**Behoben (Commit `3e27dd0`):** Ein dauerhaftes 64-Slot-Inventar hält jetzt
+**4 normale und 9 legendäre** Eisenplatten. Phase 2 meldet alle drei Zählformen
+plus die vorher eingelegten Werte. Damit sind beide Fragen mit einem Lauf
+entschieden — ob Qualität den Speicher übersteht, und was ein blanker Name zählt.
+
+**Warum das aufgeschrieben wird:** Es ist derselbe Fehlertyp wie die Runden davor —
+ein Messwert, der nicht dort stand, wo er gebraucht wurde. Der erste Lauf hat drei
+Annahmen bestätigt und dabei die vierte offengelassen, weil ich die Probe dorthin
+gelegt habe, wo sie nicht überleben konnte.
+
+### 7.5 Und danach: die Umstellung der Drives
 
 `storageArray` wird an **fünf Stellen außerhalb** des Moduls direkt gelesen:
 
