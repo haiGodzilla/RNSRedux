@@ -538,33 +538,124 @@ commands.add_command("rns-debug-nc", "RNSRedux: dump only the controller counter
     helpers.write_file("rns-debug-nc.txt", "\n# tick " .. game.tick .. " | " .. StressTest.drainStatus() .. " | " .. busScanStatus() .. "\n" .. text .. "\n", true)
 end)
 
---Debug command for M1: exercises ItemStore against a scratch inventory, without
---touching drives or the network.
-commands.add_command("rns-store-test", "RNSRedux: exercise ItemStore against a scratch inventory", function()
+--Debug command for P2: what a store written to storage survives and what it does
+--not. Two phases, driven by a marker: the first call builds the stores, then the
+--save and load happen, the second call inspects what came back.
+--
+--Three questions from the plan's open list are answered here:
+--  * does a LuaInventory reference in storage survive save/load (docs say LuaObject
+--    references are storable, this is the check)
+--  * what happens to the store's metatable (storage drops unregistered metatables,
+--    so the methods are expected to be gone until rebuild puts them back)
+--  * does a container holding several chunk inventories hold them all afterwards
+--The quality question is answered empirically too: the store is handed a legendary
+--stack without passing isStorable, to see whether the engine keeps the distinction.
+--A stack array handed to insert is attempted, since ItemStackIdentification's union
+--has no array member and the plan hoped otherwise.
+commands.add_command("rns-store-test", "RNSRedux: P2 store probe. First call builds, second call after a save/load inspects", function()
     local lines = {}
-    local store = ItemStore.new(4000)
-    table.insert(lines, "slots=" .. store.slots)
 
-    local first = store:insert{name = "iron-plate", count = 10}
-    table.insert(lines, "insert 10 normal -> " .. first)
+    if storage.storeProbe == nil then
+        ------------------------------ phase 1: build
+        local store = ItemStore.new(4000)
+        store:insert{name = "iron-plate", count = 50}
+        store:insert{name = "copper-plate", count = 7}
+        --Straight into the inventory, bypassing isStorable: is the engine able to
+        --keep a quality apart at all?
+        local legendaryAccepted = store.inventory.insert{name = "iron-plate", count = 3, quality = "legendary"}
+        --An array, to see what the API does with it. pcall so the message is data.
+        local arrayOk, arrayResult = pcall(function()
+            return store.inventory.insert{{name = "coal", count = 5}, {name = "stone", count = 5}}
+        end)
 
-    local storable, why = ItemStore.isStorable{name = "iron-plate", count = 3, quality = "legendary"}
-    table.insert(lines, "legendary storable=" .. tostring(storable) .. " (" .. tostring(why) .. ")")
+        --Several chunk inventories, distinguishable by content.
+        local chunkA = game.create_inventory(512)
+        local chunkB = game.create_inventory(512)
+        chunkA.insert{name = "steel-plate", count = 30}
+        chunkB.insert{name = "plastic-bar", count = 20}
 
-    local second = store:insert{name = "iron-plate", count = 250}
-    table.insert(lines, "insert 250 normal -> " .. second)
-    table.insert(lines, "count=" .. store:getCount("iron-plate")
-        .. " slots=" .. store:getUsedSlots() .. "/" .. store.slots
-        .. " total=" .. store:getTotalItems()
-        .. " contents=" .. #store:getContents())
+        storage.storeProbe = {
+            store = store,
+            chunkA = chunkA,
+            chunkB = chunkB,
+            legendaryAccepted = legendaryAccepted,
+            arrayOk = tostring(arrayOk),
+            arrayResult = tostring(arrayResult),
+        }
 
-    local removed = store:remove("iron-plate", 100)
-    table.insert(lines, "remove 100 -> " .. removed .. " left=" .. store:getCount("iron-plate"))
+        table.insert(lines, "phase 1: built")
+        table.insert(lines, "slots=" .. store.slots
+            .. " iron=" .. store:getCount("iron-plate")
+            .. " copper=" .. store:getCount("copper-plate"))
+        table.insert(lines, "legendary insert accepted=" .. tostring(legendaryAccepted)
+            .. " normal count still=" .. store:getCount("iron-plate", "normal")
+            .. " legendary count=" .. store:getCount("iron-plate", "legendary"))
+        table.insert(lines, "array insert ok=" .. tostring(arrayOk) .. " result=" .. tostring(arrayResult)
+            .. " coal=" .. store.inventory.get_item_count("coal")
+            .. " stone=" .. store.inventory.get_item_count("stone"))
+        table.insert(lines, "chunkA steel=" .. chunkA.get_item_count("steel-plate")
+            .. " chunkB plastic=" .. chunkB.get_item_count("plastic-bar"))
+        table.insert(lines, "NOW SAVE, RETURN TO MENU, LOAD, THEN RUN /rns-store-test AGAIN")
+    else
+        ------------------------------ phase 2: inspect after load
+        local probe = storage.storeProbe
+        local store = probe.store
 
-    store:destroy()
-    table.insert(lines, "after destroy count=" .. store:getCount("iron-plate"))
+        table.insert(lines, "phase 2: after load")
+        table.insert(lines, "store table present=" .. tostring(store ~= nil))
+        --The metatable is the question. storage drops unregistered metatables, so
+        --this is expected to be false and is what makes a rebuild necessary.
+        table.insert(lines, "store.insert is a function=" .. tostring(type(store.insert) == "function"))
+
+        local inventory = store.inventory
+        table.insert(lines, "inventory present=" .. tostring(inventory ~= nil)
+            .. " valid=" .. tostring(inventory ~= nil and inventory.valid == true))
+        if inventory ~= nil and inventory.valid == true then
+            table.insert(lines, "iron=" .. inventory.get_item_count("iron-plate")
+                .. " copper=" .. inventory.get_item_count("copper-plate")
+                .. " legendary=" .. inventory.get_item_count{name = "iron-plate", quality = "legendary"})
+            table.insert(lines, "coal=" .. inventory.get_item_count("coal")
+                .. " stone=" .. inventory.get_item_count("stone"))
+        end
+
+        for _, name in pairs{"chunkA", "chunkB"} do
+            local chunk = probe[name]
+            table.insert(lines, name .. " present=" .. tostring(chunk ~= nil)
+                .. " valid=" .. tostring(chunk ~= nil and chunk.valid == true)
+                .. " steel=" .. tostring(chunk ~= nil and chunk.valid and chunk.get_item_count("steel-plate") or -1)
+                .. " plastic=" .. tostring(chunk ~= nil and chunk.valid and chunk.get_item_count("plastic-bar") or -1))
+        end
+
+        --The cure for the metatable, applied by hand first so the fix is proven
+        --before it goes into the module. onLoad does the same via rebuild().
+        setmetatable(store, {__index = ItemStore})
+        table.insert(lines, "after manual setmetatable, store.insert is a function="
+            .. tostring(type(store.insert) == "function"))
+        if type(store.insert) == "function" then
+            table.insert(lines, "getCount via method=" .. store:getCount("iron-plate")
+                .. " total=" .. store:getTotalItems())
+        end
+
+        table.insert(lines, "run /rns-store-reset to start over")
+    end
 
     game.print(table.concat(lines, "\n"))
+end)
+
+commands.add_command("rns-store-reset", "RNSRedux: drop the P2 store probe and its inventories", function()
+    local probe = storage.storeProbe
+    if probe ~= nil then
+        for _, key in pairs{"store", "chunkA", "chunkB"} do
+            local holder = probe[key]
+            local inventory = holder
+            if holder ~= nil and holder.inventory ~= nil then inventory = holder.inventory end
+            if inventory ~= nil and inventory.valid == true then inventory.destroy() end
+        end
+        storage.storeProbe = nil
+        game.print("rns-store-reset: probe and inventories dropped")
+    else
+        game.print("rns-store-reset: nothing to drop")
+    end
 end)
 
 --Debug command: sets the external bus rescan period and reads it back. The first
