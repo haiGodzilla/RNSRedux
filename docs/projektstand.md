@@ -1532,12 +1532,11 @@ Engine-Inventar seinen Inhalt — es sei denn, man serialisiert ihn weiterhin f�
 den Blueprint-Pfad, was einen Teil des Umbaus wieder aufhebt (aber nur dort, nicht
 im Betrieb).
 
-**Erschwerend, und ungeprüft:** Ob ein Item-Tag überhaupt eine LuaObject-Referenz
-tragen kann, habe ich nicht nachgelesen. Die Storage-Doku erlaubt Referenzen in
-`storage`; für Item-Tags gilt das nicht automatisch. Meine Aussage „dieser Pfad
-bricht" stützt sich auf den Unterschied zwischen Daten und Referenzen, **nicht auf
-eine geprüfte API-Aussage**. Vor dem Bauen ist das zu klären — es entscheidet, ob
-der Inhalt verloren geht oder serialisiert werden muss.
+**Erschwerend, aber jetzt geprüft:** `Tags` ist laut Doku ein `dictionary[string →
+AnyBasic]` mit den vier Grundtypen String, Boolean, Number, Table [1]. Item-Tags
+halten also **nur Daten, keine Objektreferenzen** — `AnyBasic` ist ein eigener
+Begriff neben `LuaObject` [1]. Ein Engine-Inventar kann damit **nicht** in ein
+Item-Tag. **Der Blueprint-Pfad bricht, das ist belegt und nicht mehr Vermutung.**
 
 **Konsequenz für den Zuschnitt:** Punkt 1 und 2 sind groß und berühren den
 Transferpfad, für den die P1-Abnahme (`truth` im Dump) schon existiert. Punkt 3 ist
