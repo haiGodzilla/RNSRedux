@@ -251,6 +251,30 @@ script.on_event(defines.events.on_player_setup_blueprint, onBlueprintSetup)
 script.on_event(defines.events.on_player_configured_blueprint, onBlueprintConfigured)
 script.on_event(defines.events.on_entity_settings_pasted, onSettingsPasted)
 
+--What the member drives actually hold, read from their own storage tables, next
+--to what they claim through storedAmount. The two are maintained by different
+--code paths, and a network-level comparison is meaningless while they disagree:
+--a difference here means the drives are already inconsistent on their own.
+local function driveTotals(network)
+    local drives, claimed, actual = 0, 0, 0
+    local fluidClaimed, fluidActual = 0, 0
+    for _, obj in pairs(network.connectedEntities or {}) do
+        if obj.storageArray ~= nil then
+            drives = drives + 1
+            claimed = claimed + (obj.storedAmount or 0)
+            for _, stack in pairs(obj.storageArray) do
+                actual = actual + (stack.count or 0)
+            end
+        elseif obj.fluidArray ~= nil then
+            fluidClaimed = fluidClaimed + (obj.storedAmount or 0)
+            for _, fluid in pairs(obj.fluidArray) do
+                fluidActual = fluidActual + (fluid.amount or 0)
+            end
+        end
+    end
+    return drives, claimed, actual, fluidClaimed, fluidActual
+end
+
 --Builds the counter dump for a single network controller. Shared by /rns-debug
 --and /rns-debug-nc, so the two can never drift apart.
 local function controllerCounterLine(obj)
@@ -275,6 +299,7 @@ local function controllerCounterLine(obj)
     local partition = network.StoredPartition or {}
     local drive = partition.itemDrive or {}
     local external = partition.itemExternal or {}
+    local driveCount, driveClaimed, driveActual, fluidClaimed, fluidActual = driveTotals(network)
 
     return "NC " .. obj.entID
         .. " members=" .. members
@@ -284,6 +309,8 @@ local function controllerCounterLine(obj)
         .. " cache=" .. cachedStacks
         .. " drive=" .. tostring(drive.storedAmount) .. "/" .. tostring(drive.capacity)
         .. " external=" .. tostring(external.storedAmount) .. "/" .. tostring(external.capacity)
+        .. " truth=" .. driveCount .. "/" .. driveClaimed .. "/" .. driveActual
+        .. " fluidTruth=" .. fluidClaimed .. "/" .. fluidActual
 end
 
 --Debug command: dumps the network bookkeeping from inside the mod.

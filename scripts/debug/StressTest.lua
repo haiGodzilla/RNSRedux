@@ -217,7 +217,24 @@ function StressTest.fill(typesPerDrive, amountPerType)
         end
     end
 
-    return string.format("drives=%d typesEach=%d amountEach=%d inserted=%d", drives, types, amountPerType, added)
+    --The fill writes straight into the drives' own tables, so the network
+    --bookkeeping never sees any of it. Ask the affected controllers for one
+    --rebuild, otherwise the first controller dump after a fill reports empty
+    --counters and the acceptance comparison measures the fixture, not the code.
+    local requested = 0
+    local flagged = {}
+    for _, obj in pairs(storage.entityTable or {}) do
+        local controller = obj.networkController
+        if controller ~= nil and controller.entID ~= nil and controller.network ~= nil
+            and flagged[controller.entID] == nil then
+            flagged[controller.entID] = true
+            controller.network.shouldRefresh = true
+            requested = requested + 1
+        end
+    end
+
+    return string.format("drives=%d typesEach=%d amountEach=%d inserted=%d rebuildRequested=%d",
+        drives, types, amountPerType, added, requested)
 end
 
 --Verification: what the network actually sees, including power state.
