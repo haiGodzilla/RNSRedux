@@ -25,7 +25,7 @@ fünf Angaben:
 | `behoben` | behoben **und** gemessen |
 | `kein Fehler` | nachgerechnet oder gemessen, unkritisch |
 
-Stand: Commit `??`. Die Reihenfolge ist keine Priorisierung.
+Stand: Commit `ca5e457`. Die Reihenfolge ist keine Priorisierung.
 
 ## 1. Offen
 
