@@ -2069,12 +2069,9 @@ trägt ihn.
 
 ### 7.19 Was noch offen ist
 
-1. **Die Mouseover-Anzeige** zeigt `0/0`, der Klick auf denselben Drive die richtige
-   Füllung. Die Prototypen tragen keine `x / y`-Zeichenkette, die Zahl kommt also
-   aus dem Code: entweder die Item-Beschreibung (`ItemDrives.lua:335`, aus
-   `DataConvert_EntityToItem`) oder die GUI-Zeile (`372`, `429`). `0/0` verlangt,
-   dass **beide** Werte null sind. **Ungemessen** — es fehlt die Angabe, worüber
-   genau gefahren wird.
+1. **Die Mouseover-Anzeige** zeigt `0/0`, der Klick die richtige Füllung. Geklärt in
+   7.20: der Drive ist ein `container` mit `inventory_size = 0`, und Factorio zeigt
+   beim Hover das Inventar. **Behebung offen**, eigener Schritt.
 2. **Die Chunk-Größe** (`CHUNK_INITIAL = 1024`, 7.15). Eigener Schritt.
 3. **Die Item-Verteilung beim Abbau** (Andre). Eigener Schritt, weil sie denselben
    Einbau-Pfad benutzt.
