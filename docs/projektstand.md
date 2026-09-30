@@ -1816,6 +1816,39 @@ kommt.
 
 **Der Umbau selbst ist unberührt davon** und getestet werden muss er so oder so.
 
+### 7.13 Die Blockade ist verdrahtet, an der einzig richtigen Stelle
+
+**Andre hat Weg 1 gewählt.** Umgesetzt in `BaseNet:insert_item_into_drive`
+(Commit `1142444`).
+
+**Die Stelle war nicht die, die ich vorgeschlagen hatte, und der Grund ist
+wichtig.** Ich hatte `add_or_merge_basic_item` genannt. Dort wäre es **zu spät**:
+`insert_item_into_drive` schneidet den Quellstapel **vor** dem Einlagern zusammen
+(`local splitStack = inv_item:split(...)`), und `item.count = inv_item.count`
+überträgt den reduzierten Stand in das echte Inventar. Eine Ablehnung **nach** dem
+Split würde das Item also **vernichten** statt es liegen zu lassen.
+
+Die Prüfung sitzt deshalb **vor** dem Split:
+
+```lua
+if not ItemStore.isStorable(inv_item) then return transferCapacity end
+```
+
+`transferCapacity` bleibt unverändert, der Aufrufer geht zum nächsten Drive oder
+zum nächsten Item. Kein Verlust, keine Schleife.
+
+**Und es ist genau eine Stelle:** Alle Drive-Einlagerungen laufen durch
+`insert_item_into_drive` — Inventar, Cursor und IO-Bus. Bedarfsgesteuerte Zwischen-
+lagerungen in der Anlage (`baseInv`, `targetInventory`) laufen an der Politik
+vorbei, weil dort noch nichts im Netz landet.
+
+**Bewusst nicht abgedeckt: `DataConvert_ItemToEntity`.** Ein Blueprint, der vor
+dieser Änderung gebaut wurde, soll seinen Inhalt **behalten** statt ihn an einer
+Politikprüfung auf einem Ladepfad zu verlieren. Das ist Wiederherstellung, kein
+Eingang. **Und der Stresstest umgeht sie ebenfalls**, weil er
+`add_or_merge_basic_item` direkt ruft — er füllt nur normale Items, und er ist ein
+Werkzeug.
+
 ## 8. Offene technische Schulden
 
 - `NetworkBase.addConnectables`, Zeilen 183/186/191: drei Prüfungen mit `and`

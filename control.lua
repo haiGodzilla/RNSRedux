@@ -569,6 +569,13 @@ commands.add_command("rns-store-test", "RNSRedux: P2 store probe. First call bui
         store:insert{name = "iron-plate", count = 50}
         store:insert{name = "copper-plate", count = 7}
 
+        --The policy fence, seen from the outside. Without a quality mod there are no
+        --quality items to feed it, so this shows the function, not the wiring -- the
+        --wiring is checked by reading insert_item_into_drive and by the truth column.
+        local plainStorable = ItemStore.isStorable{name = "iron-plate", count = 1}
+        local bareStorable = ItemStore.isStorable{name = "iron-plate", count = 1, quality = "normal"}
+        local fancyStorable, fancyWhy = ItemStore.isStorable{name = "iron-plate", count = 1, quality = "legendary"}
+
         --The array question on a throwaway inventory, so the store's counters stay
         --clean. pcall so the API message becomes data rather than an error.
         local probeInv = game.create_inventory(10)
@@ -641,6 +648,9 @@ commands.add_command("rns-store-test", "RNSRedux: P2 store probe. First call bui
             .. " iron=" .. store:getCount("iron-plate")
             .. " copper=" .. store:getCount("copper-plate")
             .. " used=" .. store:getTotalItems())
+        table.insert(lines, "policy: no quality field=" .. tostring(plainStorable)
+            .. " explicit normal=" .. tostring(bareStorable)
+            .. " legendary=" .. tostring(fancyStorable) .. " (" .. tostring(fancyWhy) .. ")")
         table.insert(lines, "array insert ok=" .. tostring(arrayOk) .. " result=" .. tostring(arrayResult)
             .. " coal=" .. arrayCoal .. " stone=" .. arrayStone)
         table.insert(lines, "quality: legendary insert accepted=" .. tostring(legendaryAccepted)
