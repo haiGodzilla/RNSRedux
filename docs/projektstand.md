@@ -1420,7 +1420,7 @@ damit Versicherung gegen Stack-Size-Mods, nicht gegen Vanilla.
 
 ### 7.3 Erster Probelauf: alle drei Engine-Annahmen bestätigt
 
-Commit `??`. Zwei Aufrufe von `/rns-store-test` um einen Speicher-/Ladezyklus.
+Commit `3e27dd0`. Zwei Aufrufe von `/rns-store-test` um einen Speicher-/Ladezyklus.
 Ausgabe des Laufs, wörtlich:
 
 ```
