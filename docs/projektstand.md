@@ -305,13 +305,35 @@ bleiben.
 nicht (5.3). Geprüft ist damit die Behauptung, um die es geht: die Entfernung ist
 ein Ereignis und wird gefangen, ohne Takt.
 
-### 5.8 Offen: die Entnahme auf gesundem Aufbau
+### 5.8 Die Entnahme: offen, Verdacht eingegrenzt
 
-`NetworkBase.lua:888` ist die zweite Buchungsstelle und noch ungemessen. Auf dem
-Phantom-Spielstand ist sie nicht prüfbar (5.6). Erwartung auf einem frischen
-Aufbau: Blick auf einen Netzinhalt, Drag ins Inventar, `/rns-debug-nc` — `tracked`
-und `drive` müssen um denselben Betrag fallen, und ein anschließendes
-`/rns-debug-refresh` darf nichts ändern.
+`NetworkBase.lua:888` ist die zweite Buchungsstelle und noch ungemessen. Am
+Phantom-Spielstand ist sie nicht prüfbar (5.6).
+
+**Erster Lauf auf gesundem Aufbau (Save `truth 20/260000/260000`): die Entnahme
+bucht nichts.** Zwei Dumps, 4.052 Ticks auseinander, dazwischen mehrere
+Klickversuche auch mit den Modifiern — `tracked` bleibt in allen zehn Netzen
+exakt auf `260000/16`. Es hat kein Transfer stattgefunden, weder in die eine noch
+in die andere Richtung. Andre meldet zusätzlich, dass die Shortcuts ebenfalls
+nichts bewirken.
+
+Offen ist damit nur noch, **welche** der beiden Schichten blockiert: der Klick
+oder der Transfer.
+
+Weil das GUI von außen nicht prüfbar ist — `NII.interaction` liest die Tags des
+Elements und die Klick-Modifier und kehrt bei fehlgeschlagenem
+`exists_in_network` **still** zurück (`NetworkInventoryInterface.lua:771`) —
+gibt es dafür jetzt ein Werkzeug: **`/rns-debug-extract [item] [menge]`** ruft
+`BaseNet.transfer_from_network_to_inv` direkt auf, mit einem Wrapper in der Form,
+die das GUI baut. Es meldet zusätzlich die drei Werte, die im Code über den
+Weiterlauf entscheiden: `can_insert`, freie Slots und freie Menge für das Item.
+
+Zwei Ausgänge, beide entscheidend:
+
+- **Der Befehl überträgt, der Klick nicht** → der Fehler sitzt in der GUI-Schicht
+  (Tags des Elements oder die Prüfung in Zeile 771), nicht im Transfer.
+- **Der Befehl überträgt auch nicht** → die Ursache steht in der Ausgabe
+  (`can_insert=false`, `emptyStacks=0`, `insertable=0`) oder wirft eine Ausnahme.
 
 Dabei mitprüfen: dass ein Ziehen die Menge liefert, die die Anzeige zeigt. Wenn
 die Anzeige 100 nennt und der Drag 1 liefert, ist das ein echter Befund — er
@@ -321,6 +343,35 @@ Nicht geprüft und bewusst offen: Save/Load mit einem Transfer dazwischen. Der
 Wert in `storage` übersteht den Ladezyklus, weil `DataConvert` für Blueprints
 greift und die Objekte ansonsten unverändert in `storage` liegen — aber das ist
 gelesen, nicht gemessen.
+
+### 5.9 Prüfschritte für den nächsten Lauf
+
+**Eine Frage vorweg, weil sie die Antwort vervollständigt:** Kam beim Klicken eine
+Meldung, und steht in `factorio-current.log` ein `RNSRedux error:`? Ein Fehler im
+GUI-Pfad wird von `Util.safeCall` abgefangen (`utils/Util.lua:13–17`), im Chat
+gemeldet und per `log()` in die Datei geschrieben — dann schließt
+`onGuiClicked` das Fenster. Konkret prüfen:
+
+```bash
+grep "RNSRedux error" "$HOME/Library/Application Support/factorio/factorio-current.log"
+```
+
+1. Das Werkzeug direkt aufrufen, ohne GUI:
+
+   ```
+   /rns-debug-extract
+   ```
+
+2. Ausgabe ablesen. Vier Zahlen sind entscheidend:
+   `can_insert`, `emptyStacks`, `insertable` und `left`.
+3. Dasselbe mit explizitem Item und größerer Menge, um eine Mengengrenze
+   auszuschließen:
+
+   ```
+   /rns-debug-extract iron-plate 100
+   ```
+
+4. Danach `/rns-debug-nc` und mit dem Dump vorher vergleichen.
 
 Danach ist der IO-Bus der nächste Posten (Abschnitt 6, offene Reihenfolge in
 `docs/ups-architektur.md` Abschnitt 6a).
