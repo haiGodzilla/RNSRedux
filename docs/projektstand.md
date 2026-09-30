@@ -332,42 +332,70 @@ voll noch blockiert. **Damit ist die Entnahmebuchung selbst belegt.**
 Offen ist nur noch, warum der GUI-Klick nicht bis dorthin kommt. Zwei Stellen
 fallen dabei auf, beide still:
 
-- `NII.interaction` kehrt ohne Meldung zurück, wenn
-  `BaseNet.exists_in_network(obj.networkController, obj.entID)` falsch ist
-  (`NetworkInventoryInterface.lua:788`).
-- `NII.interaction` hat **keinen Zweig für `RNS_NII_PInv_*`**. Die Buttons der
-  Spielerinventar-Spalte werden erzeugt, aber kein Klick-Handler liest sie —
-  dort ist nur `RNS_NII_Insert`, `RNS_NII_IDInv` und `RNS_NII_FDInv` bedient
-  (`NetworkInventoryInterface.lua:790–799`). Aufgefallen beim Lesen, nicht
-  gemessen.
+### 5.9 Klick-Spur: der Klick kommt durch, der Fehler sitzt tiefer
 
-Dazu passt eine zweite Lücke im selben Muster: der Sortierschalter
-`RNS_NII_SortOrder` wird nur im Klick-Pfad behandelt, ein Schalter feuert aber
-`on_gui_element_changed`, und dort fehlt der `RNS_NII`-Zweig
-(`Gui.lua:170–215`). Auch gelesen, nicht gemessen.
+Erster Spur-Lauf (Commit `31d2347`). Drei Klicks, jeder läuft bis in den Handler:
 
-### 5.9 Klick-Spur für den nächsten Lauf
+```
+click 'RNS_NII_IDInv_16' button=2 shift=false ctrl=false
+nii 'RNS_NII_IDInv_16' count=1 tags=yes id=28 stack=true obj=yes inNetwork=true
+click 'RNS_NII_Insert' button=2 shift=false ctrl=false
+nii 'RNS_NII_Insert' count=1 tags=yes id=28 stack=false obj=yes inNetwork=true
+```
 
-Weil von außen nicht unterscheidbar ist, ob der Klick nie ankommt oder ob der
-Handler früh zurückkehrt, schreibt der Code jetzt bei jedem Klick auf ein eigenes
-Element eine Zeile nach `script-output/rns-click.txt` (Commit `31d2347`,
-**temporär, vor dem Release zu entfernen**):
+Damit ist die GUI-Verkabelung **ausgeschlossen**: Der Handler läuft, die Tags
+sind da, die ID löst auf, `exists_in_network` ist wahr, und die Klickart ergibt
+`count=1`. Der stille Ausstieg in Zeile 788 war nicht die Ursache. Der Fehler
+sitzt in oder hinter `NII.transfer_from_idinv`.
 
-- `GUI.on_gui_clicked` protokolliert Name, Maustaste, Shift und Strg — vor der
-  GUI-Gültigkeitsprüfung, die selbst eine der Stellen ist, an denen ein Klick
-  verschwinden kann.
-- `NII.interaction` protokolliert, wovon seine Zweige abhängen: Tags vorhanden,
-  die ID, Stack vorhanden, und das Ergebnis von `exists_in_network`.
+Was die Spur **nicht** hergibt und deshalb offen bleibt: ob die Funktion früh
+zurückkehrt, ob `transfer_from_network_to_inv` scheitert, oder ob sie wirft.
 
-Lesart:
+Ein Nebenwert, der nicht aus dem Gedächtnis beantwortet wird: `button=2`. Ob das
+die linke oder die rechte Maustaste ist, ist **nicht** belegt — die Dokumentation
+nennt die Zahlenwerte von `defines.mouse_button_type` nicht, und ein
+`button=2` bei `count=1` widerspricht der naheliegenden Annahme. Die Spur
+schreibt deshalb zusätzlich `left=` und `right=` mit. Belegt ist nur: Die
+Zuordnung im Code greift konsistent, `count=1` und `-2` treffen verschiedene
+Zweige.
 
-| Dateiinhalt | Bedeutung |
+**Verdacht, aus dem Code gelesen.** Der Transfer sucht einen Drive, dessen
+gespeicherter Stapel **exakt** zum übergebenen passt
+(`compare_itemstacks(storedItem, exact)` mit `exact=true`,
+`NetworkBase.lua:1009`). Diese Prüfung vergleicht `health`, `ammo`,
+`durability`, `modified`, `tags` und `extras`. Scheitert sie, findet die Suche
+nichts und kehrt **ohne Meldung** zurück. Der Klick übergibt einen Stapel aus dem
+`interfaceCache`, `/rns-debug-extract` dagegen eine frische Vorlage aus
+`Itemstack.create_template` — der Unterschied zwischen funktionierendem Befehl
+und stummem Klick steckt in genau diesen Feldern.
+
+Die Spur (Commit `ee1b83d`, **temporär, vor dem Release zu entfernen**). protokolliert deshalb im zweiten Lauf:
+
+| Zeile | Bedeutung |
 |---|---|
-| Nur `click '…'`-Zeilen, keine `nii …`-Zeilen | Der Klick kommt an, aber die Weiche `string.match(name, "RNS_NII")` oder die Prüfung in `Gui.lua:150` schluckt ihn. |
-| Keine `click`-Zeile für den Button | Der Klick erreicht `on_gui_click` nicht — dann ist der Handler nicht registriert oder das Element ist nicht klickbar. |
-| `nii '…RNS_NII_IDInv_1' tags=nil` | Der Button verliert seine Tags, dann wirft die nächste Zeile. |
-| `… inNetwork=false` | Der stille Ausstieg in Zeile 788. Das NII wäre dann nicht als Mitglied geführt. |
-| `nii '…' count=0` | Die Maustaste wird nicht als links erkannt, die Menge bleibt null. |
+| `idinv stack name=… count=… modified=… netBefore=…` | Was der Klick mitbringt. Keine Zeile → `tags.stack` ist leer und `Itemstack:reload` bekommt nichts. |
+| `idinv match stored=true loose=true exact=false …` | Der Stapel passt nur lose. Dann ist eines der sechs Felder die Ursache, und `clickedModified`/`storedModified`/`…Extras` grenzen es ein. |
+| `idinv match stored=false` | Der erste Drive hält das Item gar nicht — dann prüft die Suche im falschen Netz. |
+| `idinv result amount=… net a->b player c->d` | Der Aufruf ist durchgelaufen. `b` gleich `a` → er hat nichts gefunden. |
+| Nur `idinv stack …` und `idinv match …`, kein `result` | Der Aufruf hat **geworfen**. Dann steht die Meldung in `factorio-current.log`. |
+
+Dazu die Meldungsspur, die im ersten Lauf nicht abgefragt wurde:
+
+```bash
+grep "RNSRedux error" "$HOME/Library/Application Support/factorio/factorio-current.log"
+```
+
+`GUI.on_gui_clicked` wird in `control.lua` über `Util.safeCall` geführt, und
+`Util.safeCall` schreibt jeden Fehler per `log()` in die Datei
+(`utils/Util.lua:13–17`). Ein Wurf im Klickpfad steht also dort.
+
+**Zwei Stellen, die beim Lesen aufgefallen und weiterhin ungemessen sind:**
+`NII.interaction` hat keinen Zweig für `RNS_NII_PInv_*` — die Buttons der
+Spielerinventar-Spalte erzeugt das GUI, aber kein Klick-Handler liest sie
+(`NetworkInventoryInterface.lua:790–799`). Und der Sortierschalter
+`RNS_NII_SortOrder` wird im Klick-Pfad behandelt, während ein Schalter
+`on_gui_element_changed` auslöst, wo der `RNS_NII`-Zweig fehlt
+(`Gui.lua:170–215`).
 
 Nicht geprüft und bewusst offen: Save/Load mit einem Transfer dazwischen. Der
 Wert in `storage` übersteht den Ladezyklus, weil `DataConvert` für Blueprints
