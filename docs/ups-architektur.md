@@ -378,22 +378,25 @@ Punkt 3 kam trotzdem zuerst, mit Absicht: Er ist der kleinste Eingriff, ändert
 nicht, was transferiert wird, und braucht keine neue Vergleichsgrundlage. Punkt 1
 ist der größere Umbau, weil er den Slot-Index als Vergleichsbasis aufgibt.
 
-Erster Eingriff umgesetzt (`0db27d7`, `docs/projektstand.md` 6.9) und gemessen
-(`docs/projektstand.md` 6.10): Der External-Bus liest seinen Container nur noch,
-wenn sich die Gesamtzahl geändert hat, mit einem erzwungenen Vollaufbau als Netz.
-`avg` fiel von 2,756 auf 1,088 ms, die Buchhaltung blieb exakt.
+**Zwei Eingriffe umgesetzt** (`0db27d7` Lesekürzung, `??` Slot-Fingerabdruck),
+beide am External-Bus, weil er 82 % der gemessenen Buskosten trägt:
 
-**Der Zähler belegt den Mechanismus** (`docs/projektstand.md` 6.11): Über 16.573
-Ticks wurden 6.630 Sweeps gezählt, erwartet 16.573 × 2/5 = 6.630, und der nicht
-übersprungene Anteil ist 332 von 6.630, also genau der erzwungene Volllauf alle 20
-Sweeps. Die Abkürzung greift bei 95 % der Sweeps.
+- Der Container wird nur noch gelesen, wenn sich seine Gesamtzahl geändert hat
+  (`docs/projektstand.md` 6.9). `avg` fiel damit von 2,756 auf 1,088 ms, die
+  Buchhaltung blieb exakt.
+- Beim Lesen wird nur noch dann ein frischer Itemstack pro Slot gebaut, wenn der
+  Slot sich wirklich geändert hat (`docs/projektstand.md` 6.17).
 
-**Aber das ist der Bestfall, und damit offen, was sie in der Praxis wert ist.**
-Der Aufbau liest Container, die sich nie ändern. Die Trefferquote folgt
-`1 - exp(-r / 12)` mit `r` = Items pro Sekunde pro Container; die Kipprate liegt
-bei 8,3 Items/s. **Punkt 1 der Liste hilft bei jeder Rate, die Abkürzung nur bei
-langsamen Containern** — die Kurve ist damit die Entscheidungsgrundlage für den
-nächsten Eingriff. Messwerkzeug: `/rns-stress-drain` (`docs/projektstand.md` 6.12).
+**Die Lesekürzung greift in Abhängigkeit von der Änderungsrate.** Ein Treffer ist
+ein Sweep, der eine Änderung sieht; bei `r` Items pro Sekunde und Container und 12
+Lesetakten pro Sekunde ist die Trefferquote `r / 12`. Gemessen und auf zwei
+Nachkommastellen bestätigt: 8,35 % gegen 8,33 % bei `r = 1`
+(`docs/projektstand.md` 6.13). Kipprate `r = 6`, ab `r = 12` wertlos. Bei 1 Item/s
+bleiben 92 % der Sweeps übersprungen — der Bereich, in dem ein External-Bus
+typischerweise arbeitet.
+
+**Der Slot-Fingerabdruck hilft dagegen bei jeder Rate**, weil er die Arbeit pro
+gelesenem Sweep senkt statt deren Zahl.
 
 **Unerklärt und kleiner:** eine Zerlegung geht um 0,21 ms nicht auf, und die
 9 % Mehrkosten aus 6.6 haben keine Ursache. Möglicherweise derselbe Posten.
@@ -510,10 +513,16 @@ Drei Dinge prüfen den Aufbau, bevor die Zahl etwas wert ist:
   für einen Eingriff am Lesepfad** — sie geht selbst auf (Sweeps pro Tick × Busse ×
   Messdauer, Sicherheitsabruf alle `RNS_ExternalStorage_Rescan`) und braucht keinen
   A/B-Lauf. Siehe `docs/projektstand.md` 6.11.
-- `/rns-bus-skip <n>` schaltet die Abkürzung des External-Busses ab (`1`) oder an
-  (`20`), **liest den Wert zurück** und nullt die Zähler. Als A/B-Werkzeug gedacht
-  — aber erst nach der Zählung entscheiden, denn ein A/B-Lauf über einen
-  Konsolen-Ausdruck ist nur so gut wie die Prüfung, dass der Ausdruck ankam.
+- `/rns-bus-skip <n>` schaltet die Lesekürzung des External-Busses ab (`1`) oder an
+  (`20`), **liest den Wert zurück** und nullt die Zähler.
+- `/rns-bus-scan on|off` schaltet den Slot-Fingerabdruck ab oder an, **liest den
+  Wert zurück** und nullt die Zähler. Der Dump-Kopf zeigt `busScan=<an/aus>
+  hits=<übersprungen> full=<neu gebaut>`; `hits` soll im eingeschalteten Zustand
+  die Zahl der Neuaufbauten verdrängen. Nach einem Save/Load steht beides auf der
+  Code-Vorgabe, die Befehle müssen erneut laufen.
+- **Der Korrektheitsbeweis für einen Eingriff am Lesepfad ist der A/B-Vergleich
+  der Summen**, nicht die Zählung allein: `tracked`, `truth` und `busTruth` müssen
+  bei beiden Schalterstellungen identisch sein (`docs/projektstand.md` 6.18).
 
 **Stressaufbau.** `/rns-stress-build <stationen> <drivesProStation> [busseProStation]`,
 dann

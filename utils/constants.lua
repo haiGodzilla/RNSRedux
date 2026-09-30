@@ -104,6 +104,11 @@ Constants.Settings = {
     RNS_BaseItemIO_TransferCapacity = 1,
     RNS_FluidIO_Tick = 5,
     RNS_ExternalStorage_Tick = 5,
+    --Cheap fingerprint check before rebuilding a slot's item stack. On by default:
+    --without it every sweep allocates an Itemstack for all 48 slots of every
+    --container, which is the measured post in the external bus. Turning it off
+    --restores the old path and is what proves the two behave the same.
+    RNS_ExternalBus_FastScan = true,
     --How many sweeps an external bus may skip reading its container before it is
     --forced to read it anyway. Bounds the staleness of the cache in the one case
     --the cheap check cannot see: a container whose total stays the same while its

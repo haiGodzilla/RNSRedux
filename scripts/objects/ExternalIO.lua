@@ -316,7 +316,45 @@ function EIO:update(network, periodic)
             local inv = self.focusedEntity.thisEntity.get_inventory(i)
             if BaseNet.inventory_is_sortable(inv) then inv.sort_and_merge() end
             for j = 1, #inv do
+                --Fast path: most sweeps find every slot exactly as it was. Four cheap
+                --comparisons replace building a fresh Itemstack per slot, which reads
+                --about twenty engine fields and allocates two tables -- for all 48
+                --slots of every container, twelve times a second, per bus.
+                --The fields compared are the ones a container can change on its own:
+                --a turret empties its magazine, a tool wears down, damage lowers
+                --health. Everything else an item carries (tags, extras, equipment
+                --grid, blueprint data) is set when it enters the container and does
+                --not change while it lies there.
+                --Anything that does not match falls through to the unchanged path
+                --below, so a miss only costs the comparison.
+                if Constants.Settings.RNS_ExternalBus_FastScan then
+                    local cachedSlot = self.cache[j]
+                    if cachedSlot ~= nil then
+                        --One reference to the slot, reused: every inv[j] is a fresh
+                        --LuaItemStack and each field read on it crosses into the engine.
+                        local slot = inv[j]
+                        local slotCount = (slot.valid_for_read == true) and slot.count or 0
+                        local emptySlot = slotCount <= 0
+                        local emptyCache = cachedSlot.name == "RNS_Empty"
+                        if emptySlot and emptyCache then
+                            self.fastScanHits = (self.fastScanHits or 0) + 1
+                            goto continue
+                        end
+                        if not emptySlot and not emptyCache
+                            and cachedSlot.name == slot.name
+                            and cachedSlot.count == slotCount
+                            and (cachedSlot.ammo or 0) == ((slot.type == "ammo") and slot.ammo or 0)
+                            and (cachedSlot.durability or 0) == ((slot.is_tool == true) and slot.durability or 0)
+                            and (cachedSlot.health or 1) == (slot.health or 1) then
+                            self.storedAmount = self.storedAmount + 1
+                            self.fastScanHits = (self.fastScanHits or 0) + 1
+                            goto continue
+                        end
+                    end
+                end
+
                 local itemstack = Itemstack:new(inv[j]) or {name = "RNS_Empty", count = 0}
+                self.fastScanFull = (self.fastScanFull or 0) + 1
                 self.storedAmount = self.storedAmount + (itemstack.count ~= 0 and 1 or 0)
                 if j > #self.cache then
                     if itemstack.name ~= "RNS_Empty" then

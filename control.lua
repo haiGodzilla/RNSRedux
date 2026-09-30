@@ -316,6 +316,19 @@ local function externalTotals(network)
     return buses, cached, actual, skipped, read, typeCount
 end
 
+--Reports the fast-scan mode and the per-bus counters, summed over the base. The
+--counters are monotonic, so two dumps are read as a difference; toggling the mode
+--zeroes them so a run is measured over one window.
+local function busScanStatus()
+    local hits, full = 0, 0
+    for _, obj in pairs(storage.entityTable or {}) do
+        hits = hits + (obj.fastScanHits or 0)
+        full = full + (obj.fastScanFull or 0)
+    end
+    return string.format("busScan=%s hits=%d full=%d",
+        tostring(Constants.Settings.RNS_ExternalBus_FastScan), hits, full)
+end
+
 --Builds the counter dump for a single network controller. Shared by /rns-debug
 --and /rns-debug-nc, so the two can never drift apart.
 local function controllerCounterLine(obj)
@@ -522,7 +535,7 @@ commands.add_command("rns-debug-nc", "RNSRedux: dump only the controller counter
     --drain stopped". Comparing two dumps by hand was the gap that made the previous
     --run unreadable: removed was printed once, early, and never again.
     game.print("rns-debug-nc: appended to script-output/rns-debug-nc.txt")
-    helpers.write_file("rns-debug-nc.txt", "\n# tick " .. game.tick .. " | " .. StressTest.drainStatus() .. "\n" .. text .. "\n", true)
+    helpers.write_file("rns-debug-nc.txt", "\n# tick " .. game.tick .. " | " .. StressTest.drainStatus() .. " | " .. busScanStatus() .. "\n" .. text .. "\n", true)
 end)
 
 --Debug command for M1: exercises ItemStore against a scratch inventory, without
@@ -583,6 +596,29 @@ commands.add_command("rns-bus-skip", "RNSRedux: set the external bus rescan peri
 
     game.print("rns-bus-skip: period " .. tostring(previous) .. " -> "
         .. tostring(Constants.Settings.RNS_ExternalStorage_Rescan)
+        .. ", counters zeroed on " .. zeroed .. " buses")
+end)
+
+commands.add_command("rns-bus-scan", "RNSRedux: toggle the external bus fast scan. <on|off>", function(event)
+    local want = string.lower(event.parameter or "")
+    if want ~= "on" and want ~= "off" then
+        game.print("rns-bus-scan: usage /rns-bus-scan on|off")
+        return
+    end
+    local previous = Constants.Settings.RNS_ExternalBus_FastScan
+    Constants.Settings.RNS_ExternalBus_FastScan = (want == "on")
+
+    local zeroed = 0
+    for _, obj in pairs(storage.entityTable or {}) do
+        if obj.fastScanHits ~= nil or obj.fastScanFull ~= nil then
+            obj.fastScanHits = 0
+            obj.fastScanFull = 0
+            zeroed = zeroed + 1
+        end
+    end
+
+    game.print("rns-bus-scan: " .. tostring(previous) .. " -> "
+        .. tostring(Constants.Settings.RNS_ExternalBus_FastScan)
         .. ", counters zeroed on " .. zeroed .. " buses")
 end)
 

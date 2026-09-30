@@ -1171,7 +1171,77 @@ rund 8 % von 4,10 ms = 0,34 ms — gemessen waren es rund 0,42 ms. Die 0,21 ms
 Differenz und diese 0,08 ms könnten dieselbe Ursache haben, aber das ist eine
 Vermutung, keine Messung.
 
-## 7. Offene technische Schulden
+### 6.17 P5-Punkt 1: der Slot-Durchlauf
+
+Bisher baute jeder Buslauf für **jeden Slot** des Containers einen frischen
+Itemstack: `Itemstack:new(inv[j])` liest rund zwanzig Engine-Felder und legt zwei
+Tabellen an, dazu `Itemstack:reload(self.cache[j])` mit neuer Metatable. Bei 40
+Bussen, 48 Slots und 12 Sweeps pro Sekunde sind das **rund 23.000 Itemstacks und
+46.000 Tabellen pro Sekunde** — für einen Container, an dem sich meist nichts
+geändert hat.
+
+**Umgesetzt (Commit `??`): ein Fingerabdruck-Vergleich vor dem Neuaufbau.** Vier
+Feldvergleiche ersetzen den Neubau, wenn der Slot unverändert ist. Verglichen
+werden genau die Felder, die sich in einem Container von selbst ändern können:
+
+| Feld | warum |
+|---|---|
+| Belegung | leer geblieben ist der Normalfall |
+| `name`, `count` | Identität und Menge des Stapels |
+| `ammo` | ein Geschütz leert sein Magazin |
+| `durability` | ein Werkzeug nutzt sich ab |
+| `health` | Beschuss senkt sie |
+
+Alles andere, was ein Item trägt — `tags`, `extras`, Ausrüstungsgitter,
+Blueprint-Daten — wird beim Einlagern gesetzt und ändert sich nicht, während es
+liegt. **Ein Treffer kann deshalb nur entstehen, wenn der Stapel wirklich
+derselbe ist.**
+
+**Ein Fehltreffer kostet nur den Vergleich**, nicht mehr: Stimmt eines der Felder
+nicht, läuft der **unveränderte** Pfad darunter vollständig durch. Der Vorfilter
+kann also keine Buchung verursachen, nur eine auslassen — und auslassen kann er
+sie nur bei identischem Stapel.
+
+**Zwei Zähler** pro Bus, `fastScanHits` und `fastScanFull`, gehen summiert in den
+Dump-Kopf:
+
+```
+# tick 12048 | drain=... | busScan=true hits=123456 full=789
+```
+
+`hits` ist die Zahl der übersprungenen Neuaufbauten. Im eingeschalteten Zustand
+soll `full` auf die Zahl der tatsächlichen Änderungen zusammenschrumpfen.
+
+### 6.18 Was der Lauf klären muss
+
+**Der Schalter** (Commit `??`):
+
+```
+/rns-bus-scan off     -- alter Pfad
+/rns-bus-scan on      -- Vorfilter (Code-Vorgabe)
+```
+
+Er setzt den Wert **und liest ihn zurück** und nullt die Zähler, damit ein Lauf
+über ein Fenster geht. **Nach einem Save/Load steht er auf der Code-Vorgabe**, der
+Befehl muss erneut laufen.
+
+**Der Korrektheitsbeweis ist der A/B-Vergleich.** Beide Läufe müssen bei
+`tracked`, `truth` und `busTruth` **identisch** sein. Weicht etwas ab, hat der
+Vorfilter eine Buchung unterschlagen — und dann ist er zu verwerfen, nicht zu
+reparieren. Der Vergleich belegt die Gleichheit aller Summen und aller
+Slot-Belegungen; er beweist nicht, dass jede einzelne Buchung dieselbe war. Das
+ist eine Stichprobe über die Summen, und sie ist stark genug, weil ein
+unterschlagener Stapel an drei Stellen gleichzeitig auffallen müsste.
+
+**Und der Gewinn** ist die Differenz von `mod-RNSRedux` zwischen den beiden
+Läufen. Erwartung: Der Slot-Durchlauf ist ein erheblicher Teil der 513 µs pro
+Buslauf, aber ich sage keine Zahl voraus — die letzten beiden Runden haben
+gezeigt, dass meine Vorhersagen für den Anteil einzelner Abschnitte nicht tragen.
+
+**Was offen bleibt:** `sort_and_merge` (Zeile 317) und `add_item_to_interface_cache`
+bleiben unangetastet. Das zweite ist ein linearer Scan pro Änderung (Plan-Punkt c)
+und gehört zu P3. Wenn der Vorfilter wenig bringt, sind das die nächsten
+Kandidaten.
 
 Aus dem 1:1-Port bekannt, bewusst nicht angefasst:
 
