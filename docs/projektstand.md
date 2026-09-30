@@ -203,7 +203,7 @@ Im Code:
   und einmal `count_empty_stacks(true, false)` auf einem echten Inventar ab.
 - `insert_item_into_external` ruft am Ende jeder Charge noch
   `external:update(self)` (Zeile 1101) — ein weiterer voller Scan im Transfer.
-- `NetworkController.lua:119–128` prüft fünf globale Tick-Modulo (Detector 3,
+- `NetworkController.lua:124–133` prüft fünf globale Tick-Modulo (Detector 3,
   ItemIO 4, FluidIO 5, ExternalStorage 5). Bei Tick 20 laufen ItemIO und
   ExternalStorage zusammen, bei Tick 60 alle vier. Der Spike ist damit dauerhaft
   rund vier- bis fünfmal so hoch wie nötig.

@@ -93,12 +93,12 @@ werden clientseitig aufbereitet. Bei rund 10.000 Kabeln mit je zwei bis drei
 Objekten sind das zehntausende Renderobjekte. Für UPS unerheblich, für die
 Bildrate nicht. Ebenfalls neu im Plan.
 
-**i) Alle Controller refreshen im selben Tick.** `NetworkController.lua:92`
-prüfte `game.tick % self.updateTick == 0` mit `updateTick = 600`. Der Tick ist
-global, nicht entity-bezogen, also macht **jeder** Controller sein `doRefresh`
-im selben Tick. Bei 20 Stationen sind das 20 vollständige Netzaufbauten
-gleichzeitig, alle 10 Sekunden. Gemessen: 134,731 ms in einem einzelnen Tick
-bei 20 Stationen und 1.000 Drives (Tab-Out-Frames ausgenommen).
+**i) Alle Controller refreshten im selben Tick.** `NetworkController.lua:103`
+prüfte `game.tick % self.updateTick == 0`, damals mit `updateTick = 600`. Der
+Tick ist global, nicht entity-bezogen, also machte **jeder** Controller sein
+`doRefresh` im selben Tick. Bei 20 Stationen waren das 20 vollständige
+Netzaufbauten gleichzeitig, alle 10 Sekunden. Gemessen: 134,731 ms in einem
+einzelnen Tick bei 20 Stationen und 1.000 Drives (Tab-Out-Frames ausgenommen).
 
 **Behoben in zwei Schritten.** Zuerst leitete jeder Controller aus seiner
 `unit_number` eine feste Phase ab, der Vollaufbau traf damit pro Tick höchstens
@@ -109,7 +109,7 @@ bei einer Strukturänderung sowie als Netz alle zwei Minuten pro Controller. Im
 Dauerzustand fällt kein Aufbau mehr an.
 
 Nicht behoben, gleiche Ursache eine Ebene tiefer:
-`NetworkController.lua:119–128` prüft fünf globale Tick-Modulo (Detector 3,
+`NetworkController.lua:124–133` prüft fünf globale Tick-Modulo (Detector 3,
 ItemIO 4, FluidIO 5, ExternalStorage 5). Bei Tick 20 laufen ItemIO und
 ExternalStorage zusammen, bei Tick 60 alle vier. Der Spike ist damit
 dauerhaft rund vier- bis fünfmal so hoch wie nötig.
