@@ -199,11 +199,19 @@ function StressTest.fill(typesPerDrive, amountPerType)
 
             drives = drives + 1
             for t = 1, types do
-                if obj:getRemainingStorageSize() <= 0 then break end
+                local room = obj:getRemainingStorageSize()
+                if room <= 0 then break end
                 local name = available[t]
                 local template = Itemstack.create_template(name)
                 if template ~= nil then
-                    added = added + obj:add_or_merge_basic_item(template, amountPerType)
+                    --The stack has to carry the count that is booked as
+                    --inserted. add_or_merge_basic_item stores the first stack
+                    --as given but adds `amount` to storedAmount, so a
+                    --placeholder count of 1 makes the drive claim a full load
+                    --while holding a single item.
+                    local chunk = math.min(amountPerType, room)
+                    template.count = chunk
+                    added = added + obj:add_or_merge_basic_item(template, chunk)
                 end
             end
         end
