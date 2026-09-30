@@ -275,6 +275,33 @@ local function driveTotals(network)
     return drives, claimed, actual, fluidClaimed, fluidActual
 end
 
+--What the external buses cache next to what their containers actually hold. The
+--controller rebuild reads the cache, not the container (NetworkBase.addConnectables
+--calls init_cache, which keeps an existing cache), so a stale cache looks
+--self-consistent in any two dumps. This is the only place the two are compared.
+local function externalTotals(network)
+    local buses, cached, actual = 0, 0, 0
+    for _, obj in pairs(network.connectedEntities or {}) do
+        if obj.cache ~= nil and obj.type == "item" then
+            buses = buses + 1
+            for i = 1, #obj.cache do
+                local entry = obj.cache[i]
+                if entry ~= nil and entry.name ~= "RNS_Empty" then
+                    cached = cached + (entry.count or 0)
+                end
+            end
+            local focused = obj.focusedEntity ~= nil and obj.focusedEntity.thisEntity or nil
+            if focused ~= nil and focused.valid == true then
+                for _, invIndex in pairs(obj.focusedEntity.inventory.output.values or {}) do
+                    local inv = focused.get_inventory(invIndex)
+                    if inv ~= nil then actual = actual + inv.get_item_count() end
+                end
+            end
+        end
+    end
+    return buses, cached, actual
+end
+
 --Builds the counter dump for a single network controller. Shared by /rns-debug
 --and /rns-debug-nc, so the two can never drift apart.
 local function controllerCounterLine(obj)
@@ -300,6 +327,7 @@ local function controllerCounterLine(obj)
     local drive = partition.itemDrive or {}
     local external = partition.itemExternal or {}
     local driveCount, driveClaimed, driveActual, fluidClaimed, fluidActual = driveTotals(network)
+    local busCount, busCached, busActual = externalTotals(network)
 
     return "NC " .. obj.entID
         .. " members=" .. members
@@ -311,6 +339,7 @@ local function controllerCounterLine(obj)
         .. " external=" .. tostring(external.storedAmount) .. "/" .. tostring(external.capacity)
         .. " truth=" .. driveCount .. "/" .. driveClaimed .. "/" .. driveActual
         .. " fluidTruth=" .. fluidClaimed .. "/" .. fluidActual
+        .. " busTruth=" .. busCount .. "/" .. busCached .. "/" .. busActual
 end
 
 --Debug command: dumps the network bookkeeping from inside the mod.
