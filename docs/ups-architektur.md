@@ -379,24 +379,29 @@ nicht, was transferiert wird, und braucht keine neue Vergleichsgrundlage. Punkt 
 ist der größere Umbau, weil er den Slot-Index als Vergleichsbasis aufgibt.
 
 **Zwei Eingriffe umgesetzt** (`0db27d7` Lesekürzung, `59871da` Slot-Fingerabdruck),
-beide am External-Bus, weil er 82 % der gemessenen Buskosten trägt:
+beide am External-Bus, weil er 82 % der gemessenen Buskosten trug. Gemessen über
+drei Runden (`docs/projektstand.md` 6.19, 6.20):
 
-- Der Container wird nur noch gelesen, wenn sich seine Gesamtzahl geändert hat
-  (`docs/projektstand.md` 6.9). `avg` fiel damit von 2,756 auf 1,088 ms, die
-  Buchhaltung blieb exakt.
-- Beim Lesen wird nur noch dann ein frischer Itemstack pro Slot gebaut, wenn der
-  Slot sich wirklich geändert hat (`docs/projektstand.md` 6.17).
+| Zustand | Buskosten (40 Busse, gemischt) | Anteil am Tick-Budget |
+|---|---|---|
+| vorher | 2,54 ms | 15 % |
+| Lesekürzung | 0,87 ms | 5,2 % |
+| Lesekürzung + Fingerabdruck | 0,41 ms | 2,5 % |
 
-**Die Lesekürzung greift in Abhängigkeit von der Änderungsrate.** Ein Treffer ist
-ein Sweep, der eine Änderung sieht; bei `r` Items pro Sekunde und Container und 12
-Lesetakten pro Sekunde ist die Trefferquote `r / 12`. Gemessen und auf zwei
-Nachkommastellen bestätigt: 8,35 % gegen 8,33 % bei `r = 1`
-(`docs/projektstand.md` 6.13). Kipprate `r = 6`, ab `r = 12` wertlos. Bei 1 Item/s
-bleiben 92 % der Sweeps übersprungen — der Bereich, in dem ein External-Bus
-typischerweise arbeitet.
+- Der Container wird nur noch gelesen, wenn sich seine Gesamtzahl geändert hat.
+  Die Trefferquote folgt `r / 12` (bestätigt auf zwei Nachkommastellen, Kipprate
+  `r = 6`, ab `r = 12` wertlos).
+- Beim Lesen wird ein Slot nur noch dann neu aufgebaut, wenn er sich geändert hat.
+  Im gesättigten Aufbau greift das bei **jedem** Slot (`full = 0`).
 
-**Der Slot-Fingerabdruck hilft dagegen bei jeder Rate**, weil er die Arbeit pro
-gelesenem Sweep senkt statt deren Zahl.
+**Der External-Posten ist damit abgeräumt.** Offen bleibt im Buspfad nur der
+Einlagerungspfad des **Item**-Busses — die drei Inventarabfragen pro
+Insert-Versuch (`NetworkBase.lua:1066–1069`), der kleinere Anteil und nur bei
+tatsächlichem Transfer.
+
+**Nächster Schritt ist P2, nicht mehr P5.** Begründung in `docs/projektstand.md`
+6.20: Der gemessene Handlungsbedarf ist weg (2,5 % des Budgets), die Skalierung
+ist P4s Thema, und P2 behebt einen Fehler statt einer Kostenstelle.
 
 **Unerklärt und kleiner:** eine Zerlegung geht um 0,21 ms nicht auf, und die
 9 % Mehrkosten aus 6.6 haben keine Ursache. Möglicherweise derselbe Posten.

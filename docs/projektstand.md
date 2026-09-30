@@ -1212,7 +1212,7 @@ Dump-Kopf:
 `hits` ist die Zahl der übersprungenen Neuaufbauten. Im eingeschalteten Zustand
 soll `full` auf die Zahl der tatsächlichen Änderungen zusammenschrumpfen.
 
-### 6.18 Was der Lauf klären muss
+### 6.18 Der Schalter und die Prüfung
 
 **Der Schalter** (Commit `59871da`):
 
@@ -1225,25 +1225,127 @@ Er setzt den Wert **und liest ihn zurück** und nullt die Zähler, damit ein Lau
 über ein Fenster geht. **Nach einem Save/Load steht er auf der Code-Vorgabe**, der
 Befehl muss erneut laufen.
 
-**Der Korrektheitsbeweis ist der A/B-Vergleich.** Beide Läufe müssen bei
-`tracked`, `truth` und `busTruth` **identisch** sein. Weicht etwas ab, hat der
-Vorfilter eine Buchung unterschlagen — und dann ist er zu verwerfen, nicht zu
-reparieren. Der Vergleich belegt die Gleichheit aller Summen und aller
-Slot-Belegungen; er beweist nicht, dass jede einzelne Buchung dieselbe war. Das
-ist eine Stichprobe über die Summen, und sie ist stark genug, weil ein
-unterschlagener Stapel an drei Stellen gleichzeitig auffallen müsste.
+**Der Korrektheitsbeweis ist eine innere Prüfung, nicht ein Vergleich über die
+Zeit.** Die Item-Busse exportieren während der Messung weiter, die Absolutwerte
+ändern sich also laufend. Gültig ist die Beziehung `tracked = drive + External`
+plus `truth` behauptet = tatsächlich und `busTruth` Cache = Container, in **jedem**
+Dump. **Meine frühere Vorgabe, die beiden Läufe müssten identisch sein, war
+falsch** — siehe `docs/projektstand.md` 6.19.
 
 **Und der Gewinn** ist die Differenz von `mod-RNSRedux` zwischen den beiden
-Läufen. Erwartung: Der Slot-Durchlauf ist ein erheblicher Teil der 513 µs pro
-Buslauf, aber ich sage keine Zahl voraus — die letzten beiden Runden haben
-gezeigt, dass meine Vorhersagen für den Anteil einzelner Abschnitte nicht tragen.
+Läufen. Die Streuung von Runde zu Runde ist dabei mindestens 0,26 ms (dieselbe
+Konfiguration maß 1,088 in 6.10 und 0,824 in 6.19), also **größer als der
+gemessene Unterschied von 0,192 ms**. Für eine belastbare Zahl braucht es drei
+Lesungen je Zustand; für die Entscheidung reicht die Mechanik, und die ist über
+die Zähler bewiesen.
 
 **Was offen bleibt:** `sort_and_merge` (Zeile 317) und `add_item_to_interface_cache`
 bleiben unangetastet. Das zweite ist ein linearer Scan pro Änderung (Plan-Punkt c)
-und gehört zu P3. Wenn der Vorfilter wenig bringt, sind das die nächsten
-Kandidaten.
+und gehört zu P3.
 
-Aus dem 1:1-Port bekannt, bewusst nicht angefasst:
+### 6.19 Der Vorfilter greift bei jedem Slot
+
+Zwei Läufe auf demselben gesättigten `10 20 4 mixed`-Stand, kein Abfluss.
+
+| Zustand | Dump-Kopf | `mod-RNSRedux` |
+|---|---|---|
+| Vorfilter an | `busScan=true hits=19200 full=0` | 0,632 / 0,247 / 5,045 |
+| Vorfilter aus | `busScan=false hits=0 full=65280` | 0,824 / 0,207 / 9,628 |
+
+**Beide Zähler gehen exakt auf.** `hits` und `full` werden über **alle** 40 Busse
+summiert, `busSkips` je Netz über dessen 2 External-Busse:
+
+- **An:** `busSkips` 730/770 je Netz → 40 gelesene Sweeps. 40 × 10 Netze × 48
+  Slots = **19.200** = `hits`. ✓
+- **Aus:** `busSkips` 2.340 → 4.768 je Netz, also Δ122 gelesene Sweeps. 122 × 10 ×
+  48 = **58.560** = 65.280 − 6.720. ✓
+
+**`full=0` im eingeschalteten Zustand heißt: jeder einzelne Slot-Vergleich war ein
+Treffer.** Über 400 volle Container-Durchläufe musste kein einziger Itemstack neu
+gebaut werden. Die Container sind gesättigt und statisch, der Vorfilter trifft
+also genau den Fall, für den er gedacht ist.
+
+**Ein Nebenbefund, der die Buchhaltung bestätigt:** `external=96/96` in beiden
+Läufen. Der Vorfilter zählt seinen Treffer als `storedAmount + 1`, das ist die
+Zahl der belegten Slots — 48 je Bus, 96 für zwei. Sie stimmt, also zählt der
+Vorfilter denselben Wert wie der Originalpfad.
+
+#### Zur Korrektheit, und zu einer falschen Vorgabe von mir
+
+**Ich hatte geschrieben, die beiden Läufe müssten bei `tracked`, `truth` und
+`busTruth` identisch sein. Das ist falsch.** Die Item-Busse exportieren während
+der Messung weiter, der Bestand sinkt also laufend; die drei Dumps tragen
+verschiedene Absolutwerte (268.290, 264.364, 260.000).
+
+**Die gültige Prüfung ist eine innere**, und sie hält in allen drei Dumps:
+
+```
+268290 = 258690 + 9600      (tracked = drive + External)
+264364 = 254764 + 9600
+260000 = 250400 + 9600
+```
+
+Dazu `truth` behauptet = tatsächlich und `busTruth` Cache = Container in jedem
+Dump. **Der Vorfilter bucht also denselben Wert wie der Originalpfad**, und das
+ist die Aussage, die zählt — nicht Gleichheit über die Zeit.
+
+#### Der Gewinn, und wie belastbar er ist
+
+`avg` fällt von 0,824 auf 0,632 ms, also **0,192 ms weniger**. `max` fällt von
+9,628 auf 5,045 ms, also um mehr als vier Millisekunden.
+
+**Aber die Zahl ist weich, und ich sage das deutlich.** Dieselbe Konfiguration
+(Vorfilter aus, Lesekürzung an) wurde in 6.10 mit **1,088 ms** gemessen und hier
+mit **0,824 ms**. Die Streuung von Runde zu Runde ist also mindestens **0,26 ms**
+— größer als der gemessene Unterschied selbst.
+
+Und eine Gegenrechnung: Im Fenster wurden 9,6 Neuaufbauten pro Tick vermieden
+(58.560 über 6.072 Ticks). 0,192 ms / 9,6 ergäbe **20 µs pro Neuaufbau** — für
+`Itemstack:new` mit rund zwanzig Feldzugriffen und zwei Tabellen ist das zu hoch.
+Der wahre Wert liegt vermutlich bei einem Drittel bis der Hälfte.
+
+**Was feststeht:** Die Arbeit ist weg — 58.560 Neuaufbauten und ebenso viele
+Metatabellen, belegt durch die Zähler, nicht erschlossen. **Was nicht feststeht:**
+wie viel Zeit das genau spart. Die Mechanik ist bewiesen, die Zahl nicht.
+
+### 6.20 Stand von P5 und Empfehlung
+
+Die Buskosten über die drei Runden, jeweils gegen die 0,221 ms ohne Busse:
+
+| Zustand | `avg` | Buskosten | Anteil am Budget |
+|---|---|---|---|
+| vor den Eingriffen | 2,756 | 2,54 ms | 15 % |
+| Lesekürzung | 1,088 | 0,87 ms | 5,2 % |
+| Lesekürzung + Vorfilter | 0,632 | 0,41 ms | **2,5 %** |
+
+**Der Ausgangsbefund ist damit erledigt.** 40 Busse kosteten 15 % des Tick-Budgets
+und skalierten linear — bei 160 Bussen 60 %. Jetzt sind es 2,5 %, bei 160 Bussen
+rund 10 %.
+
+**Was im Buspfad noch offen ist:** die drei Zählerabfragen pro Insert-Versuch im
+Einlagerungspfad — zweimal `get_item_count` und einmal `count_empty_stacks` auf
+einem echten Inventar (`NetworkBase.lua:1066–1069`). Das ist Plan-Punkt 1 in
+seiner ursprünglichen Formulierung, „gezielter Zugriff statt Inventarlesen". Er
+greift am Item-Bus, dem kleineren Anteil, und nur bei tatsächlichem Transfer.
+
+**Meine Empfehlung: hier aufhören und zu P2 gehen.** Drei Gründe:
+
+1. **Der gemessene Handlungsbedarf ist weg.** 2,5 % des Budgets bei 40 Bussen ist
+   kein Problem, das eine weitere Runde rechtfertigt — zumal die Streuung der
+   Messung inzwischen größer ist als der verbleibende Gewinn.
+2. **Die Skalierung ist das eigentliche Thema, und dafür ist P4 zuständig.**
+   Nicht die Kosten eines Buslaufs skalieren, sondern die Zahl der Läufe pro Tick.
+3. **P2 behebt einen Fehler, nicht eine Kostenstelle.** Ohne ItemStore kollabieren
+   Qualitätsstufen auf einen Eintrag, und die Handserialisierung erfindet bei
+   Munition und Haltbarkeit Werte. Das ist die Ursache, aus der dieses Projekt
+   überhaupt entstanden ist.
+
+**Wenn du beim Bus bleiben willst**, ist der nächste Schritt die Neuvermessung:
+drei Lesungen je Zustand statt einer, dann trägt die Zahl. Ein weiterer Eingriff
+ohne belastbare Differenz wäre ein Blindflug — und ich habe in dieser Sitzung
+zweimal eine Zuordnung behauptet, die nicht trug.
+
+## 7. Offene technische Schulden
 
 - `NetworkBase.addConnectables`, Zeilen 183/186/191: drei Prüfungen mit `and`
   statt `or` (`if x == nil and x.valid == false`). Crash statt sauberer Abbruch
