@@ -144,10 +144,13 @@ anzufassen: 1.0.3 „improving ups by ~50%", 1.0.18 Grid „every tick instead o
 1.0.30 „stop triggering anymore IO buses from working uselesslly", 1.0.39
 External Bus von 2 auf 5 Ticks, 1.0.40 „less laggy".
 
-**Behoben (Commit `beb263c`):** Die Bündelung ist weg — jeder Bus läuft auf
-seiner eigenen Phase aus der `unit_number`, der Sweep läuft jeden Tick. Gleiche
-Frequenz, gleicher Durchsatz, Arbeit verteilt. Das senkt die Spitze, nicht den
-Mittelwert; die Kontaktkosten bleiben der eigentliche Umbau.
+**Behoben (Commit `beb263c`, nachgefasst in `10154d6`):** Die Bündelung ist weg —
+jeder Bus läuft auf seiner eigenen Phase aus der `unit_number`. Das senkt die
+Spitze von 20,945 auf 13,990 ms, unter das Budget. Der erste Versuch ließ dabei
+den Mittelwert steigen, weil die Vorprüfungen (`check_focused_entity` über jeden
+Bus) weiter jeden Tick liefen; das Phasentor sitzt jetzt davor. Details in
+`docs/projektstand.md` 6.4 und 6.5. Die Kontaktkosten bleiben der eigentliche
+Umbau — der Offset senkt die Spitze, nicht den Mittelwert.
 
 ## 3. Zielarchitektur
 

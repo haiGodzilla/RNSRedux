@@ -648,28 +648,88 @@ Sweep trotzdem eine Warteschlange** — das ist P4.
 Nicht mitgemacht: die Fluid-Busse und der Detektor behalten ihre globalen Ticks.
 Der Offset senkt außerdem nur die Spitze, nicht den Mittelwert.
 
-### 6.4 Was der nächste Lauf klären muss
+### 6.4 Erste Offset-Messung: Spitze weg, Mittelwert gestiegen
 
-Ein Lauf auf demselben `10 20 4`-Stand, gleiche Bedingungen wie 6.2:
+Derselbe `10 20 4`-Stand, zwei Minuten, `/perf-avg-frames 600`:
 
-1. Syncen, Save laden, Datei leeren, zwei Minuten stehen lassen.
+| Aufnahme | `mod-RNSRedux` avg | min | max | `Update` avg | `Frame cycle` max |
+|---|---|---|---|---|---|
+| gebündelt (6.2) | 2,527 | 0,054 | 20,945 | 3,095 | 23,045 |
+| gephaset (6.3) | 2,878 | 1,776 | 13,990 | 3,447 | 17,208 |
+
+**Die Bündelung war die Ursache der Spitze — bestätigt.** `max` fällt von 20,945
+auf 13,990 ms, unter das Budget von 16,667. `Frame cycle` überschreitet es nur
+noch um 0,5 ms statt um 6,4.
+
+**Aber der Mittelwert ist um 0,35 ms gestiegen, und der Boden von 0,054 auf
+1,776 ms.** Das ist eine Verschlechterung, die ich eingebaut habe, und sie ist
+größer als der Gewinn: Die Mod kostet jetzt **jeden** Tick rund 1,8 ms, vorher
+fast nichts mit gelegentlichen Spitzen. Der Boden ist die interessantere Zahl,
+weil der Mittelwert Spitzen verwischt und der Boden zeigt, was dauerhaft anliegt.
+
+**Die Ursache stand im eigenen Kommentar.** `NC:updateExternalStorage` lief ab
+6.3 jeden Tick und rief `filter_externalIO_by_valid_signal` — und das ruft
+`signal_valid` **und** `check_focused_entity` auf jedem Bus
+(`NetworkBase.lua:1340–1355`). `check_focused_entity` validiert die Inventare des
+Containers. Fünffache Häufigkeit bei gleicher Arbeit pro Aufruf: Der Bus selbst
+wurde gephaset, seine Vorprüfungen nicht.
+
+### 6.5 Behoben (Commit `10154d6`)
+
+Das Phasentor sitzt jetzt **vor** den teuren Prüfungen statt nur vor dem Update.
+`EIO:is_periodic_tick()` wird zuerst gefragt; ein Bus in der falschen Phase kostet
+einen Modulo und sonst nichts. `signal_valid` und `check_focused_entity` laufen
+nur noch auf dem eigenen Tick des Busses — also mit der Häufigkeit von vor der
+Entzerrung.
+
+Erwartung für den nächsten Lauf auf demselben Stand:
+
+- `avg` zurück auf rund 2,4–2,5 ms — dieselbe Arbeit wie in 6.2, ohne die
+  Vorprüfungs-Overhead.
+- `min` fällt deutlich, aber **nicht** auf 0,054 zurück. Der Boden kann nicht
+  mehr bei null liegen, weil die Arbeit jetzt echt verteilt ist: im Mittel
+  entfallen rund neun Busläufe auf jeden Tick.
+- `max` bleibt unter dem Budget.
+
+Damit wäre der Offset genau das, was er sein soll: gleicher Mittelwert wie vorher,
+ohne die 21-ms-Spitze. Ob das gelingt, entscheidet der Lauf — nicht die Rechnung.
+
+**Was an dieser Messung unsicher ist und deshalb offen bleibt:**
+
+- Ob `max = 13,990` noch einen Ladeartefakt enthält. Der Save wurde für die
+  Messung geladen; `Frame cycle` max von 17,208 deutet auf keinen echten Stall,
+  aber ausschließen kann ich es nicht.
+- Ob der Bus-Lauf **gefüllt** war. Ohne Fill hätten die 20 Item-Busse nichts zu
+  exportieren, und die 2,3 ms stünden überwiegend auf der External-Seite. Das
+  entscheidet, welche Seite ich zuerst anfasse, und ist noch nicht bestätigt.
+- Ob die Phasen gleichmäßig verteilt sind. `min = 1,776` liegt **unter** dem
+  Mittel von 2,3 ms Busarbeit, es gibt also Ticks mit weniger als dem
+  Durchschnitt und entsprechend welche mit mehr. Die `entID`s des Aufbaus sind
+  geometrisch bedingt und liegen nicht gleichmäßig über die vier bzw. fünf
+  Phasen — bei den Item-Bussen sind zwei Restklassen deutlich stärker besetzt.
+  Ein Aufbau mit gestreuten `entID`s wäre der sauberere Maßstab; der Offset
+  selbst ist davon unberührt, weil er pro Bus rechnet.
+
+### 6.6 Was der nächste Lauf klären muss
+
+Ein Lauf auf demselben `10 20 4`-Stand:
+
+1. Syncen, Save laden, Datei leeren, zwei Sekunden warten.
 2. `/rns-stress-status` — `buses total=40 withTarget=40 inNetwork=40` und
-   `members=72` müssen stehen. Weicht etwas ab, ist der Aufbau nicht vergleichbar.
-3. `F4` → `show-time-usage`, `/perf-avg-frames 600`, `mod-RNSRedux` avg/min/max
-   ablesen.
+   `members=72` müssen stehen. Weicht etwas ab, ist der Lauf nicht vergleichbar.
+3. `F4` → `show-time-usage`, `/perf-avg-frames 600`, zwei Minuten stehen lassen,
+   **nicht** tabben, dann `mod-RNSRedux` avg/min/max ablesen.
 
-**Erwartung, die die Änderung prüft:** `avg` bleibt bei rund 2,5 ms (gleiche
-Arbeit), `max` fällt deutlich unter das Budget von 16,667 ms. Bleibt `avg`
-gleich und `max` hoch, greift der Offset nicht — dann sitzt die Spitze nicht in
-der Bündelung. Fällt `avg`, ist die frühere Zahl nicht vergleichbar und wir
-suchen den Grund, statt ihn zu verbuchen.
+Erwartung siehe 6.5. Bleibt `avg` bei 2,88 und der Boden bei 1,78, hat das
+Phasentor nichts gebracht — dann sitzt der Overhead woanders, und die nächste Spur
+gilt dem, was pro Tick außerhalb der Phasenprüfung läuft.
 
 Für die Kontaktkosten danach ist die Reihenfolge im Plan Abschnitt 3.6 schon
-richtig: gezielter Zugriff statt Inventarlesen, dann Kadenz, dann Bedarf. Der
-Vergleich der beiden Aufnahmen sagt dabei, welche Seite zuerst dran ist — dazu
-muss aber bekannt sein, wie viel des Mittels auf Item- und wie viel auf
-External-Busse entfällt. Das kann der Aufbau noch nicht trennen; ein vierter
-Parameter für die Busart wäre der nächste kleine Schritt am Werkzeug.
+richtig: gezielter Zugriff statt Inventarlesen, dann Kadenz, dann Bedarf. Welche
+Seite zuerst dran ist, entscheidet die Aufteilung des Mittels auf Item- und
+External-Busse — dazu muss aber erst geklärt sein, ob der Lauf gefüllt war, und
+der Aufbau kann die beiden Busarten noch nicht trennen. Ein vierter Parameter für
+die Busart wäre der nächste kleine Schritt am Werkzeug.
 
 ## 7. Offene technische Schulden
 
@@ -694,6 +754,15 @@ Aus dem 1:1-Port bekannt, bewusst nicht angefasst:
   linearer Scan pro Entnahme. Das ist Plan-Punkt (c) und gehört zu P3.
 - Der Verweis auf die Projektnotiz „Analyse Fabrikdurchsatz" in
   `docs/ups-architektur.md` läuft ins Leere: **die Notiz liegt nicht im Repo.**
+- `filter_externalIO_by_valid_signal` (`NetworkBase.lua:1340–1355`) baut bei
+  jedem Aufruf verschachtelte Tabellen neu auf und ruft `check_focused_entity`
+  auf jedem Bus. Seit `10154d6` läuft es nur noch auf dem Tick des jeweiligen
+  Busses, aber die Allokation bleibt. Kandidat für P5, wenn der Name nicht mehr
+  gebraucht wird — die Prüflogik sitzt jetzt in `updateExternalStorage`.
+- `NC:updateExternalStorage` läuft jetzt jeden Tick und iteriert dabei alle
+  External-Busse, auch wenn keiner in seiner Phase ist. Bei 40 Bussen ist das
+  billig, bei einigen Tausend nicht. Zusammen mit dem Item-Sweep derselbe
+  Posten, den P4 mit Zeitschlitzen lösen soll.
 
 ## 8. Arbeitsweise
 
