@@ -4,7 +4,7 @@ Einstiegspunkt für die Weiterarbeit. Technischer Plan und Begründungen:
 `docs/ups-architektur.md`. Dieses Dokument beantwortet „wo stehen wir, was ist
 verifiziert, was ist der nächste Schritt".
 
-Stand: Commit `e6d6740`, Branch `port/2.0`, Version 2.0.0.
+Stand: Commit `f29a9dd`, Branch `port/2.0`, Version 2.0.0.
 
 ## 1. Projekt
 
@@ -103,7 +103,7 @@ die Summe, für eine Trennung der Anteile bräuchte es einen zweiten Aufbau mit
 variabler Kabellänge. Der Aufbau enthält außerdem **keine Busse**, deckt also P1
 ab, nicht P5.
 
-## 5. Aktueller Fokus: P1
+## 5. Aktueller Fokus: P1 (abgenommen, zwei Randpfade offen)
 
 ### 5.1 Der Befund, der den Zuschnitt ändert
 
