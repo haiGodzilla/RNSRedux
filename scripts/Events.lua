@@ -31,28 +31,41 @@ function Event.placed(event)
         if event.tags and obj.deserialize_settings then
 			obj:deserialize_settings(event.tags)
 		end
-        --TEMPORARY TRACE, remove once the blueprint path is settled. The write side
-        --was proven (30 stacks gathered), but DataConvert_ItemToEntity never ran, so
-        --the read path is where the contents are lost. This records what Event.placed
-        --actually sees, because "the branch was never entered" and "the tag was empty"
-        --need different fixes.
+        --Which stack carried the item here. on_built_entity -- a player placing it by
+        --hand -- has no `stack` field: it provides consumed_items, a temporary
+        --inventory of everything the game used to build. The robot and space-platform
+        --variants do have `stack`. Both are read, so a drive built by hand and one
+        --placed by a robot behave the same; before this, only the robot path carried
+        --its contents through.
+        local carrier = event.stack
+        if carrier == nil and event.consumed_items ~= nil then
+            for i = 1, #event.consumed_items do
+                local candidate = event.consumed_items[i]
+                if candidate.valid_for_read == true and candidate.type == "item-with-tags" then
+                    carrier = candidate
+                    break
+                end
+            end
+        end
+
+        --TEMPORARY TRACE, remove once this is confirmed on a real save.
         local stackType = "nil"
-        if event.stack ~= nil then stackType = tostring(event.stack.type) end
+        if carrier ~= nil then stackType = tostring(carrier.type) end
         local hasTag = "n/a"
-        if event.stack ~= nil and event.stack.valid_for_read == true then
-            hasTag = tostring(event.stack.get_tag(Constants.Settings.RNS_Tag) ~= nil)
+        if carrier ~= nil and carrier.valid_for_read == true then
+            hasTag = tostring(carrier.get_tag(Constants.Settings.RNS_Tag) ~= nil)
         end
         helpers.write_file("rns-store-trace.txt", "placed: " .. tostring(entName)
-            .. " stack=" .. tostring(event.stack ~= nil)
-            .. " valid=" .. tostring(event.stack ~= nil and event.stack.valid_for_read == true)
+            .. " carrier=" .. tostring(carrier ~= nil)
+            .. " valid=" .. tostring(carrier ~= nil and carrier.valid_for_read == true)
             .. " type=" .. stackType
             .. " hasRnsTag=" .. hasTag
             .. " hasConvert=" .. tostring(objInfo ~= nil and objInfo.tag ~= nil
                 and _G[objInfo.tag] ~= nil and _G[objInfo.tag].DataConvert_ItemToEntity ~= nil)
             .. "\n", true)
 
-        if event.stack ~= nil and event.stack.valid_for_read == true and event.stack.type == "item-with-tags" and obj.DataConvert_ItemToEntity ~= nil then
-			local contents = event.stack.get_tag(Constants.Settings.RNS_Tag)
+        if carrier ~= nil and carrier.valid_for_read == true and carrier.type == "item-with-tags" and obj.DataConvert_ItemToEntity ~= nil then
+			local contents = carrier.get_tag(Constants.Settings.RNS_Tag)
 			if contents ~= nil then
 				obj:DataConvert_ItemToEntity(contents)
 			end

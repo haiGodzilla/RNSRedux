@@ -1959,6 +1959,68 @@ Umbau funktioniert hat, weiß ich nicht: In `docs/projektstand.md` ist „Save/L
 als geprüft vermerkt, „Blueprint-Inhalt" **nicht**. **Ich behaupte nicht, dass es
 ein Altfehler ist** — dafür fehlt der Beleg.
 
+### 7.17 Ursache: `on_built_entity` hat in 2.0 kein `stack`-Feld — Altfehler
+
+Der Trace entschied es in einer Zeile:
+
+```
+placed: RNS_ItemDrive4k stack=false valid=false type=nil hasRnsTag=n/a hasConvert=true
+```
+
+**Kein `stack`, obwohl die Konvertierungsfunktion existiert und erreichbar ist
+(`hasConvert=true`).** Der Lesepfad war also nicht leer, sondern **nie betreten**.
+
+**Die Primärquelle** (Events-Doku, `on_built_entity`):
+
+```
+on_built_entity:            entity, player_index, consumed_items, tags
+on_robot_built_entity:      robot, entity, stack, tags
+on_space_platform_built_entity: platform, entity, stack, tags
+```
+
+**Das Feld `stack` gibt es beim Spieler-Bau nicht mehr.** Was es gibt, ist
+`consumed_items` — „a temporary inventory containing all items that the game used
+to build the entity". Der Code prüfte `event.stack` und lag damit seit der
+Portierung tot.
+
+**Damit ist es ein Altfehler, nicht mein Umbau — und die Asymmetrie hat ihn
+verdeckt:** `on_robot_built_entity` **hat** `stack`. Ein per Roboter gebauter Drive
+trug seinen Inhalt also durch, ein von Hand gebauter nicht. Wer nur mit Baulogistik
+arbeitet, sieht den Fehler nie.
+
+**Behoben (Commit `??`):** `Event.placed` liest jetzt beide Wege — `event.stack`
+für Roboter und Plattformen, sonst den `item-with-tags`-Stapel aus
+`event.consumed_items`.
+
+```lua
+local carrier = event.stack
+if carrier == nil and event.consumed_items ~= nil then
+    for i = 1, #event.consumed_items do
+        local candidate = event.consumed_items[i]
+        if candidate.valid_for_read == true and candidate.type == "item-with-tags" then
+            carrier = candidate
+            break
+        end
+    end
+end
+```
+
+**Was das für die Bewertung heißt:** Mein Umbau hat den Fehler nicht verursacht,
+aber er hat ihn **aufgedeckt** — und das nur, weil `ItemStackDefinition` die
+Identität jetzt vollständig trägt und der Inhalt damit überhaupt wiederherstellbar
+wäre. Vorher wäre er ebenso verloren gegangen, nur unauffällig.
+
+**Offen bleibt ein zweiter, kleinerer Fehler:** Die Mouseover-Anzeige eines Drives
+zeigt `0/0`, während der Klick auf denselben Drive die richtige Füllung zeigt.
+Nachgeprüft: Die Prototypen tragen keine `x / y`-Zeichenkette
+(`prototypes/Drives.lua` setzt nur die Größe), die Zahl kommt also aus dem Code.
+Zwei Kandidaten stehen in `ItemDrives.lua`: die Item-Beschreibung aus
+`DataConvert_EntityToItem` (Zeile 328) und die GUI-Zeile (365, 422). **`0/0`
+verlangt, dass beide Werte null sind** — also entweder `maxStorage = 0` auf dem
+Objekt, das die Anzeige benutzt, oder die Anzeige liest ein anderes Objekt als der
+Klick. **Ungemessen**, und bewusst nicht geraten: Es braucht die Angabe, worüber
+genau gefahren wird.
+
 ## 8. Offene technische Schulden
 
 - `NetworkBase.addConnectables`, Zeilen 183/186/191: drei Prüfungen mit `and`
