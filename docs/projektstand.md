@@ -787,9 +787,21 @@ seltener. Die Menge, die ein Sweep sieht, ist dieselbe.
 
 **Das Risiko ist die Buchhaltung**, nicht der Durchsatz: der Cache speist
 `Contents.item` und `StoredPartition` des Netzes. Bleibt er zu lange stehen,
-laufen die Zähler auseinander. Deshalb ist die Prüfung nicht nur eine Messung,
-sondern auch der P1-Abnahmetest — `/rns-debug-nc`, `/rns-debug-refresh`,
-`/rns-debug-nc` müssen identisch sein.
+laufen die Zähler auseinander.
+
+**Und der P1-Abnahmetest fängt das nicht.** `NetworkBase.addConnectables` ruft für
+jeden External-Bus `init_cache()`, und `init_cache` kehrt zurück, wenn schon ein
+Cache da ist (`ExternalIO.lua:217`) — der Vollaufbau baut die Zähler also **aus
+dem Cache** und fasst den Container nicht an. Ein Cache, der nicht mehr liest,
+sähe in zwei Dumps identisch aus. Deshalb hat der Dump eine neue Spalte
+(Commit `3f7d80b`):
+
+```
+busTruth=<Busse>/<was der Cache behauptet>/<was im Container steht>
+```
+
+Das ist die Größe, die die Änderung überleben muss. `external=` und `busTruth`
+mittlere Zahl müssen zusammenpassen; die dritte ist die Wahrheit im Container.
 
 **Der Gewinn hängt daran, wie oft sich der Container ändert.** In einer echten
 Anlage schiebt ein Inserter wenige Items pro Sekunde ein, dann greift die
