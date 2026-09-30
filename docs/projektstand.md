@@ -907,39 +907,71 @@ fehlende Prüfung: Ein Konsolen-Ausdruck auf `Constants.Settings` wurde nie bele
 als Werkzeug für den Fall, dass ein späterer Eingriff wieder eine Umschaltung
 braucht.
 
-### 6.12 Offen nach diesem Schritt — und der Aufbau, der es klärt
+### 6.12 Der Lastregler — und der erste Lauf, der nichts gemessen hat
 
 Die Praxis-Frage aus 6.11 lässt sich **nicht** mit dem bisherigen Aufbau beantworten:
 Dessen Container ändern sich nie, der Bus liest also nie etwas Neues. Und ein
 echter Verbraucher (Inserter, Maschine) hätte eine ungenaue Rate. Deshalb ein
-dosierter Abfluss mit exakter Rate (Commit `5fad81f`):
+dosierter Abfluss mit exakter Rate:
 
 ```
 /rns-stress-drain <itemsProSekundeProContainer>   -- 0 schaltet ab
 /rns-stress-drain-status
 ```
 
-Der Befehl setzt die Rate, **nullt die Zähler** der Busse — damit zwei Läufe über
-dasselbe Fenster vergleichbar sind — und entnimmt dann jeden Tick so viele Items
-aus den External-Containern, dass die Rate pro Container stimmt. Round-Robin über
-die Container, damit die Verteilung gleichmäßig ist. Der Tick-Handler wird in
-`control.lua` registriert und kehrt sofort zurück, solange die Rate 0 ist; **er
-überlebt ein Save/Load, die Rate nicht** — die ist eine lokale Variable der Datei
-und steht nach dem Laden wieder auf 0. Der Befehl muss nach dem Laden erneut
-aufgerufen werden.
+Der Befehl setzt die Rate, **nullt die Zähler** der Busse — damit ist
+`busSkips=` danach eine Fenstermessung — und entnimmt dann jeden Tick so viele
+Items aus den Containern, dass die Rate pro Container stimmt. Round-Robin, damit
+die Verteilung gleichmäßig ist. Der Tick-Handler steht in `control.lua` und kehrt
+sofort zurück, solange die Rate 0 ist; **er überlebt ein Save/Load, die Rate
+nicht** — die ist eine lokale Variable der Datei. Der Befehl muss nach dem Laden
+erneut laufen.
 
-**Die erwartete Kurve.** Der Bus liest alle `RNS_ExternalStorage_Tick` = 5 Ticks,
-also `L` = 12 mal pro Sekunde. Ändert sich die Gesamtzahl mit Rate `r` pro
-Container, dann trifft ein Sweep nur dann etwas Neues, wenn seit dem letzten
-Treffer etwas passiert ist:
+**Der erste Lauf hat nichts gemessen, und der Grund lag bei mir.** Fenster über
+5.882 Ticks:
+
+| Größe | Wert |
+|---|---|
+| Ticks | 5.882 |
+| Erwartete Sweeps (2 Busse × 5.882 / 5) | 2.352 |
+| Gezählt | **2.352** (2.620 − 268) |
+| Nicht übersprungen | **116** |
+| Erzwungene Vollläufe (2.352 / 20) | **117,6** |
+
+Nicht übersprungen (116) ≤ erzwungen (117,6): **es gab praktisch keinen einzigen
+Treffer.** Das ist exakt der Fall `r = 0` — und derselbe Wert wie im Lauf ohne
+jeden Abfluss (95 % Überspringungen).
+
+**Die Ursache: Der Regler war nicht scharf.** Die Container-Liste wurde in
+`StressTest.build` festgehalten, und der gemessene Spielstand stammt aus der Zeit
+**vor** diesem Code. Ohne Liste kehrte `tick` an seiner Schutzprüfung um. Der
+Abfluss lief nie.
+
+**Behoben (Commit `77a1e02`):** Die Liste wird jetzt in `setDrain` **gesucht** —
+die Entity-Tabelle nach External-Bussen durchgehen, deren fokussierte Container
+nehmen und das Item aus dem ersten Container lesen. Das funktioniert auf jedem
+Spielstand, auch einem, der mit einer älteren Fassung dieser Datei gebaut wurde.
+Der Build schreibt die Liste nicht mehr, es gibt also nur eine Quelle.
+
+**Der Fehlermodus ist es, der zählt:** Ein Werkzeug, das still nichts tut, liefert
+eine Messung, die wie ein sauberer Null-Effekt aussieht. Das ist in dieser Sitzung
+**das zweite Mal**, dass ein stiller Nichts-Tun als Befund durchgegangen wäre —
+beim ersten Mal war es die Konsolenzuweisung von `Rescan`. Deshalb meldet der
+Befehl jetzt selbst, wie viele Container er gefunden hat und welches Item er
+entnimmt.
+
+### 6.13 Die erwartete Kurve
+
+Der Bus liest `RNS_ExternalStorage_Tick` = 5, also `L` = 12 mal pro Sekunde.
+Ändert sich die Gesamtzahl mit Rate `r` pro Container:
 
 ```
-Trefferquote = 1 - exp(-r / L)      daraus gelesen, plus der erzwungene Volllauf
+Trefferquote = 1 - exp(-r / L)
 ```
 
 | `r` pro Container | Treffer | Übersprungen |
 |---|---|---|
-| 0 (heutiger Aufbau) | 0 % | 95 % |
+| 0 | 0 % | 95 % |
 | 0,5 Items/s | 4 % | 91 % |
 | 1 Items/s | 8 % | 87 % |
 | 4 Items/s | 28 % | 67 % |
@@ -949,30 +981,29 @@ Trefferquote = 1 - exp(-r / L)      daraus gelesen, plus der erzwungene Volllauf
 **Die Kipprate liegt bei `L` × ln 2 ≈ 8,3 Items/s pro Container.** Darunter ist die
 Abkürzung ihr Geld wert, darüber verliert sie schnell.
 
-Das ist eine Rechnung, keine Messung, und sie steht hier als Erwartung. **Der Lauf
-prüft sie:** Ist die gemessene Trefferquote bei `r = 1` deutlich unter 8 %, greift
-die Abkürzung seltener als die Rechnung sagt, und dann ist die Unabhängigkeit der
-Änderungen vom Lesetakt verletzt — was ich beim Bau dieses Werkzeugs als Annahme
-gesetzt habe und nicht belegt habe.
+Das ist eine Rechnung, keine Messung. Der Lauf prüft sie: Ist die Trefferquote bei
+`r = 1` deutlich unter 8 %, greift die Abkürzung seltener als die Rechnung sagt,
+und dann ist meine Annahme verletzt, dass die Änderungen unabhängig vom Lesetakt
+passieren.
 
-**Was der Lauf nicht klärt:** welcher Fall in einer echten Anlage vorliegt. Das
-hängt am Spielstil und an der Anzahl Busse pro Verbraucher, und beides kann ich
-nicht abschätzen. Die Kurve sagt, wo die Grenze liegt — welchen Punkt man
-annehmen will, ist eine Entscheidung, keine Messung.
+**Ein Verdacht, der beim Lesen auftauchte und noch nicht geprüft ist.** Der
+External-Bus hat `io = "input/output"` (`ExternalIO.lua:18`) — er liest den
+Container **und** schreibt in ihn. Der Abfluss schafft Platz, der Bus könnte ihn
+sofort wieder füllen. Dann ändert sich die Gesamtzahl zwischen zwei Sweeps
+nicht, und die Trefferquote bliebe bei null, egal wie hoch die Rate ist.
+**Der Aufbau prüft das nicht**, weil er die Richtung nicht steuert. Falls der
+nächste Lauf wieder null Treffer zeigt, ist das die erste Spur.
 
-### 6.13 Offen nach diesem Schritt
+### 6.14 Was der Lauf entscheidet, und was nicht
 
-- **Der Gewinn in der Praxis**, jetzt als Kurve statt als Zahl. Der Aufbau liefert
-  die Trefferquote für eine vorgegebene Rate; welche Rate realistisch ist, bleibt
-  offen.
-- **Die 0,21 ms, die in der Zerlegung fehlen** (6.11), und die 9 % aus 6.6. Beide
-  unerklärt und möglicherweise derselbe Posten: etwas, das mit der Busanzahl
-  wächst und das ich keiner der beiden Seiten zugeordnet habe.
-- **Der Item-Bus** (rund 0,45 ms in `mixed`), der größere verbleibende
-  Einzelposten. Verdacht in 6.7, unangetastet.
-- **P5-Punkt 1, der Slot-Durchlauf.** Er ist der nächste echte Eingriff: Er hilft
-  bei **jeder** Änderungsrate, während die Abkürzung nur bei langsamen Containern
-  greift. Die Kurve aus 6.12 ist damit auch die Entscheidungsgrundlage dafür.
+Er liefert die Trefferquote für eine vorgegebene Rate. **Welcher Fall in einer
+echten Anlage vorliegt, klärt er nicht** — das hängt am Spielstil und an der Zahl
+der Busse pro Verbraucher, und beides ist nicht abschätzbar. Die Kurve sagt, wo die
+Grenze liegt; welchen Punkt man annimmt, ist eine Entscheidung.
+
+Für den nächsten echten Eingriff ist die Folgerung davon unabhängig:
+**P5-Punkt 1, der Slot-Durchlauf, hilft bei jeder Änderungsrate** — die Abkürzung
+nur bei langsamen Containern. Sie ist damit die gute Ergänzung, nicht die Lösung.
 
 ## 7. Offene technische Schulden
 

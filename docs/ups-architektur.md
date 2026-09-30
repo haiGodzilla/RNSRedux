@@ -478,10 +478,13 @@ exakter Rate macht daraus einen messbaren Fall:
 ```
 
 Der Befehl **nullt die Zähler** der Busse, also ist danach
-`busSkips=` eine Fenstermessung. Erwartete Trefferquote
-`1 - exp(-r / 12)` plus der erzwungene Volllauf alle 20 Sweeps — Herleitung und
-Tabelle in `docs/projektstand.md` 6.12. **Nach einem Save/Load muss der Befehl
-erneut aufgerufen werden**, die Rate steht dann wieder auf 0.
+`busSkips=` eine Fenstermessung. Er sucht die Container selbst und meldet, wie
+viele er gefunden hat — ein Regler, der still nichts tut, liefert sonst eine
+Messung, die wie ein sauberer Null-Effekt aussieht (`docs/projektstand.md` 6.12).
+Erwartete Trefferquote `1 - exp(-r / 12)` plus der erzwungene Volllauf alle 20
+Sweeps; Herleitung und Tabelle in `docs/projektstand.md` 6.13. **Nach einem
+Save/Load muss der Befehl erneut aufgerufen werden**, die Rate steht dann wieder
+auf 0.
 
 Drei Dinge prüfen den Aufbau, bevor die Zahl etwas wert ist:
 
