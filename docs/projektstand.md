@@ -2021,6 +2021,69 @@ Objekt, das die Anzeige benutzt, oder die Anzeige liest ein anderes Objekt als d
 Klick. **Ungemessen**, und bewusst nicht geraten: Es braucht die Angabe, worüber
 genau gefahren wird.
 
+### 7.18 Behoben: ein fremder Entity-Tag hat den platzierten Drive zerstört
+
+Andres Befund: „als ich den erzeugten Drive ohne Verbindung zum Netzwerk platzieren
+will, dann verschwindet der einfach." Der Log, dreimal hintereinander:
+
+```
+RNSRedux error: ItemDrives.lua:138: bad argument #1 of 2 to 'pairs' (table expected, got nil)
+```
+
+Zeile 138 ist `regenerate_icons` mit `pairs(self.filters)`. **Die Ursache:**
+
+`Event.placed` ruft `obj:deserialize_settings(event.tags)`, sobald `event.tags`
+gesetzt ist (`Events.lua:31`). Und `on_built_entity` füllt `event.tags` mit den
+**Entity**-Tags — die dürfen fremd oder leer sein, denn das Item, das den Drive
+platziert, muss keinen RNS-Tag tragen. Das per `/c` erzeugte Item tut es nicht.
+
+`deserialize_settings` schrieb die Felder **ungeprüft** ins Objekt:
+
+```lua
+self.filters = tags["filters"]      -- nil, wenn der Schlüssel fehlt
+```
+
+Damit war `filters` `nil`, und der Icon-Neuaufbau warf. **Und dann zerstörte
+`Control.placed` den Drive:**
+
+```lua
+function placed(event)
+    if Util.safeCall(Event.placed, event) == false then
+        ...
+        entity.destroy()
+```
+
+**Behoben (Commit `535a6d9`):** Jedes Feld wird nur übernommen, wenn der Tag es
+tatsächlich hat, und `filters`/`guiFilters` nur, wenn sie wirklich Tabellen sind.
+Ein Tag ohne RNS-Schlüssel lässt den Drive auf seinen Konstruktorwerten — also
+unkonfiguriert, was das richtige Ergebnis ist.
+
+**Und `FluidDrives` hat denselben Code und denselben Wurf**, deshalb mitgefixt. Beide
+hängen am selben Pfad (`Events.lua:31`).
+
+**Nicht angefasst:** die übrigen sechs `deserialize_settings` (Detector, ExternalIO,
+FluidIO, ItemIOV3, TransReceiver, WirelessGrid). Sie übernehmen die Tags ebenso
+ungeprüft, aber **keiner ruft `regenerate_icons`** — keiner wirft.
+
+**Warum das erst jetzt auffiel:** Das Symptom zeigt sich nur beim Platzieren eines
+Items **ohne** RNS-Tag. Ein per Blueprint gesetzter oder im Spiel gebauter Drive
+trägt ihn.
+
+### 7.19 Was noch offen ist
+
+1. **Die Mouseover-Anzeige** zeigt `0/0`, der Klick auf denselben Drive die richtige
+   Füllung. Die Prototypen tragen keine `x / y`-Zeichenkette, die Zahl kommt also
+   aus dem Code: entweder die Item-Beschreibung (`ItemDrives.lua:335`, aus
+   `DataConvert_EntityToItem`) oder die GUI-Zeile (`372`, `429`). `0/0` verlangt,
+   dass **beide** Werte null sind. **Ungemessen** — es fehlt die Angabe, worüber
+   genau gefahren wird.
+2. **Die Chunk-Größe** (`CHUNK_INITIAL = 1024`, 7.15). Eigener Schritt.
+3. **Die Item-Verteilung beim Abbau** (Andre). Eigener Schritt, weil sie denselben
+   Einbau-Pfad benutzt.
+4. **Die Trace-Ausgaben** sind temporär und müssen vor dem Release raus: der
+   `storeTrace`-Aufruf in `DataConvert_*`, die `placed:`-Zeile in `Event.placed` und
+   die `validate:`-Zeile in `ItemDrives`.
+
 ## 8. Offene technische Schulden
 
 - `NetworkBase.addConnectables`, Zeilen 183/186/191: drei Prüfungen mit `and`
