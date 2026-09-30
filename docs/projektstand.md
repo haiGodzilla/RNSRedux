@@ -4,7 +4,7 @@ Einstiegspunkt für die Weiterarbeit. Technischer Plan und Begründungen:
 `docs/ups-architektur.md`. Dieses Dokument beantwortet „wo stehen wir, was ist
 verifiziert, was ist der nächste Schritt".
 
-Stand: Commit `a5add2b`, Branch `port/2.0`, Version 2.0.0.
+Stand: Commit `61d0a0a`, Branch `port/2.0`, Version 2.0.0.
 
 ## 1. Projekt
 
@@ -129,7 +129,10 @@ deutlich kleiner und risikoärmer als ursprünglich geplant.
 Zwei Messwerkzeuge, Commit `26308e5`:
 
 - `/rns-debug` zeigt pro Controller `members`, `tracked` (Summe/Typenzahl),
-  `cache` (Cache-Stacks), `drive` und `external` (belegt/Kapazität).
+  `cache` (Cache-Stacks), `drive` und `external` (belegt/Kapazität). Seit
+  Commit `61d0a0a` zusätzlich `truth` und `fluidTruth`: was die Mitglieds-Drives
+  tatsächlich in ihren Speichertabellen halten, neben dem, was sie über
+  `storedAmount` behaupten.
 - `/rns-debug-refresh` erzwingt den Vollaufbau sofort.
 
 Beide zusammen sind der Abnahmemaßstab: **vor und nach erzwungenem Refresh
@@ -138,8 +141,12 @@ Stressaufbau ohne IO-Busse und ohne laufende Maschinen erfüllt das. Wenn
 zwischendurch Items transferiert werden, ändern sich die Werte legitim und der
 Vergleich ist wertlos.
 
-Zwei Beziehungen, die aufgehen sollten: `tracked` = `drive` (Belegung), und die
-`drive`-Kapazität = Summe der `maxStorage` aller Mitglieds-Drives.
+Zwei Beziehungen, die aufgehen sollten: `tracked` = dem tatsächlichen Inhalt der
+Mitglieds-Drives, und die `drive`-Kapazität = Summe der `maxStorage` aller
+Mitglieds-Drives. Die frühere Annahme `tracked` = `drive` war falsch: `drive`
+führt `storedAmount`, also die gebuchte Menge, `tracked` die Stapel selbst. Die
+beiden fallen nur zusammen, wenn in jedem Stapel auch die Anzahl steht, die
+gebucht wurde.
 
 ### 5.3 Umgesetzt: P1 ist eine Auslöser-Frage (Commit `a5add2b`)
 
@@ -162,19 +169,74 @@ in diesem Moment zahlt der Baupfad ohnehin ein Vielfaches davon (Punkt g,
 Beitrittskaskade). Dafür müsste jede Austrittsbuchung die Beitrittsbuchung
 exakt spiegeln. Ohne messbaren Gewinn ist das nur zusätzliche Fehlerfläche.
 
-### 5.4 Was noch zu prüfen ist
+### 5.4 Erster Abnahmelauf: nicht bestanden — und nicht aussagekräftig
 
-Der Eingriff ist committet, aber nicht gemessen.
+Zwei Dumps, 711 Ticks auseinander, dazwischen `/rns-debug-refresh`: der erste
+noch ohne die `truth`-Spalte, also aus einem Stand vor `61d0a0a`.
 
-- **Abnahme:** `20 50` laden, dann `/rns-debug`, `/rns-debug-refresh`,
-  `/rns-debug`. Beide Dumps müssen identisch sein, inklusive `tracked`,
-  `cache`, `drive` und `external`. Das prüft die Zählertabelle selbst — sie war
-  vorher durch das Netz alle 600 Ticks gedeckt und ist es jetzt erst nach 7200.
-- **Nebenwirkung:** `power_usage` und `electric_buffer_size` werden nur im
-  Refresh-Zweig gesetzt. Sie folgen jetzt der Struktur statt dem Takt; beim
-  Anbau eines Drives muss der Controller weiterhin mitziehen.
-- **Sichtprüfung:** Drive bauen, abbauen, von Bitern zerstören lassen, dann
-  Save/Load — die Summen in der GUI müssen in allen vier Fällen stimmen.
+- Vor dem Vollaufbau lasen sechs Netze `tracked=160260 drive=420000`, drei
+  `tracked=260 drive=260000`, sieben der großen Netze `tracked=0 cache=0
+  drive=0`.
+- Danach waren alle Netze einer Bauform untereinander identisch, aber nicht
+  identisch mit dem ersten Dump: die drei `260`-Netze standen jetzt auf
+  `160260`, die sieben Null-Netze auf `644`.
+
+Damit ist der Vergleich so nicht verwertbar, und der Grund liegt im Aufbau:
+
+**Der Fill umgeht die Netzwerkbuchhaltung.** `StressTest.fill` schreibt direkt
+in `obj.storageArray` und ruft kein `increase_tracked_item_count` und kein
+`delta_ItemDrive_Partition`. `Contents` und `StoredPartition` bleiben deshalb
+leer, bis irgendetwas einen Vollaufbau auslöst. Vor P1 deckte der 600-Tick-Takt
+das innerhalb von zehn Sekunden zu — die Diff-Prüfung hätte ihn nie gesehen.
+Bei 7200 Ticks steht die Lücke offen. Die sieben Null-Netze im ersten Dump sind
+genau das: der Fill-Posten, nicht der Produktivcode.
+
+**Zusätzlich ist der Aufbau in sich widersprüchlich.** Die Spalten `tracked`
+und `drive` eines Netzes stehen im Verhältnis 1 zu 1000 zueinander — genau
+`amountPerType`. Das ist mit dem Zustand vor Commit `bfc0618` erklärbar: dort
+bekam ein Stack `count = 1`, während `storedAmount` die gebuchte Menge (`min`)
+mitzählte. Für eine `20 50`-Station geht die Stapelrechnung auf: 13 Drives mit
+4 Typen und 37 mit 16 Typen ergeben 52 + 592 = 644 Stapel, also `tracked=644`.
+Ungeprüfte Zuordnung; der neue `truth`-Wert entscheidet sie.
+
+**Offen bleibt ein echter Widerspruch.** Sieben der zehn `10 20`-Netze lasen vor
+dem Vollaufbau `420000` statt `260000`, die drei übrigen `260000`. Nach dem
+Vollaufbau standen alle zehn auf `420000`. Handgerechnet sind für diesen Aufbau
+260000 richtig: fünf 4k-Drives füllen bei 4.000, fünfzehn weitere bei 16.000.
+Der Aufbau ist also um 160.000 überbucht, und der Vollaufbau hat den korrekten
+Wert in den überbuchten verwandelt. Beide Zähler sind um denselben Betrag zu
+hoch, was auf doppelt gezählte Drives hindeutet — aber ob die Ursache im Aufbau
+oder im Produktivcode sitzt, entscheidet der neue `truth`-Wert in einem Lauf.
+
+### 5.5 Korrigiertes Verfahren
+
+Der Dump hat eine Spalte mehr (Commit `61d0a0a`):
+
+```
+truth=<Drives>/<von den Drives behauptet>/<tatsaechlich in storageArray>
+fluidTruth=<behauptet>/<tatsaechlich>
+```
+
+Damit trennt ein einziger Lauf drei Fälle, die bisher gleich aussahen:
+
+| Befund | Bedeutung |
+|---|---|
+| `truth` behauptet ≠ tatsächlich | Die Drives sind schon untereinander inkonsistent. Kein Netzwerkvergleich möglich, Aufbau neu bauen. |
+| `truth` stimmt, `tracked` ≠ `truth` | Der inkrementelle Pfad verliert Buchungen. Das ist der Fehler, den P1 sucht. |
+| `tracked` = `truth` und beide Dumps gleich | P1 ist abgenommen. |
+
+`StressTest.fill` setzt außerdem `shouldRefresh` auf jedem berührten Controller,
+damit die Zähler beim ersten Dump stehen. Reihenfolge:
+
+1. `/rns-debug-nc` — Dump A
+2. `/rns-debug-refresh`
+3. `/rns-debug-nc` — Dump B
+4. A gegen B vergleichen, `truth` gegen `tracked` vergleichen
+
+Für die Stufen `10 20` und `20 50` gilt: die Stufe muss aus einem frischen
+Savegame kommen. Der vorliegende Spielstand enthält beide Aufbauten
+nebeneinander und stammt aus der Zeit vor `bfc0618` — seine Zahlen sind für die
+Abnahme nicht mehr brauchbar.
 
 Danach ist der IO-Bus der nächste Posten (Abschnitt 6, offene Reihenfolge in
 `docs/ups-architektur.md` Abschnitt 6a).
