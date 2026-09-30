@@ -263,12 +263,37 @@ commands.add_command("rns-debug", "RNSRedux: dump network and interface state", 
         if obj.thisEntity ~= nil and obj.thisEntity.valid == true then
             local name = obj.thisEntity.name
             if name == Constants.NetworkController.main.name then
+                local network = obj.network
                 local members = 0
-                for _ in pairs(obj.network.connectedEntities or {}) do members = members + 1 end
+                for _ in pairs(network.connectedEntities or {}) do members = members + 1 end
+
+                --The incremental counters that P1 must not disturb. Sum and key
+                --count are reported separately: a growing key count with a flat
+                --sum would mean zero entries pile up instead of dropping out.
+                local trackedItems = 0
+                local trackedTypes = 0
+                for _, count in pairs(network.Contents.item or {}) do
+                    trackedItems = trackedItems + count
+                    trackedTypes = trackedTypes + 1
+                end
+
+                local cachedStacks = 0
+                for _, list in pairs(network.interfaceCache.item or {}) do
+                    cachedStacks = cachedStacks + #list
+                end
+
+                local partition = network.StoredPartition or {}
+                local drive = partition.itemDrive or {}
+                local external = partition.itemExternal or {}
+
                 table.insert(lines, "NC " .. obj.entID
                     .. " members=" .. members
-                    .. " shouldRefresh=" .. tostring(obj.network.shouldRefresh)
-                    .. " powerDraw=" .. tostring(obj.network.powerDraw))
+                    .. " shouldRefresh=" .. tostring(network.shouldRefresh)
+                    .. " powerDraw=" .. tostring(network.powerDraw)
+                    .. " tracked=" .. trackedItems .. "/" .. trackedTypes
+                    .. " cache=" .. cachedStacks
+                    .. " drive=" .. tostring(drive.storedAmount) .. "/" .. tostring(drive.capacity)
+                    .. " external=" .. tostring(external.storedAmount) .. "/" .. tostring(external.capacity))
             elseif name == Constants.NetworkInventoryInterface.name then
                 local hasController = obj.networkController ~= nil
                 local inNetwork = false
@@ -303,6 +328,24 @@ commands.add_command("rns-debug", "RNSRedux: dump network and interface state", 
     end
 
     game.print(table.concat(lines, "\n"))
+end)
+
+--Debug command: forces the periodic full rebuild on every network right now.
+--Run /rns-debug, then this, then /rns-debug again. Both dumps have to match,
+--because the rebuild restores exactly the state the incremental bookkeeping
+--maintains. The comparison only holds while nothing is being transferred, so
+--use a filled network without running machines. The controller is identified
+--by its network reference, not by thisEntity: that field can hold a LuaPlayer,
+--whose key lookups raise.
+commands.add_command("rns-debug-refresh", "RNSRedux: force a network rebuild on every controller", function()
+    local rebuilt = 0
+    for _, obj in pairs(storage.entityTable or {}) do
+        if obj.network ~= nil then
+            obj.network:doRefresh(obj)
+            rebuilt = rebuilt + 1
+        end
+    end
+    game.print("rns-debug-refresh: rebuilt " .. rebuilt .. " controllers")
 end)
 
 --Debug command for M1: exercises ItemStore against a scratch inventory, without
