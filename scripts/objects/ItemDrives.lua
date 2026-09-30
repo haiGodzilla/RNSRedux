@@ -209,14 +209,6 @@ end
 --object of the table.
 function ID:validate()
     self.storedAmount = self.store:getTotalItems()
-    --TEMPORARY TRACE, remove once the blueprint path is settled. The hover shows
-    --0/0, and this says whether that is an empty store, a missing maxStorage, or
-    --something else again.
-    helpers.write_file("rns-store-trace.txt", "validate: entID=" .. tostring(self.entID)
-        .. " maxStorage=" .. tostring(self.maxStorage)
-        .. " used=" .. tostring(self.store:getTotalItems())
-        .. " storedAmount=" .. tostring(self.storedAmount)
-        .. "\n", true)
 end
 
 function ID:add_or_merge_basic_item(itemstack_data, amount)
@@ -284,27 +276,15 @@ function ID:getRemainingStorageSize()
     return self.store:getRemainingCapacity()
 end
 
---TEMPORARY TRACE, remove once the blueprint path is settled. The drive loses its
---contents on mine and rebuild, and the loss is on one of two halves: what the tag
---receives, or what it gives back. Both are recorded so one run says which.
-local function storeTrace(message)
-    helpers.write_file("rns-store-trace.txt", message .. "\n", true)
-end
-
 function ID:DataConvert_ItemToEntity(tag)
     --Contents come back through the same bridge the transfer path uses. Both shapes
     --are accepted: the list written below, and the name-keyed table from a blueprint
     --made before this change.
     local stored = tag.storage or {}
-    local keys = 0
-    for k in pairs(stored) do keys = keys + 1 end
     for _, entry in pairs(stored) do
         self.store:insertItemstack(entry)
     end
     self.storedAmount = self.store:getTotalItems()
-    storeTrace("ItemToEntity: storageType=" .. type(tag.storage)
-        .. " #stored=" .. #stored .. " keys=" .. keys
-        .. " inserted=" .. self.store:getTotalItems())
     if tag.filters ~= nil then
         self.filters = tag.filters
         self.guiFilters = tag.guiFilters
@@ -322,15 +302,10 @@ function ID:DataConvert_EntityToItem(tag)
     --only, so an engine inventory cannot be written into one. Without this a mined or
     --blueprinted drive would lose its contents.
     local stored = {}
-    local yielded = 0
     self.store:forEachStack(function(stack)
         stored[#stored + 1] = Itemstack:new(stack)
-        yielded = yielded + 1
     end)
     tags.storage = stored
-    storeTrace("EntityToItem: used=" .. self.store:getTotalItems()
-        .. " yielded=" .. yielded .. " stored=" .. #stored
-        .. " first=" .. tostring(stored[1] ~= nil and stored[1].name or "nil"))
     Util.add_list_into_table(description, {{"item-description.RNS_DriveTag_Storage", self:getStorageSize(), self.maxStorage}})
 
     tags.filters = self.filters

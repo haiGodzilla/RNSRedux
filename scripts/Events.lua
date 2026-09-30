@@ -48,22 +48,6 @@ function Event.placed(event)
             end
         end
 
-        --TEMPORARY TRACE, remove once this is confirmed on a real save.
-        local stackType = "nil"
-        if carrier ~= nil then stackType = tostring(carrier.type) end
-        local hasTag = "n/a"
-        if carrier ~= nil and carrier.valid_for_read == true then
-            hasTag = tostring(carrier.get_tag(Constants.Settings.RNS_Tag) ~= nil)
-        end
-        helpers.write_file("rns-store-trace.txt", "placed: " .. tostring(entName)
-            .. " carrier=" .. tostring(carrier ~= nil)
-            .. " valid=" .. tostring(carrier ~= nil and carrier.valid_for_read == true)
-            .. " type=" .. stackType
-            .. " hasRnsTag=" .. hasTag
-            .. " hasConvert=" .. tostring(objInfo ~= nil and objInfo.tag ~= nil
-                and _G[objInfo.tag] ~= nil and _G[objInfo.tag].DataConvert_ItemToEntity ~= nil)
-            .. "\n", true)
-
         if carrier ~= nil and carrier.valid_for_read == true and carrier.type == "item-with-tags" and obj.DataConvert_ItemToEntity ~= nil then
 			local contents = carrier.get_tag(Constants.Settings.RNS_Tag)
 			if contents ~= nil then

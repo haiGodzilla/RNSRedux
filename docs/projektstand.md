@@ -1949,7 +1949,8 @@ zehn Netzen. **Es fehlt genau das, was im Item-Tag transportiert werden müsste.
 | **H1: Die Schreibseite liefert nichts.** `forEachStack` gibt keine Stapel her, obwohl `used` 3000 sagt. | `EntityToItem: used=3000 yielded=0 stored=0` |
 | **H2: Die Leseseite erreicht die Daten nicht.** Der Tag trägt sie, aber `DataConvert_ItemToEntity` wird nie gerufen oder findet nichts. | `EntityToItem` mit Werten, **keine** `ItemToEntity`-Zeile — oder eine mit `keys=0` |
 
-Der Trace schreibt beide Seiten nach `script-output/rns-store-trace.txt`.
+**Der Trace, der es entschied (inzwischen entfernt):** Er schrieb beide Seiten nach
+`script-output/rns-store-trace.txt`.
 
 **Eine Umfangsbemerkung, die ich offenlegen muss:** Die Zählertabelle, die
 Transferpfade, die Entnahme, die Politik-Prüfung und der Ladezyklus sind alle
@@ -2077,9 +2078,10 @@ trägt ihn.
 2. **Die Chunk-Größe** (`CHUNK_INITIAL = 1024`, 7.15). Eigener Schritt.
 3. **Die Item-Verteilung beim Abbau** (Andre). Eigener Schritt, weil sie denselben
    Einbau-Pfad benutzt.
-4. **Die Trace-Ausgaben** sind temporär und müssen vor dem Release raus: der
-   `storeTrace`-Aufruf in `DataConvert_*`, die `placed:`-Zeile in `Event.placed` und
-   die `validate:`-Zeile in `ItemDrives`.
+4. ~~Die Trace-Ausgaben~~ — **erledigt** (Commit `??`): die vier temporären
+   Schreibstellen in `Event.placed` und `ItemDrives` sind raus, der
+   `storeTrace`-Helfer ebenfalls. Die `carrier`-Ermittlung in `Event.placed` bleibt:
+   sie ist der Fix, nicht die Messung.
 
 ### 7.20 Der Hover über einen platzierten Drive zeigt `0/0` — der Grund steht im Prototype
 
@@ -2123,6 +2125,46 @@ dieser Sitzung nicht angefasst, und sie stammen aus dem 1:1-Port.
 **Empfehlung: eigener Schritt nach P2.** Es ist eine Anzeige-Ungenauigkeit ohne
 Datenverlust, und Weg 1 berührt Mechanik, die der Umbau gerade erst stabil gemacht
 hat.
+
+### 7.21 P2 ist abgenommen
+
+Der Lauf aus der Anleitung, vier Dumps um Abbau und Wiederaufbau eines vollen
+Drives. **NC 27 gegen die neun unberührten Netze:**
+
+| Größe | NC 27 nach dem Abbau | die anderen neun | Differenz |
+|---|---|---|---|
+| `members` | 71 | 72 | −1 |
+| `drive`-Kapazität | 1.696.000 | 1.700.000 | −4.000 |
+| `truth` Drives | 19 | 20 | −1 |
+| `powerDraw` | 17.460 | 17.500 | −40 |
+| `drive` | 252.813 | 255.813 | **−3.000** |
+
+Ein 4k-Drive mit 3000 Items — **jede Zahl passt**, inklusive Kapazität und
+Leistungsaufnahme. Im Dump nach dem Wiederaufbau ist NC 27 wieder identisch mit den
+übrigen neun, und die Gegenrechnung stimmt auf den Item:
+
+> Die neun fielen zwischen den beiden Dumps um 1.102 (Item-Export). Ohne
+> Wiederaufbau hätte NC 27 bei 251.711 stehen müssen; gemessen 254.711. **Differenz
+> exakt 3.000.**
+
+**Die Kontrollen halten alle:**
+
+- `truth` behauptet = tatsächlich in allen vier Dumps, in allen zehn Netzen
+- `tracked` = `drive` + External überall
+- `busTruth` Cache = Container, `busTypes` = 1, `busSkips` 95 % übersprungen
+- **Log: `3` Treffer vorher, `3` nachher** — kein neuer Fehler
+- Der Trace war vollständig: `EntityToItem` (3000 gesammelt) → `placed carrier=true
+  hasRnsTag=true` → `ItemToEntity` (`#stored=30 inserted=3000`) → `validate used=3000`
+- Der leere `/c`-Drive: `hasRnsTag=false`, `validate maxStorage=4000 used=0` —
+  platziert, nicht zerstört
+
+**Damit ist P2 abgenommen.** Modul, Brücke, Drive-Umstellung, Zählertabelle und der
+Blueprint-Pfad sind gemessen; die Qualitäts-Blockade ist verdrahtet.
+
+**Was P2 nebenbei repariert hat:** den Munitions- und Haltbarkeits-Modulo (erfundene
+Füllmengen bei halben Magazinen), die fehlende Qualität im Stapel-Dialekt, den toten
+Lesepfad aus der 2.0-Portierung und den Absturz bei fremden Entity-Tags bei der
+Platzierung.
 
 ## 8. Offene technische Schulden
 
