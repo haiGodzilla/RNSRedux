@@ -78,7 +78,7 @@ local function configureExternalBus(obj)
     obj.onlyModified = false
 end
 
-function StressTest.build(stationCount, drivesPerStation, busesPerStation)
+function StressTest.build(stationCount, drivesPerStation, busesPerStation, busKind)
     local player = game.player
     if player == nil then return "no player" end
     local surface = player.surface
@@ -123,6 +123,15 @@ function StressTest.build(stationCount, drivesPerStation, busesPerStation)
     if (busesPerStation or 0) > buses then
         notes[#notes + 1] = "bus count reduced to " .. buses .. " of " .. busesPerStation
             .. ": only " .. maxBuses .. " columns fit at " .. drivesPerStation .. " drives per station"
+    end
+
+    --Which kind of bus to build. The two sides cost differently and the plan
+    --scopes them as separate milestones, so a measurement that mixes them cannot
+    --say which one to attack. "mixed" is the original behaviour.
+    local kind = busKind or "mixed"
+    if kind ~= "mixed" and kind ~= "item" and kind ~= "external" then
+        notes[#notes + 1] = "unknown bus kind '" .. kind .. "', using mixed"
+        kind = "mixed"
     end
 
     --The item the buses move. It has to be one the fill also puts into the drives,
@@ -208,10 +217,11 @@ function StressTest.build(stationCount, drivesPerStation, busesPerStation)
                 stats.failed = stats.failed + 1
             end
 
-            --Alternating kinds, so both directions run in the same save: the item
-            --bus pushes out of the network, the external bus pulls its container
-            --into the network.
-            local isExternal = (b % 2 == 0)
+            --Alternating kinds in the default build, so both directions run in the
+            --same save: the item bus pushes out of the network, the external bus
+            --pulls its container into the network. A single kind can be forced to
+            --separate the two costs.
+            local isExternal = (kind == "external") or (kind == "mixed" and b % 2 == 0)
             local busName = isExternal and Constants.NetworkCables.externalIO.name
                 or Constants.NetworkCables.itemIO.name
             local bus = place(surface, force, player, busName, {bx, cy + 2}, record, defines.direction.south)
@@ -275,9 +285,9 @@ function StressTest.build(stationCount, drivesPerStation, busesPerStation)
     end
 
     local summary = string.format(
-        "stations=%d controllers=%d drives=%d cables=%d grids=%d power=%d buses=%d itemBuses=%d externalBuses=%d filledChests=%d failed=%d registered=%d",
+        "stations=%d controllers=%d drives=%d cables=%d grids=%d power=%d buses=%d(%s) itemBuses=%d externalBuses=%d filledChests=%d failed=%d registered=%d",
         stationCount, stats.controllers, stats.drives, stats.cables, stats.grids,
-        stats.power, stats.buses, stats.itemBuses, stats.externalBuses,
+        stats.power, stats.buses, kind, stats.itemBuses, stats.externalBuses,
         stats.filledChests, stats.failed, registered)
     if #notes > 0 then
         summary = summary .. "\n" .. table.concat(notes, "\n")

@@ -129,13 +129,12 @@ false)` auf einem echten Inventar ab, und `insert_item_into_external` ruft am
 Ende jeder Charge noch `external:update(self)` (Zeile 1101) — ein weiterer
 voller Scan innerhalb des Transfers.
 
-**Gemessen am 30.09.2026, siehe `docs/projektstand.md` 6.2.** Aufbau `10 20`,
-40 Busse gegen 0 Busse: `mod-RNSRedux` 2,527 gegen 0,221 ms im Mittel, Spitze
-20,945 gegen 1,003 ms bei 16,667 ms Budget. 40 Busse kosten also 2,31 ms pro Tick
-und reißen die Spitze über das Budget. Ohne Busse ist die Mod 1,3 % des Ticks,
-mit Bussen 15 %. Die Schätzung pro Buslauf liegt bei rund 256 µs — mehr, als die
-ganze Mod ohne Busse pro Tick braucht. Damit ist (j) nicht mehr Verdacht,
-sondern der gemessene Hauptposten.
+**Gemessen am 30.09.2026, siehe `docs/projektstand.md` 6.2, 6.6 und 6.7.** Aufbau
+`10 20`, gemischt: 40 Busse kosten **2,5 ms pro Tick im Mittel** gegen 0,221 ms
+ohne Busse, also 6,3 % des Budgets — dauerhaft, in jedem Tick. Nach dem
+Phasen-Offset liegt die Spitze bei 7,974 statt 20,945 ms. Pro Buslauf sind das
+rund **280 µs**, mehr als die ganze Mod ohne Busse pro Tick braucht. Damit ist
+(j) nicht mehr Verdacht, sondern der gemessene Hauptposten.
 
 Belegt durch den Changelog des Originalautors, der über vier Monate wiederholt
 an Kadenz und Vollständigkeitsprüfungen nachgebessert hat, ohne die Struktur
@@ -145,12 +144,13 @@ anzufassen: 1.0.3 „improving ups by ~50%", 1.0.18 Grid „every tick instead o
 External Bus von 2 auf 5 Ticks, 1.0.40 „less laggy".
 
 **Behoben (Commit `beb263c`, nachgefasst in `10154d6`):** Die Bündelung ist weg —
-jeder Bus läuft auf seiner eigenen Phase aus der `unit_number`. Das senkt die
-Spitze von 20,945 auf 13,990 ms, unter das Budget. Der erste Versuch ließ dabei
-den Mittelwert steigen, weil die Vorprüfungen (`check_focused_entity` über jeden
-Bus) weiter jeden Tick liefen; das Phasentor sitzt jetzt davor. Details in
-`docs/projektstand.md` 6.4 und 6.5. Die Kontaktkosten bleiben der eigentliche
-Umbau — der Offset senkt die Spitze, nicht den Mittelwert.
+jeder Bus läuft auf seiner eigenen Phase aus der `unit_number`, und die
+Vorprüfungen sitzen hinter demselben Tor. Zusammen fällt die Spitze von 20,945
+auf 7,974 ms, unter das Budget von 16,667. Der erste Versuch ließ den Mittelwert
+steigen, weil `check_focused_entity` weiter über jeden Bus und jeden Tick lief;
+das Tor sitzt jetzt davor. Details in `docs/projektstand.md` 6.4 bis 6.6. Die
+Kontaktkosten bleiben der eigentliche Umbau — der Offset senkt die Spitze, nicht
+den Mittelwert.
 
 ## 3. Zielarchitektur
 
@@ -345,18 +345,21 @@ anderen.** 40 Busse kosten 2,31 ms pro Tick im Mittel und eine Spitze über dem
 Budget; der Refresh-Posten ist mit `a5add2b` auf Strukturänderungen
 zusammengeschrumpft und liegt im Rauschen.
 
-Der Phasen-Offset ist umgesetzt (`beb263c`) — er kostet keinen Durchsatz und war
-damit der erste Schritt. **Offen ist damit nur noch die Kontaktkosten-Senkung**,
-also der eigentliche Umbau nach Abschnitt 3.6:
+Der Phasen-Offset ist umgesetzt (`beb263c`, `10154d6`) — er kostet keinen
+Durchsatz und war damit der erste Schritt: `max` fiel von 20,945 auf 7,974 ms,
+unter das Budget. **Offen ist damit nur noch die Kontaktkosten-Senkung**, also
+der eigentliche Umbau nach Abschnitt 3.6:
 
-1. Gezielter Zugriff statt Inventarlesen (der Bus liest heute jeden Slot).
+1. Gezielter Zugriff statt Inventarlesen — der Bus liest heute jeden Slot und legt
+   dabei pro Slot ein `Itemstack:new` an.
 2. Niedrigere Kadenz — kostet Durchsatz, ist eine Balance-Änderung.
 3. Nur bei Bedarf handeln, statt bei jedem Sweep.
 
 Die Reihenfolge aus 3.6 trägt: 1 vor 2 vor 3, weil nur 1 ohne Nebenwirkung ist.
-Welche der drei zuerst greift, entscheidet die Aufteilung des Mittels auf Item-
-und External-Busse; die kann der Messaufbau noch nicht trennen, ein vierter
-Parameter für die Busart wäre der nächste kleine Schritt.
+**Welche Seite zuerst, entscheidet die Messung** (`docs/projektstand.md` 6.7):
+Der Aufbau kann Item- und External-Busse jetzt getrennt bauen, damit die 2,5 ms
+zurechenbar werden. Der Plan führt sie als getrennte Meilensteine — P4 Scheduler,
+P5 External IO —, also ist die Trennung die Voraussetzung für beide.
 
 **Kadenz senken kostet Durchsatz.** `RNS_ItemIO_Tick = 4` entspricht 15 Items/s
 bei `IIOMultiplier = 1`. Eine Senkung auf 16 Ticks viertelt den Durchsatz,
@@ -442,10 +445,12 @@ dann
 `members` = Drives + Kabel **pro Station** + 2. Weicht eine Zeile ab, ist der
 Aufbau unvollständig und die Stufe unbrauchbar.
 
-**Busse (dritter Parameter).** Pro Bus drei Entities an einer Station: ein
-Stichkabel, der Bus, seine Kiste. Sie liegen südlich der Spinne, deren Geometrie
-unberührt bleibt. Erwartung: `members = Drives + spineLength + 2 × Busse + 2`;
-`/rns-stress-build` gibt den Wert selbst aus.
+**Busse (dritter und vierter Parameter).** `/rns-stress-build <stationen>
+<drivesProStation> [busseProStation] [mixed|item|external]`. Pro Bus drei Entities
+an einer Station: ein Stichkabel, der Bus, seine Kiste. Sie liegen südlich der
+Spinne, deren Geometrie unberührt bleibt. Erwartung:
+`members = Drives + spineLength + 2 × Busse + 2`; `/rns-stress-build` gibt den
+Wert selbst aus.
 
 | Aufbau | `members` |
 |---|---|
@@ -454,9 +459,10 @@ unberührt bleibt. Erwartung: `members = Drives + spineLength + 2 × Busse + 2`;
 | `20 50 10` | 174 |
 
 Abwechselnd Item-IO (exportiert, Kiste leer) und External-IO (importiert, Kiste
-mit 4.800 Items vorgefüllt). Zwei Einstellungen setzt der Aufbau selbst, weil die
-Busse sonst nichts tun: `filters` auf ein Item, das der Fill auch in die Drives
-legt (`ItemIOV3:IO` betritt den Exportzweig nur bei `filters.max ~= 0`,
+mit 4.800 Items vorgefüllt); der vierte Parameter erzwingt eine einzelne Art, um
+die beiden Kostenanteile zu trennen. Zwei Einstellungen setzt der Aufbau selbst,
+weil die Busse sonst nichts tun: `filters` auf ein Item, das der Fill auch in die
+Drives legt (`ItemIOV3:IO` betritt den Exportzweig nur bei `filters.max ~= 0`,
 `ItemIOV3.lua:522`), und `onlyModified = false` am External-Bus (der Import
 überspringt sonst jeden unmodifizierten Stapel, `NetworkBase.lua:1187`).
 `/rns-stress-status` meldet zusätzlich `buses total= withTarget= inNetwork=` — ein

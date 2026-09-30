@@ -682,54 +682,80 @@ einen Modulo und sonst nichts. `signal_valid` und `check_focused_entity` laufen
 nur noch auf dem eigenen Tick des Busses — also mit der Häufigkeit von vor der
 Entzerrung.
 
-Erwartung für den nächsten Lauf auf demselben Stand:
+Erwartung: `avg` zurück auf rund 2,4–2,5 ms, `min` fällt deutlich (aber nicht auf
+0,054 zurück, weil die Arbeit jetzt echt verteilt ist), `max` bleibt unter dem
+Budget. Das Ergebnis steht in 6.6.
 
-- `avg` zurück auf rund 2,4–2,5 ms — dieselbe Arbeit wie in 6.2, ohne die
-  Vorprüfungs-Overhead.
-- `min` fällt deutlich, aber **nicht** auf 0,054 zurück. Der Boden kann nicht
-  mehr bei null liegen, weil die Arbeit jetzt echt verteilt ist: im Mittel
-  entfallen rund neun Busläufe auf jeden Tick.
-- `max` bleibt unter dem Budget.
+### 6.6 Zweite Offset-Messung: das Phasentor greift
 
-Damit wäre der Offset genau das, was er sein soll: gleicher Mittelwert wie vorher,
-ohne die 21-ms-Spitze. Ob das gelingt, entscheidet der Lauf — nicht die Rechnung.
+Derselbe `10 20 4`-Stand, nach `10154d6`:
 
-**Was an dieser Messung unsicher ist und deshalb offen bleibt:**
+| Aufnahme | avg | min | max | `Frame cycle` max |
+|---|---|---|---|---|
+| ohne Busse (6.2) | 0,221 | 0,070 | 1,003 | — |
+| gebündelt (6.2) | 2,527 | 0,054 | 20,945 | 23,045 |
+| Phasentor vor dem Update (6.4) | 2,878 | 1,776 | 13,990 | 17,208 |
+| Phasentor vor den Prüfungen (6.6) | 2,756 | 2,095 | **7,974** | — |
 
-- Ob `max = 13,990` noch einen Ladeartefakt enthält. Der Save wurde für die
-  Messung geladen; `Frame cycle` max von 17,208 deutet auf keinen echten Stall,
-  aber ausschließen kann ich es nicht.
-- Ob der Bus-Lauf **gefüllt** war. Ohne Fill hätten die 20 Item-Busse nichts zu
-  exportieren, und die 2,3 ms stünden überwiegend auf der External-Seite. Das
-  entscheidet, welche Seite ich zuerst anfasse, und ist noch nicht bestätigt.
-- Ob die Phasen gleichmäßig verteilt sind. `min = 1,776` liegt **unter** dem
-  Mittel von 2,3 ms Busarbeit, es gibt also Ticks mit weniger als dem
-  Durchschnitt und entsprechend welche mit mehr. Die `entID`s des Aufbaus sind
-  geometrisch bedingt und liegen nicht gleichmäßig über die vier bzw. fünf
-  Phasen — bei den Item-Bussen sind zwei Restklassen deutlich stärker besetzt.
-  Ein Aufbau mit gestreuten `entID`s wäre der sauberere Maßstab; der Offset
-  selbst ist davon unberührt, weil er pro Bus rechnet.
+**`max` fällt auf 7,97 ms, weniger als die Hälfte des Budgets.** Die Ursache der
+Spitze war die Bündelung, und der Vorprüfungs-Overhead war der Rest — beides
+bestätigt. `Frame cycle` liegt damit wieder im Takt.
 
-### 6.6 Was der nächste Lauf klären muss
+**Der Boden steigt weiter, auf 2,095 ms — und das ist der Beweis, dass die
+Verteilung funktioniert.** Ohne Busse liegt der Boden bei 0,070; mit gephaseten
+Bussen kann er nicht dorthin zurück, weil jetzt in **jedem** Tick rund neun
+Busläufe stattfinden. Boden und Mittelwert rücken zusammen (2,095 zu 2,756, also
+76 %), die Arbeit ist also nahezu gleichmäßig verteilt. Vorher war der Boden
+0,054 bei einem Mittel von 2,527 — dieselbe Arbeit, nur in wenige Ticks gepackt.
 
-Ein Lauf auf demselben `10 20 4`-Stand:
+**Offen bleibt der Mittelwert.** Er liegt mit 2,756 über den 2,527 des
+gebündelten Laufs, also 9 % höher. Zwei Erklärungen sind möglich und ich kann
+sie mit dieser Aufnahme nicht trennen: der Sweep läuft jetzt jeden Tick über alle
+Busse (billig, aber nicht gratis), oder es ist Messrauschen. Ein Lauf gegen den
+unveränderten Bestand wäre der Test — dafür müsste der Offset abschaltbar sein,
+was er nicht ist. **Ich buche die 9 % als ungeklärt, nicht als Kosten.**
 
-1. Syncen, Save laden, Datei leeren, zwei Sekunden warten.
-2. `/rns-stress-status` — `buses total=40 withTarget=40 inNetwork=40` und
-   `members=72` müssen stehen. Weicht etwas ab, ist der Lauf nicht vergleichbar.
-3. `F4` → `show-time-usage`, `/perf-avg-frames 600`, zwei Minuten stehen lassen,
-   **nicht** tabben, dann `mod-RNSRedux` avg/min/max ablesen.
+Was sicher ist: **die Spitze war das Problem, und sie ist weg.** Ob 40 Busse
+2,5 ms kosten, ist unabhängig davon, wie die 2,5 ms über die Ticks verteilt sind.
 
-Erwartung siehe 6.5. Bleibt `avg` bei 2,88 und der Boden bei 1,78, hat das
-Phasentor nichts gebracht — dann sitzt der Overhead woanders, und die nächste Spur
-gilt dem, was pro Tick außerhalb der Phasenprüfung läuft.
+### 6.7 Die Kontaktkosten, und welche Seite zuerst
 
-Für die Kontaktkosten danach ist die Reihenfolge im Plan Abschnitt 3.6 schon
-richtig: gezielter Zugriff statt Inventarlesen, dann Kadenz, dann Bedarf. Welche
-Seite zuerst dran ist, entscheidet die Aufteilung des Mittels auf Item- und
-External-Busse — dazu muss aber erst geklärt sein, ob der Lauf gefüllt war, und
-der Aufbau kann die beiden Busarten noch nicht trennen. Ein vierter Parameter für
-die Busart wäre der nächste kleine Schritt am Werkzeug.
+Der Mittelwert ist die eigentliche Rechnung: 2,756 minus 0,221 ms Grundlast
+ergibt **rund 2,5 ms für 40 Busse**, also 6,3 % des Tick-Budgets — dauerhaft, in
+jedem Tick. Bei den 40 Bussen sind das im Mittel neun Busläufe pro Tick
+(20 Item-Busse auf einem von vier Ticks, 20 External-Busse auf einem von fünf),
+also **rund 280 µs pro Buslauf**.
+
+Diese Zahl ist hoch genug, um misstrauisch zu werden, und der Verdacht steht im
+Code:
+
+- `EIO:update` läuft bei **jedem** Buslauf über **jeden** Slot des Containers und
+  legt dafür ein `Itemstack:new(...)` an (`ExternalIO.lua:278`) — bei 48 Slots
+  also 48 Allokationen pro Buslauf. Das ist genau das Muster, das die
+  Durchsatzanalyse verbietet.
+- `inv.sort_and_merge()` wird pro Buslauf aufgerufen, an mehreren Stellen
+  (`ExternalIO.lua:223`, `276`, `NetworkBase.lua:952`).
+- `NetworkBase.lua:1066–1069` fragt pro Insert-Versuch zweimal `get_item_count`
+  und einmal `count_empty_stacks` ab.
+
+**Was die Messung nicht hergibt: welche der beiden Seiten das Mittel trägt.** Der
+Aufbau baute bisher nur gemischt. Der Plan trennt sie aber — P4 ist der
+Scheduler, P5 ist ausdrücklich External IO —, also entscheidet erst die Trennung,
+welchen Meilenstein wir anfassen.
+
+Dafür hat `/rns-stress-build` jetzt einen vierten Parameter
+(`… 4 item` / `… 4 external` / `… 4 mixed`). Zwei Läufe, sonst identisch:
+
+1. `/rns-stress-build 10 20 4 item` → 40 Item-Busse, keine External-Busse
+2. `/rns-stress-build 10 20 4 external` → 40 External-Busse, keine Item-Busse
+
+Zusammen mit dem gemischten Wert aus 6.6 ergeben die drei Zahlen ein
+Gleichungssystem, das die Kosten je Seite isoliert. Der Aufbau ist bis auf die
+Busart identisch, also ist die Differenz zurechenbar.
+
+**Für beide Läufe gilt: vorher `/rns-stress-fill 16 1000`.** Ohne Fill hat die
+Item-Seite nichts zu exportieren, und die Messung zeigt dann nur die External-
+Seite — unabhängig davon, was der Parameter sagt.
 
 ## 7. Offene technische Schulden
 
