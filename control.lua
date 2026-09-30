@@ -541,6 +541,38 @@ commands.add_command("rns-store-test", "RNSRedux: exercise ItemStore against a s
     game.print(table.concat(lines, "\n"))
 end)
 
+--Debug command: sets the external bus rescan period and reads it back. The first
+--control run set Constants.Settings.RNS_ExternalStorage_Rescan from the console
+--and nothing checked that the assignment arrived, so that run could not refute
+--anything. This does the same and reports the value it reads afterwards, which is
+--the check that was missing.
+--A period of 1 disables the skip: the guard tests rescanCounter < period, and that
+--is false after the first increment.
+--It also zeroes the skip counters, so before and after can be compared over the
+--same window instead of as a difference of monotonic totals.
+commands.add_command("rns-bus-skip", "RNSRedux: set the external bus rescan period. <n>, 1 disables the skip", function(event)
+    local n = tonumber(event.parameter or "")
+    if n == nil or n < 1 then
+        game.print("rns-bus-skip: usage /rns-bus-skip <n> with n >= 1")
+        return
+    end
+    local previous = Constants.Settings.RNS_ExternalStorage_Rescan
+    Constants.Settings.RNS_ExternalStorage_Rescan = n
+
+    local zeroed = 0
+    for _, obj in pairs(storage.entityTable or {}) do
+        if obj.skippedSweeps ~= nil then
+            obj.skippedSweeps = 0
+            obj.readSweeps = 0
+            zeroed = zeroed + 1
+        end
+    end
+
+    game.print("rns-bus-skip: period " .. tostring(previous) .. " -> "
+        .. tostring(Constants.Settings.RNS_ExternalStorage_Rescan)
+        .. ", counters zeroed on " .. zeroed .. " buses")
+end)
+
 --Stress test commands for UPS measurement.
 commands.add_command("rns-stress-build", "RNSRedux: build a stress network. <stations> <drivesPerStation> [busesPerStation] [mixed|item|external]",
     function(data)
