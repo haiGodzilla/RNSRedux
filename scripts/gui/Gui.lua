@@ -134,21 +134,6 @@ function GUI.on_gui_clicked(event)
     local playerIndex = event.player_index
     local player = getPlayer(playerIndex)
     local RNSPlayer = getRNSPlayer(playerIndex)
-
-    --TEMPORARY DIAGNOSTIC, remove once the NII click path is settled. Records
-    --every click on one of our own elements, so "the click never arrived" can be
-    --told apart from "the handler returned early". Before the GUI validity check
-    --below, because that check is one of the places a click can vanish.
-    if event.element ~= nil and event.element.name ~= nil
-        and string.match(event.element.name, "RNS_") ~= nil then
-        helpers.write_file("rns-click.txt", "click '" .. event.element.name
-            .. "' button=" .. tostring(event.button)
-            .. " left=" .. tostring(defines.mouse_button_type.left)
-            .. " right=" .. tostring(defines.mouse_button_type.right)
-            .. " shift=" .. tostring(event.shift)
-            .. " ctrl=" .. tostring(event.control) .. "\n", true)
-    end
-
     if RNSPlayer.GUI == nil or RNSPlayer.GUI.valid == false then return end
 
     if event.element.name == Constants.Settings.RNS_Gui.tooltip .. "_CloseButton" then

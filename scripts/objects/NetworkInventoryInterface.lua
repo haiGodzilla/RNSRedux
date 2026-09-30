@@ -656,57 +656,7 @@ function NII.transfer_from_idinv(RNSPlayer, NII, tags, count)
 	if network == nil then return end
 	if network:is_empty() then return end
 	if tags == nil then return end
-	--TEMPORARY DIAGNOSTIC, remove once the NII click path is settled. The click
-	--reaches this function; this records what it was handed, so "returned early"
-	--and "raised before doing anything" can be told apart from the outside.
-	local raw = tags.stack
-	local rawName = raw ~= nil and raw.name or nil
-	helpers.write_file("rns-click.txt", "idinv stack name=" .. tostring(rawName)
-		.. " count=" .. tostring(raw ~= nil and raw.count or nil)
-		.. " modified=" .. tostring(raw ~= nil and raw.modified or nil)
-		.. " netBefore=" .. tostring(rawName ~= nil and network.Contents.item[rawName] or nil) .. "\n", true)
 	local itemstack = Itemstack:reload(tags.stack)
-
-	--TEMPORARY DIAGNOSTIC. The transfer only proceeds when its exact comparison
-	--passes, and that comparison walks name, health, ammo, durability, modified,
-	--tags and extras. So dump every field of both stacks, from a drive that
-	--actually holds the item -- the first drive in the table need not, and probing
-	--that one produced a useless `stored=false` in an earlier run.
-	local function fieldList(stack)
-		if stack == nil then return "nil" end
-		local parts = {}
-		for key, value in pairs(stack) do
-			if type(value) == "table" then
-				local entries = 0
-				for _ in pairs(value) do entries = entries + 1 end
-				parts[#parts + 1] = key .. "=table(" .. entries .. ")"
-			else
-				parts[#parts + 1] = key .. "=" .. tostring(value)
-			end
-		end
-		table.sort(parts)
-		return table.concat(parts, ",")
-	end
-
-	local held = nil
-	for p = 1, Constants.Settings.RNS_Max_Priority*2 + 1 do
-		for _, drive in pairs(network.ItemDriveTable[p]) do
-			if drive.storageArray[itemstack.name] ~= nil then
-				held = drive.storageArray[itemstack.name]
-				break
-			end
-		end
-		if held ~= nil then break end
-	end
-	local loose, exact = nil, nil
-	if held ~= nil then
-		loose = itemstack:compare_itemstacks(held, false)
-		exact = itemstack:compare_itemstacks(held, true)
-	end
-	helpers.write_file("rns-click.txt", "idinv probe holdingDrive=" .. tostring(held ~= nil)
-		.. " loose=" .. tostring(loose) .. " exact=" .. tostring(exact)
-		.. "\n  clicked[" .. fieldList(itemstack) .. "]"
-		.. "\n  stored [" .. fieldList(held) .. "]\n", true)
 	if count == -1 then count = prototypes.item[itemstack.name].stack_size end
 	if count == -2 then count = math.ceil(math.max(1, prototypes.item[itemstack.name].stack_size/2)) end
 	if count == -3 then count = prototypes.item[itemstack.name].stack_size*10 end
@@ -716,17 +666,7 @@ function NII.transfer_from_idinv(RNSPlayer, NII, tags, count)
 	local amount = math.min(itemstack.count, count)
 	if amount <= 0 then return end
 
-	--TEMPORARY DIAGNOSTIC, see above. The before and after go around the same call
-	--the GUI has always made; if only the first line shows up, the call raised.
-	local inventory = RNSPlayer.thisEntity.get_main_inventory()
-	local netBefore = network.Contents.item[itemstack.name]
-	local playerBefore = inventory.get_item_count(itemstack.name)
-
 	BaseNet.transfer_from_network_to_inv(network, {thisEntity = RNSPlayer.thisEntity,inventory = {input = {index = 1, max = 1, values = {defines.inventory.character_main}}}}, itemstack, amount, true, true, true)
-
-	helpers.write_file("rns-click.txt", "idinv result amount=" .. tostring(amount)
-		.. " net " .. tostring(netBefore) .. "->" .. tostring(network.Contents.item[itemstack.name])
-		.. " player " .. tostring(playerBefore) .. "->" .. tostring(inventory.get_item_count(itemstack.name)) .. "\n", true)
 
 	--[[local itemDrives = BaseNet.getOperableObjects(network.ItemDriveTable)
 	local externalItems = network:filter_externalIO_by_valid_signal()
@@ -826,29 +766,14 @@ function NII.interaction(event, RNSPlayer)
 	if event.button == defines.mouse_button_type.right and event.shift == true then count = -3 end --10 Stacks
 	if event.button == defines.mouse_button_type.left and event.control == true then count = -4 end --All Stacks
 
-	--TEMPORARY DIAGNOSTIC, remove once the NII click path is settled. Prints the
-	--values every branch below depends on, before any of them can return quietly.
-	if string.match(event.element.name, "RNS_NII") ~= nil then
-		local decision = "nii '" .. event.element.name .. "' count=" .. count
-			.. " tags=" .. (event.element.tags ~= nil and "yes" or "nil")
-		if event.element.tags ~= nil then
-			decision = decision .. " id=" .. tostring(event.element.tags.ID)
-				.. " stack=" .. tostring(event.element.tags.stack ~= nil)
-		end
-		local target = storage.entityTable[event.element.tags ~= nil and event.element.tags.ID or nil]
-		decision = decision .. " obj=" .. (target ~= nil and "yes" or "nil")
-		if target ~= nil then
-			decision = decision .. " inNetwork=" .. tostring(BaseNet.exists_in_network(target.networkController, target.entID))
-		end
-		helpers.write_file("rns-click.txt", decision .. "\n", true)
-	end
-
-	
 	local obj = storage.entityTable[event.element.tags.ID]
 	if BaseNet.exists_in_network(obj.networkController, obj.entID) == false then return end
 
 	if string.match(event.element.name, "RNS_NII_Insert") then
 		NII.transfer_from_pinv(RNSPlayer, obj, event.element.tags, count)
+		return
+	elseif string.match(event.element.name, "RNS_NII_PInv") then
+		NII.transfer_player_to_network(RNSPlayer, obj, event.element.tags, count)
 		return
 	elseif string.match(event.element.name, "RNS_NII_IDInv") then
 		NII.transfer_from_idinv(RNSPlayer, obj, event.element.tags, count)
