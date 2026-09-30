@@ -317,28 +317,34 @@ Spielerklick-Grenze im Inventar liegt und nicht in der Mod.
 
 Betrifft `NetworkController.lua` (geändert) und `NetworkBase.lua` (unverändert).
 
-**P2 — ItemStore mit Chunks. Läuft; das Modul steht, die Drives sind nicht
-umgestellt.** Ausbau des begonnenen Moduls um dynamische Chunks, Item- und
+**P2 — ItemStore mit Chunks. Modul und Brücke fertig und belegt; die Drives sind
+nicht umgestellt.** Ausbau des begonnenen Moduls um dynamische Chunks, Item- und
 Quality-Schlüssel, O(1)-Abfragen. Testbefehl um Vielfach-Chunks und Save/Load
 erweitert.
 
 **Entschieden (Andre):** Qualität wird **fähig** gemacht — Store und Zählertabelle
 führen `name|quality` —, aber die **Politik bleibt**: der Drive-Eingang weist
 Qualitäts-Items weiterhin ab. Und: erst das Modul, die Drives in einem eigenen
-Schritt.
+Schritt. Der Schlüssel wandert deshalb **später** mit der Politik, nicht jetzt;
+solange die Tür zu ist, kommt kein Qualitäts-Item in die Zählertabelle.
 
-**Zwei Erkenntnisse, die den Umfang ändern** (Herleitung in
-`docs/projektstand.md` 7.1 und 7.2):
+**Belegt und nicht mehr offen** (`docs/projektstand.md` 7.3 bis 7.9):
 
-- **Der Store braucht ein `rebuild`.** `storage` entfernt unregistrierte
-  Metatables beim Speichern, also wäre `store:insert` nach einem Ladezyklus ein
-  Aufruf auf `nil`. Alle anderen Objekte des Projekts haben dafür eine
-  `rebuild`-Funktion, die `onLoad` aufruft — der ItemStore hatte keine.
-- **Chunks sind Versicherung gegen Stack-Size-Mods, nicht gegen Vanilla.** Die
-  Slot-Zahl eines Inventars ist höchstens so groß wie seine Item-Zahl, und die ist
-  durch die Kapazität begrenzt. Solange die Kapazität unter 65535 liegt, reicht ein
-  Chunk immer; ein zweiter wird erst bei größerer Kapazität **und** kleiner
-  Stackgröße erreichbar.
+- **`ItemStackDefinition` trägt die vollständige Identität** — `name`, `count`,
+  `quality`, `health`, `durability`, `ammo`, `tags`, `custom_description`,
+  `spoil_percent`. Gemessen: eine halbvolle Magazine (4 von 10) geht hinein und
+  kommt mit 4 zurück, über den Store und über einen Ladezyklus. **Das ist der
+  Befund, der P2 trägt** — die Handserialisierung in `Itemstack.lua` war nur
+  nötig, weil nichts anderes die Felder trug.
+- **`storage` entfernt unregistrierte Metatables**, also braucht der Store ein
+  `rebuild`. Gemessen.
+- **Die `LuaInventory`-Referenz und mehrere Inventare überstehen den
+  Ladezyklus.** Gemessen.
+- **Item-Tags halten keine Objektreferenzen** (`Tags :: dictionary[string →
+  AnyBasic]`), also kann ein Engine-Inventar nicht in ein Item-Tag. Der
+  Blueprint-Pfad **muss** serialisieren.
+- **`insert` nimmt keinen Stapel-Array.** Chargentransfers in P3 müssen als
+  Schleife gehen.
 
 **Offen und als Nächstes:** die Umstellung der Drives. `storageArray` wird an fünf
 Stellen außerhalb des Moduls direkt gelesen (`NetworkBase.lua` 206/971/1008,

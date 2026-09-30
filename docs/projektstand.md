@@ -1667,6 +1667,66 @@ und genau das ist die Regel, die diese Sitzung schon viermal getragen hätte.
 überhaupt beachtet. Der nächste Lauf zeigt es, und das ist die Frage, die 7.7 als
 Vorbedingung für die Drive-Umstellung festgehalten hat.
 
+### 7.9 Die Brücke trägt: vier Vieren, und nach dem Laden auch vier
+
+Commit `96e8d1a`, nach dem Fix:
+
+```
+bridge: partial magazine inserted=1 ammo along the way:
+  inventory=4 Itemstack=4 definition=4 stored=4
+  (placed: 4 rounds in one magazine, full is 10)
+
+bridge after load: magazine present=true ammo=4 (stored before the save: 4)
+```
+
+**Jeder Sprung trägt die Identität.** Die Engine beachtet das `ammo`-Feld beim
+Einfügen, der Store hält es, und es übersteht den Ladezyklus. Damit ist die
+letzte offene Frage vor der Drive-Umstellung beantwortet — und zwar positiv.
+
+**Was das belegt:** `ItemStackDefinition` ist der vollständige Weg für die
+Item-Identität. Munition, Haltbarkeit, Gesundheit, Tags und Qualität wandern durch
+die Engine, ohne dass der Mod sie anfassen muss. **Die Handserialisierung in
+`Itemstack.lua` wird damit überflüssig** — samt ihrem Munitions-Modulo, das
+halbvolle Magazine zu erfundenen Füllmengen verschmolz.
+
+**Und die Ausgangsbrücke deckt die andere Richtung:** `forEachStack occupied=3`
+bei `used=58` — drei belegte Slots, 58 Items, beide Zahlen stimmen mit dem überein,
+was Phase 1 eingelegt hat. Die Anzeige und die Netzwerkbuchhaltung können den Store
+also slotweise lesen, ohne dass etwas verloren geht.
+
+**Der Rest des Laufs ist unverändert grün:** Metatable weg und durch `rebuild`
+geheilt (`store.insert is a function=false` → `=true`), `getCount via method=50`,
+Qualität über den Speicher (`bare=4 normal=4 legendary=9`), beide
+Standalone-Inventare mit Inhalt, und `array insert ok=false` als Beleg für P3.
+
+### 7.10 Stand von P2 und was als Nächstes kommt
+
+**Fertig und belegt:**
+
+| Teil | Stand |
+|---|---|
+| Modul mit Chunks, Kapazitätssemantik, `name\|quality`-Schlüssel | geschrieben, Probelauf grün |
+| `rebuild` für den Ladezyklus | belegt: ohne es ist die Metatable weg |
+| Brücke in beide Richtungen | belegt: vier Vieren hin, vier zurück, über den Speicher |
+| Engine kann Qualität halten und unterscheiden | belegt |
+| `insert` nimmt keinen Array | belegt, gegen die Plan-Hoffnung |
+| Item-Tags halten keine Objektreferenzen | belegt, also keine Alternative zum Serialisieren im Blueprint-Pfad |
+
+**Offen, in dieser Reihenfolge:**
+
+1. **Die Drive-Umstellung.** `storageArray` an fünf Stellen außerhalb des Moduls
+   (`NetworkBase.lua` 206/971/1008, `NetworkInventoryInterface.lua` 368,
+   `WirelessGrid.lua` 391) plus die Buchhaltung in `ItemDrives.lua`. Der
+   Abnahmetest dafür existiert: `/rns-debug-nc` → `/rns-debug-refresh` →
+   `/rns-debug-nc`, und `truth` im Dump vergleicht behauptet gegen tatsächlich.
+2. **Der Blueprint-Pfad.** Entscheidung: Er serialisiert weiter, weil Item-Tags
+   keine Objektreferenzen halten (7.5). Das heißt, `DataConvert_EntityToItem` und
+   `DataConvert_ItemToEntity` behalten die Handserialisierung — **aber nur für
+   diesen einen Vorgang.** Im Betrieb läuft alles über die Engine.
+3. **Die Item-Verteilung beim Abbau** (Andre). Eigener Schritt nach 1, weil sie
+   denselben Einbau-Pfad benutzt. Offen ist der Rückfall, wenn das Netz nach dem
+   Abbau voll ist.
+
 ## 8. Offene technische Schulden
 
 - `NetworkBase.addConnectables`, Zeilen 183/186/191: drei Prüfungen mit `and`
