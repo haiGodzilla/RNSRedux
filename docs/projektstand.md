@@ -2081,6 +2081,49 @@ trägt ihn.
    `storeTrace`-Aufruf in `DataConvert_*`, die `placed:`-Zeile in `Event.placed` und
    die `validate:`-Zeile in `ItemDrives`.
 
+### 7.20 Der Hover über einen platzierten Drive zeigt `0/0` — der Grund steht im Prototype
+
+Andres Angabe war der Schlüssel: Es ist der **Hover in der Welt**, über einen
+platzierten Drive. Und im Prototype steht:
+
+```lua
+driveE.type = "container"
+driveE.inventory_size = 0
+```
+
+**Ein Drive ist ein `container` mit null Slots.** Das ist für die Mod-Logik richtig —
+der Speicher liegt nicht im Entity-Inventar, sondern im Script-Inventar des Stores —
+aber es erklärt die Anzeige: **Factorio zeigt beim Hover über einen Container dessen
+Inventar als `x / y` an, und bei null Slots ist das `0 / 0`.** Es ist also nicht die
+Mod, die falsch anzeigt, sondern das Spiel zeigt ein leeres Inventar, das die Mod nie
+benutzt.
+
+**Der Klick zeigt dagegen die Wahrheit**, weil `on_gui_opened` → `GUI.open_tooltip_gui`
+das Mod-eigene Fenster öffnet, und das liest `self:getStorageSize()`.
+
+**Als Hypothese gekennzeichnet, mit einem billigen Test:** Wenn `inventory_size`
+temporär auf 1 gesetzt wird und der Hover dann `0 / 1` zeigt, ist es die
+Container-Anzeige. Zeigt er weiter `0 / 0`, ist die Ursache anders und ich habe
+falsch geschlossen.
+
+**Das ist ein Altbestand, nicht mein Umbau:** `type` und `inventory_size` habe ich in
+dieser Sitzung nicht angefasst, und sie stammen aus dem 1:1-Port.
+
+**Zur Behebung — drei Wege, keiner davon klein:**
+
+1. **Entity-Typ wechseln**, sodass das Spiel keine Container-Anzeige baut. Die
+   IO-Busse sind `assembling-machine`, also gibt es im Projekt ein Vorbild. Kostet
+   aber Prüfung von Mining, `player.opened`, Blueprint-Verhalten und der
+   Container-Semantik (die Drives sind heute anfahrbar/öffnbar als Container).
+2. **Einen eigenen Hover-Tooltip setzen**, der die richtigen Zahlen trägt. In 2.0
+   gibt es Runtime-Tooltip-Felder; ob sie auf dieses Prototype anwendbar sind, ist
+   **ungelesen**.
+3. **Nichts tun.** Der Klick zeigt die Wahrheit, der Hover eine irreführende Null.
+
+**Empfehlung: eigener Schritt nach P2.** Es ist eine Anzeige-Ungenauigkeit ohne
+Datenverlust, und Weg 1 berührt Mechanik, die der Umbau gerade erst stabil gemacht
+hat.
+
 ## 8. Offene technische Schulden
 
 - `NetworkBase.addConnectables`, Zeilen 183/186/191: drei Prüfungen mit `and`
