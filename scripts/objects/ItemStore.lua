@@ -87,6 +87,67 @@ local function chunkWithRoom(store)
     return nil
 end
 
+--Builds the engine's stack definition from a stack the mod holds as an Itemstack.
+--ItemStackDefinition carries name, count, quality, health, durability, ammo and
+--tags, so a stack's identity travels -- which is the whole point of P2, and the
+--reason the mod's hand serialisation can go away.
+--Two things it does not carry: blueprint data and equipment grids. Those live in
+--Itemstack.extras and have no field here; they are restored separately through
+--LuaItemStack::import_stack (see insertItemstack).
+function ItemStore.definitionFrom(itemstack)
+    if itemstack == nil or itemstack.name == nil then return nil end
+    local definition = {
+        name = itemstack.name,
+        count = itemstack.count,
+        quality = ItemStore.qualityOf(itemstack.quality),
+    }
+    if itemstack.health ~= nil then definition.health = itemstack.health end
+    if itemstack.durability ~= nil then definition.durability = itemstack.durability end
+    if itemstack.ammo ~= nil then definition.ammo = itemstack.ammo end
+    --Only the real tags. Itemstack.extras is the mod's own bag for blueprint data
+    --and grids, and the engine's tags field is a different thing entirely.
+    if itemstack.tags ~= nil and next(itemstack.tags) ~= nil then
+        definition.tags = itemstack.tags
+    end
+    return definition
+end
+
+--Inserts a stack the mod holds as an Itemstack. Returns how many items went in.
+--An item that carries an export string -- blueprint, blueprint book, deconstruction
+--or upgrade planner, item-with-tags -- cannot be rebuilt from a definition alone,
+--so it is inserted as a plain item and then filled from its export string.
+function ItemStore:insertItemstack(itemstack, amount)
+    local definition = ItemStore.definitionFrom(itemstack)
+    if definition == nil then return 0 end
+    if amount ~= nil and amount < definition.count then definition.count = amount end
+
+    local inserted = self:insert(definition)
+    if inserted <= 0 then return 0 end
+
+    local data = itemstack.stack_export_string
+    if data ~= nil and data ~= "" then
+        local stack = self:getStack(definition.name, definition.quality)
+        if stack ~= nil then stack.import_stack(data) end
+    end
+    return inserted
+end
+
+--Yields every occupied slot as a LuaItemStack, so callers that speak the mod's
+--Itemstack dialect can rebuild one with Itemstack:new(stack) and lose nothing:
+--that constructor reads ammo, durability, health and the export string itself.
+--The slot indices come along for callers that need to replace a single slot.
+function ItemStore:forEachStack(callback)
+    for i = 1, #self.chunks do
+        local chunk = self.chunks[i]
+        for j = 1, #chunk do
+            local stack = chunk[j]
+            if stack.valid_for_read == true and stack.count > 0 then
+                callback(stack, i, j)
+            end
+        end
+    end
+end
+
 --Releases every chunk. Without this the savegame leaks: a script inventory is not
 --freed by dropping the reference.
 function ItemStore:destroy()

@@ -576,6 +576,19 @@ commands.add_command("rns-store-test", "RNSRedux: P2 store probe. First call bui
         local arrayStone = probeInv.get_item_count("stone")
         probeInv.destroy()
 
+        --The bridge: does a stack's identity survive the store? A partial magazine
+        --is the clearest case -- a count alone cannot tell you it is partial, so if
+        --the number of rounds comes back, the definition carried it.
+        local magazineInv = game.create_inventory(2)
+        magazineInv.insert{name = "firearm-magazine", count = 1}
+        local live = magazineInv[1]
+        live.ammo = 4
+        local wrapped = Itemstack:new(live)
+        local bridgeAccepted = store:insertItemstack(wrapped)
+        local bridgeBack = store:getStack("firearm-magazine", "normal")
+        local bridgeAmmo = (bridgeBack ~= nil) and bridgeBack.ammo or -1
+        magazineInv.destroy()
+
         --The quality question needs both qualities of the same item in one
         --inventory, and it has to survive the save. The first attempt put the
         --legendary stack in a throwaway inventory and destroyed it, so phase 2 could
@@ -605,6 +618,8 @@ commands.add_command("rns-store-test", "RNSRedux: P2 store probe. First call bui
             beforeBare = chunkC.get_item_count("iron-plate"),
             beforeNormal = chunkC.get_item_count{name = "iron-plate", quality = "normal"},
             beforeLegendary = chunkC.get_item_count{name = "iron-plate", quality = "legendary"},
+            bridgeAccepted = bridgeAccepted,
+            bridgeAmmo = bridgeAmmo,
         }
 
         table.insert(lines, "phase 1: built")
@@ -621,6 +636,9 @@ commands.add_command("rns-store-test", "RNSRedux: P2 store probe. First call bui
             .. " normal=" .. chunkC.get_item_count{name = "iron-plate", quality = "normal"}
             .. " legendary=" .. chunkC.get_item_count{name = "iron-plate", quality = "legendary"}
             .. " (4 normal + 9 legendary inserted)")
+        table.insert(lines, "bridge: partial magazine inserted=" .. bridgeAccepted
+            .. " ammo back=" .. bridgeAmmo .. " (placed: 4 rounds in one magazine)"
+            .. " count=" .. store:getCount("firearm-magazine"))
         table.insert(lines, "chunkA steel=" .. chunkA.get_item_count("steel-plate")
             .. " chunkB plastic=" .. chunkB.get_item_count("plastic-bar"))
         table.insert(lines, "NOW SAVE, RETURN TO MENU, LOAD, THEN RUN /rns-store-test AGAIN")
@@ -673,6 +691,20 @@ commands.add_command("rns-store-test", "RNSRedux: P2 store probe. First call bui
             .. tostring(type(store.insert) == "function"))
         if type(store.insert) == "function" then
             table.insert(lines, "getCount via method=" .. store:getCount("iron-plate")
+                .. " used=" .. store:getTotalItems())
+
+            --Does a stack's identity survive a save/load too? Same question as in
+            --phase 1, one cycle later.
+            local magazine = store:getStack("firearm-magazine", "normal")
+            table.insert(lines, "bridge after load: magazine present=" .. tostring(magazine ~= nil)
+                .. " ammo=" .. tostring(magazine ~= nil and magazine.ammo or -1)
+                .. " (placed: " .. tostring(probe.bridgeAmmo) .. ")")
+
+            --The out-bridge: every occupied slot as a live stack, which is what the
+            --display and the network bookkeeping will read.
+            local occupied = 0
+            store:forEachStack(function() occupied = occupied + 1 end)
+            table.insert(lines, "forEachStack occupied=" .. occupied
                 .. " used=" .. store:getTotalItems())
         end
 
