@@ -351,43 +351,77 @@ sitzt in oder hinter `NII.transfer_from_idinv`.
 Was die Spur **nicht** hergibt und deshalb offen bleibt: ob die Funktion früh
 zurückkehrt, ob `transfer_from_network_to_inv` scheitert, oder ob sie wirft.
 
-Ein Nebenwert, der nicht aus dem Gedächtnis beantwortet wird: `button=2`. Ob das
-die linke oder die rechte Maustaste ist, ist **nicht** belegt — die Dokumentation
-nennt die Zahlenwerte von `defines.mouse_button_type` nicht, und ein
-`button=2` bei `count=1` widerspricht der naheliegenden Annahme. Die Spur
-schreibt deshalb zusätzlich `left=` und `right=` mit. Belegt ist nur: Die
-Zuordnung im Code greift konsistent, `count=1` und `-2` treffen verschiedene
-Zweige.
+Die Maustaste ist damit geklärt: `left=2`, `right=4`. `button=2` war die linke,
+die Zuordnung im Code ist korrekt — belegt durch die Ausgabe, nicht durch
+Annahme.
 
 **Verdacht, aus dem Code gelesen.** Der Transfer sucht einen Drive, dessen
 gespeicherter Stapel **exakt** zum übergebenen passt
 (`compare_itemstacks(storedItem, exact)` mit `exact=true`,
-`NetworkBase.lua:1009`). Diese Prüfung vergleicht `health`, `ammo`,
-`durability`, `modified`, `tags` und `extras`. Scheitert sie, findet die Suche
-nichts und kehrt **ohne Meldung** zurück. Der Klick übergibt einen Stapel aus dem
-`interfaceCache`, `/rns-debug-extract` dagegen eine frische Vorlage aus
-`Itemstack.create_template` — der Unterschied zwischen funktionierendem Befehl
-und stummem Klick steckt in genau diesen Feldern.
+`NetworkBase.lua:1009`), und kehrt ohne Meldung zurück, wenn er keinen findet.
+Diese Prüfung ist der Kandidat; 5.11 legt sie offen.
 
-Die Spur (Commit `ee1b83d`, **temporär, vor dem Release zu entfernen**). protokolliert deshalb im zweiten Lauf:
+### 5.10 Zweite Spur: der Aufruf läuft, er bewegt nichts
 
-| Zeile | Bedeutung |
-|---|---|
-| `idinv stack name=… count=… modified=… netBefore=…` | Was der Klick mitbringt. Keine Zeile → `tags.stack` ist leer und `Itemstack:reload` bekommt nichts. |
-| `idinv match stored=true loose=true exact=false …` | Der Stapel passt nur lose. Dann ist eines der sechs Felder die Ursache, und `clickedModified`/`storedModified`/`…Extras` grenzen es ein. |
-| `idinv match stored=false` | Der erste Drive hält das Item gar nicht — dann prüft die Suche im falschen Netz. |
-| `idinv result amount=… net a->b player c->d` | Der Aufruf ist durchgelaufen. `b` gleich `a` → er hat nichts gefunden. |
-| Nur `idinv stack …` und `idinv match …`, kein `result` | Der Aufruf hat **geworfen**. Dann steht die Meldung in `factorio-current.log`. |
-
-Dazu die Meldungsspur, die im ersten Lauf nicht abgefragt wurde:
-
-```bash
-grep "RNSRedux error" "$HOME/Library/Application Support/factorio/factorio-current.log"
+```
+click 'RNS_NII_IDInv_7' button=2 left=2 right=4 shift=false ctrl=false
+nii 'RNS_NII_IDInv_7' count=1 tags=yes id=28 stack=true obj=yes inNetwork=true
+idinv stack name=advanced-circuit count=15000 modified=nil netBefore=15000
+idinv match stored=false storedCount=nil loose=false exact=false
+idinv result amount=1 net 15000->15000 player 0->0
 ```
 
-`GUI.on_gui_clicked` wird in `control.lua` über `Util.safeCall` geführt, und
-`Util.safeCall` schreibt jeden Fehler per `log()` in die Datei
-(`utils/Util.lua:13–17`). Ein Wurf im Klickpfad steht also dort.
+Drei Befunde:
+
+- **Kein Wurf.** `grep "RNSRedux error"` in `factorio-current.log` findet nichts,
+  und die `result`-Zeile ist geschrieben. Der Aufruf ist zurückgekehrt.
+  `GUI.on_gui_clicked` läuft über `Util.safeCall` (`utils/Util.lua:13–17`), ein
+  Fehler stünde also in der Datei.
+- **Der Aufruf bewegt nichts.** `net 15000->15000`, `player 0->0`.
+- **Der stille Ausstieg ist die Vergleichsprüfung**, nicht die GUI-Verkabelung.
+
+**Meine `match`-Zeile war wertlos** und darf nicht gelesen werden: Sie prüfte den
+*ersten* Drive der Prioritätstabelle, und der hält `advanced-circuit` gar nicht —
+daher `stored=false`. Bei 16 Typen zyklisch über vier Größen bekommen nur die 15
+größeren Drives diesen Typ; die 15.000 sind 15 × 1.000.
+
+### 5.11 Der Test, der die Ursache festnagelt
+
+Die Spur (Commit `b3b33f3`) sucht jetzt einen Drive, der das Item **wirklich**
+hält, und schreibt **alle Felder beider Stapel** heraus, Tabellenfelder mit der
+Anzahl ihrer Einträge. Damit ist die Vergleichsprüfung vollständig sichtbar.
+
+Die These, die das prüft: Die beiden Wege erzeugen Stapel unterschiedlich.
+`/rns-debug-extract` baut den Master über `Itemstack.create_template`, und das
+setzt `tags = {}` und `extras = {}` (`Itemstack.lua:175–176`). Der Klick übergibt
+einen Stapel aus dem `interfaceCache`, erzeugt über `Itemstack:new`, das für
+gewöhnliche Items `tags = nil` setzt (`Itemstack.lua:33`). Und
+`Itemstack.compare_tags` wertet `nil` gegen `{}` als ungleich
+(`Itemstack.lua:207–209`):
+
+```lua
+if tag1 == nil and tag2 == nil then return true end
+if type(tag1) ~= "table" or type(tag2) ~= "table" then return false end
+```
+
+Ein `nil` gegen ein leeres `{}` fällt in die zweite Zeile und liefert `false`.
+Unterscheiden sich die Wege in genau diesem Punkt, erklärt das die Beobachtung
+vollständig: Befehl funktioniert, Klick nicht.
+
+**Falls das zutrifft, ist es wieder der Aufbau, nicht der Produktivpfad.** Ein
+Spieler legt Items über `Itemstack:new` ab, das `tags = nil` setzt. Der Fill
+benutzt `create_template` und erzeugt `tags = {}` — eine Form, die das Spiel so
+nicht herstellt. Dann wären gefüllte Drives die Ausnahme und eine handgelegte
+Einlagerung die Regel.
+
+In einem Zug mitgemessen:
+
+1. Ein Item einlagern, das **nicht** in `FILL_ITEMS` steht — nur dann entsteht ein
+   neuer Stapel über den echten Pfad. Vorschlag: `copper-ore`.
+2. Dasselbe Item wieder entnehmen.
+
+Geht das, ist die Ursache eingegrenzt und der Produktivpfad nachweislich intakt.
+Geht es nicht, sitzt der Fehler tiefer, und die Feldliste aus der Spur zeigt, wo.
 
 **Zwei Stellen, die beim Lesen aufgefallen und weiterhin ungemessen sind:**
 `NII.interaction` hat keinen Zweig für `RNS_NII_PInv_*` — die Buttons der
