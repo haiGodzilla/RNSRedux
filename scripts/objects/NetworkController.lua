@@ -173,12 +173,20 @@ function NC:updateDetectors()
 end
 
 function NC:updateExternalStorage()
-    local validExternals = self.network:filter_externalIO_by_valid_signal()
+    --The phase gate comes first, because everything after it is expensive.
+    --filter_externalIO_by_valid_signal calls signal_valid and check_focused_entity
+    --on every bus, and check_focused_entity validates inventories against the
+    --container. Running that every tick instead of every fifth cost more than the
+    --spreading saved: in the first measurement the floor rose from 0.054 to 1.776
+    --ms per tick while only the peak fell. Iterating the table is cheap, the
+    --checks are not.
     for i = 1, Constants.Settings.RNS_Max_Priority*2+1 do
-        local priorityExternals = validExternals[i]
-        for _, type in pairs(priorityExternals) do
-            for _, external in pairs(type) do
-                external:update(self.network, true)
+        for _, externalType in pairs(self.network.ExternalIOTable[i]) do
+            for _, external in pairs(externalType) do
+                if external:is_periodic_tick() and external:signal_valid() then
+                    external:check_focused_entity()
+                    external:update(self.network)
+                end
             end
         end
     end

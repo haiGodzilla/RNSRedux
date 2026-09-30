@@ -240,14 +240,21 @@ function EIO:init_cache()
     return true
 end
 
+--The bus runs on one tick in RNS_ExternalStorage_Tick, phased by its own unit
+--number: same frequency as before, spread across the cycle. The sweep in
+--NetworkController:updateExternalStorage asks this before doing anything else, so
+--signal_valid and check_focused_entity are not run for every bus on every tick.
+function EIO:is_periodic_tick()
+    return (game.tick + self.entID) % Constants.Settings.RNS_ExternalStorage_Tick == 0
+end
+
 function EIO:update(network, periodic)
     if self.io == "output" then return end
-    --periodic marks the sweep from NetworkController:updateExternalStorage, which
-    --now runs every tick; each bus answers for itself whether this is its tick.
-    --The calls from inside a transfer (insert_item_into_external,
-    --extract_item_from_external) pass nothing and must keep running unphased: the
-    --cache has to reflect the container right after it was written.
-    if periodic and (game.tick + self.entID) % Constants.Settings.RNS_ExternalStorage_Tick ~= 0 then return end
+    --periodic marks the sweep. The calls from inside a transfer
+    --(insert_item_into_external, extract_item_from_external) pass nothing and must
+    --keep running unphased: the cache has to reflect the container right after it
+    --was written.
+    if periodic and not self:is_periodic_tick() then return end
     --[[if self:check_focused_entity() == nil then
         self:flush_cache()
         self:clear_cache()
