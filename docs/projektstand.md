@@ -1988,7 +1988,7 @@ verdeckt:** `on_robot_built_entity` **hat** `stack`. Ein per Roboter gebauter Dr
 trug seinen Inhalt also durch, ein von Hand gebauter nicht. Wer nur mit Baulogistik
 arbeitet, sieht den Fehler nie.
 
-**Behoben (Commit `??`):** `Event.placed` liest jetzt beide Wege — `event.stack`
+**Behoben (Commit `8d0a0f8`):** `Event.placed` liest jetzt beide Wege — `event.stack`
 für Roboter und Plattformen, sonst den `item-with-tags`-Stapel aus
 `event.consumed_items`.
 
