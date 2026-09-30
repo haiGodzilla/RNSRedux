@@ -1,8 +1,9 @@
 # RNSRedux: Projektstand
 
 Einstiegspunkt für die Weiterarbeit. Technischer Plan und Begründungen:
-`docs/ups-architektur.md`. Dieses Dokument beantwortet „wo stehen wir, was ist
-verifiziert, was ist der nächste Schritt".
+`docs/ups-architektur.md`. Offene Fehler und ihr Status: `docs/bugtracker.md`.
+Dieses Dokument beantwortet „wo stehen wir, was ist verifiziert, was ist der nächste
+Schritt".
 
 Stand: Commit `bb5ad52`, Branch `port/2.0`, Version 2.0.0.
 P0 und P1 sind durch, P5 ist bis auf den Item-Bus-Restposten abgeräumt (2,5 % des
