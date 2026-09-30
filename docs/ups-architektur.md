@@ -109,10 +109,14 @@ bei einer Strukturänderung sowie als Netz alle zwei Minuten pro Controller. Im
 Dauerzustand fällt kein Aufbau mehr an.
 
 Nicht behoben, gleiche Ursache eine Ebene tiefer:
-`NetworkController.lua:124–133` prüft fünf globale Tick-Modulo (Detector 3,
-ItemIO 4, FluidIO 5, ExternalStorage 5). Bei Tick 20 laufen ItemIO und
-ExternalStorage zusammen, bei Tick 60 alle vier. Der Spike ist damit
-dauerhaft rund vier- bis fünfmal so hoch wie nötig.
+`NetworkController.lua:124–133` prüfte fünf globale Tick-Modulo (Detector 3,
+ItemIO 4, FluidIO 5, ExternalStorage 5). Bei Tick 20 liefen ItemIO und
+ExternalStorage zusammen, bei Tick 60 alle vier. Der Spike war damit dauerhaft
+rund vier- bis fünfmal so hoch wie nötig.
+
+**Behoben für Item- und External-Busse (`beb263c`):** Die Phase kommt jetzt aus
+der `unit_number` des Busses, der Sweep läuft jeden Tick. Der Detektor und die
+Fluid-Busse behalten ihre globalen Ticks.
 
 **j) Der IO-Bus pollt echte Container im Takt.** Vermutete Hauptquelle, siehe
 Abschnitt 6a. `EIO:update` (`ExternalIO.lua:273–300`) holt pro Durchlauf
@@ -125,12 +129,25 @@ false)` auf einem echten Inventar ab, und `insert_item_into_external` ruft am
 Ende jeder Charge noch `external:update(self)` (Zeile 1101) — ein weiterer
 voller Scan innerhalb des Transfers.
 
+**Gemessen am 30.09.2026, siehe `docs/projektstand.md` 6.2.** Aufbau `10 20`,
+40 Busse gegen 0 Busse: `mod-RNSRedux` 2,527 gegen 0,221 ms im Mittel, Spitze
+20,945 gegen 1,003 ms bei 16,667 ms Budget. 40 Busse kosten also 2,31 ms pro Tick
+und reißen die Spitze über das Budget. Ohne Busse ist die Mod 1,3 % des Ticks,
+mit Bussen 15 %. Die Schätzung pro Buslauf liegt bei rund 256 µs — mehr, als die
+ganze Mod ohne Busse pro Tick braucht. Damit ist (j) nicht mehr Verdacht,
+sondern der gemessene Hauptposten.
+
 Belegt durch den Changelog des Originalautors, der über vier Monate wiederholt
 an Kadenz und Vollständigkeitsprüfungen nachgebessert hat, ohne die Struktur
 anzufassen: 1.0.3 „improving ups by ~50%", 1.0.18 Grid „every tick instead of
 55 ticks", 1.0.25 „network fullness check … doesn't cause a sudden lag spike",
 1.0.30 „stop triggering anymore IO buses from working uselesslly", 1.0.39
 External Bus von 2 auf 5 Ticks, 1.0.40 „less laggy".
+
+**Behoben (Commit `beb263c`):** Die Bündelung ist weg — jeder Bus läuft auf
+seiner eigenen Phase aus der `unit_number`, der Sweep läuft jeden Tick. Gleiche
+Frequenz, gleicher Durchsatz, Arbeit verteilt. Das senkt die Spitze, nicht den
+Mittelwert; die Kontaktkosten bleiben der eigentliche Umbau.
 
 ## 3. Zielarchitektur
 
@@ -317,27 +334,31 @@ Befehle (`/rns-debug`, `/rns-debug-nc`, `/rns-debug-refresh`,
 `/rns-debug-extract`, `rns-store-test`), `port_*.py`,
 `data-final-fixes`-Ersatzlogik prüfen.
 
-### 6a Priorisierung nach P1
+### 6a Priorisierung: entschieden
 
-P1 ist durch. Der IO-Bus ist damit der nächste Posten: Er ist die einzige
-Kostenquelle, die dauerhaft und vielfach pro Sekunde anfällt, während der
-Refresh-Posten mit `a5add2b` auf Strukturänderungen zusammengeschrumpft ist.
-Die Frage lautet nicht mehr „IO-Bus vor P1?", sondern „Phasen-Offset vor
-Kontaktkosten?".
+P1 ist durch, und die Messung aus `docs/projektstand.md` 6.2 hat die Reihenfolge
+entschieden: **Der IO-Bus ist der Posten, um eine Größenordnung vor allem
+anderen.** 40 Busse kosten 2,31 ms pro Tick im Mittel und eine Spitze über dem
+Budget; der Refresh-Posten ist mit `a5add2b` auf Strukturänderungen
+zusammengeschrumpft und liegt im Rauschen.
 
-Entscheidungsrelevante Trennung:
+Der Phasen-Offset ist umgesetzt (`beb263c`) — er kostet keinen Durchsatz und war
+damit der erste Schritt. **Offen ist damit nur noch die Kontaktkosten-Senkung**,
+also der eigentliche Umbau nach Abschnitt 3.6:
 
-- **Phase verschieben kostet keinen Durchsatz.** Jeder Bus läuft weiterhin alle
-  vier Ticks, nur verteilt. Verhalten unverändert.
-- **Kadenz senken kostet Durchsatz.** `RNS_ItemIO_Tick = 4` entspricht 15
-  Items/s bei `IIOMultiplier = 1`. Eine Senkung auf 16 Ticks viertelt den
-  Durchsatz, solange eine Charge ein Item groß ist. Das ist eine
-  Balance-Änderung, keine Optimierung.
+1. Gezielter Zugriff statt Inventarlesen (der Bus liest heute jeden Slot).
+2. Niedrigere Kadenz — kostet Durchsatz, ist eine Balance-Änderung.
+3. Nur bei Bedarf handeln, statt bei jedem Sweep.
 
-Vor jeder Änderung an diesem Pfad fehlt die Messung: Der Stresstest baute keine
-IO-Busse, also war der Pfad nicht messbar. **Behoben:** Der Aufbau baut jetzt
-Busse, siehe Messverfahren in Abschnitt 9. Damit ist der Blocker weg und die
-Reihenfolge entscheidbar.
+Die Reihenfolge aus 3.6 trägt: 1 vor 2 vor 3, weil nur 1 ohne Nebenwirkung ist.
+Welche der drei zuerst greift, entscheidet die Aufteilung des Mittels auf Item-
+und External-Busse; die kann der Messaufbau noch nicht trennen, ein vierter
+Parameter für die Busart wäre der nächste kleine Schritt.
+
+**Kadenz senken kostet Durchsatz.** `RNS_ItemIO_Tick = 4` entspricht 15 Items/s
+bei `IIOMultiplier = 1`. Eine Senkung auf 16 Ticks viertelt den Durchsatz,
+solange eine Charge ein Item groß ist. Das ist eine Balance-Änderung, keine
+Optimierung.
 
 ## 7. Gestrichen
 
@@ -392,9 +413,17 @@ selten mehr als einer im 100-Tick-Fenster. Stattdessen direkt messen, etwa mit
 alle Drives).
 
 **Konsistenzprüfung.** `/rns-debug` zeigt pro Controller `members`, `tracked`
-(Summe/Typenzahl), `cache`, `drive` und `external`. `/rns-debug-refresh`
-erzwingt den Vollaufbau. Beide Dumps müssen identisch sein — das ist der
-Abnahmemaßstab für P1.
+(Summe/Typenzahl), `cache`, `drive`, `external` und `truth` (Drives / behauptete
+Menge / tatsächlicher Inhalt). `/rns-debug-refresh` erzwingt den Vollaufbau.
+Beide Dumps müssen identisch sein — das war der Abnahmemaßstab für P1.
+
+**Dauerlast mit Bussen.** Für den Buspfad trägt der Dump-Vergleich nicht: dort
+soll sich etwas bewegen. Stattdessen zwei Läufe desselben Aufbaus, einmal mit und
+einmal ohne Busse, jeweils speichern, laden, zwei Minuten stehen lassen, dann
+`/perf-avg-frames 600` und `mod-RNSRedux` ablesen. **Die Differenz ist das
+Ergebnis.** Ob der Aufbau überhaupt wirkt, sagen `buses withTarget=`/`inNetwork=`
+aus `/rns-stress-status` und die Kisten der Item-Busse: sind die nach zwei
+Minuten leer, hat kein Bus exportiert und die Messung ist wertlos.
 
 **Stressaufbau.** `/rns-stress-build <stationen> <drivesProStation> [busseProStation]`,
 dann

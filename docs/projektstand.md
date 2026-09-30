@@ -508,6 +508,11 @@ Der IO-Bus ist die einzige Kostenquelle, die dauerhaft und vielfach pro Sekunde
 anfällt. Der Refresh-Posten im Dauerbetrieb ist seit `a5add2b` entfallen; er
 fällt nur noch bei Strukturänderungen an.
 
+**Gemessen, Stand 30.09.2026 (Details in `docs/projektstand.md` 6.2):** 40 Busse
+kosten 2,31 ms pro Tick im Mittel und eine Spitze von 20,9 ms bei 16,667 ms
+Budget. Ohne Busse liegt die Mod bei 0,221 ms. Damit ist die Frage aus 6a
+entschieden — der Buspfad ist der Posten, und zwar um eine Größenordnung.
+
 Belegt durch den Changelog des Originalautors, der über vier Monate wiederholt
 an Kadenz und Vollständigkeitsprüfungen nachgebessert hat, ohne die Struktur
 anzufassen: 1.0.3 „improving ups by ~50%", 1.0.18 Grid „every tick instead of
@@ -542,10 +547,10 @@ Blocker: Der Stresstest baute keine IO-Busse, der Pfad war also nicht messbar.
 
 ### 6.1 Der Stresstest baut jetzt Busse
 
-`/rns-stress-build <stationen> <drivesProStation> [busseProStation]`. Pro Bus vier
-Entities an einer Station: ein Stichkabel, der Bus, seine Kiste (und das
-Stichkabel zählt als Kabel). Die Spalten liegen südlich der Spinne, deren
-Geometrie unverändert bleibt. Erwartung:
+`/rns-stress-build <stationen> <drivesProStation> [busseProStation]`. Pro Bus drei
+Entities an einer Station: ein Stichkabel, der Bus, seine Kiste (die Kiste zählt
+nicht zum Netz, das Stichkabel zählt als Kabel). Die Spalten liegen südlich der
+Spinne, deren Geometrie unverändert bleibt. Erwartung:
 `members = Drives + spineLength + 2 × Busse + 2` — der Befehl gibt den Wert
 selbst mit aus, `/rns-stress-status` prüft gegen.
 
@@ -579,6 +584,92 @@ Busse und Drives lassen sich also nicht unabhängig skalieren.
 **Noch nicht gebaut:** der Infinity-Aufbau für die Dauerlast. Die External-Kisten
 laufen bei 15 Items/s in gut fünf Minuten leer; für eine Zwei-Minuten-Messung
 reicht das, für längere nicht.
+
+### 6.2 Erste Messung: der Buspfad ist der Posten, und zwar deutlich
+
+Zwei Aufnahmen, gleicher Grundaufbau `10 20`, gleiches Fill, einziger Unterschied
+der dritte Parameter. Zuordnung aus der Reihenfolge im Testlauf — die Aufnahme
+ohne Busse entstand vor dem Befehl `10 20 4`, der zwischen beiden steht.
+
+| Aufbau | mod-RNSRedux avg | min | max | Script update | Update |
+|---|---|---|---|---|---|
+| `10 20 0` | 0,221 ms | 0,070 | 1,003 | 0,224 | 0,781 |
+| `10 20 4` | 2,527 ms | 0,054 | 20,945 | 2,529 | 3,095 |
+
+**40 Busse kosten 2,31 ms pro Tick im Mittel und eine Spitze von 20,9 ms.** Das
+Tick-Budget ist 16,667 ms. Ohne Busse ist die Mod 1,3 % des Ticks, mit Bussen
+15 %, und die Spitze liegt über dem Budget. `mod-RNSRedux` und `Script update`
+sind praktisch deckungsgleich — die Script-Zeit ist die Mod.
+
+Zur Größenordnung pro Bus, als Rechnung mit Vorbehalt: 20 Item-Busse laufen auf
+einem von vier Ticks, 20 External-Busse auf einem von fünf, also 5 + 4 = 9
+Busläufe pro Tick im Mittel. 2,31 ms / 9 ergibt rund **256 µs für einen
+Buslauf**. Das ist mehr als die gesamte Mod ohne Busse pro Tick kostet.
+
+Was die Aufnahme **nicht** hergibt und deshalb offen bleibt:
+
+- Ob beide Läufe gleich lange standen und ob der Bus-Lauf gefüllt war. Nur die
+  `mod-RNSRedux`-Zeile ist ein sauberer Vergleich; Render- und GUI-Werte
+  unterscheiden sich zwischen den Aufnahmen (Render preparation 0,587 gegen
+  0,338), also war der Kamerazustand nicht identisch.
+- Ob die Spitze am Kollisionstakt hängt. Erwartet ja: bei Tick 20 laufen ItemIO
+  (4) und ExternalStorage (5) zusammen. Der Phasen-Offset in 6.3 beseitigt
+  genau das und ist damit zugleich der Test der Annahme — fällt `max` unter das
+  Budget, während `avg` gleich bleibt, war die Spitze die Bündelung.
+- Wo die 2,3 ms im Mittel herkommen. Aus dem Code gelesen, nicht gemessen:
+  `EIO:update` scannt jeden Slot des Containers mit `Itemstack:new`
+  (`ExternalIO.lua:278`), `insert_item_into_external` ruft am Ende **jeder**
+  Charge noch einmal `external:update` (`NetworkBase.lua:1101`), und
+  `NetworkBase.lua:1066–1069` fragt pro Insert-Versuch zweimal `get_item_count`
+  und einmal `count_empty_stacks` ab. Dazu `remove_item_from_interface_cache`
+  als linearer Scan pro Entnahme (Plan-Punkt c, gehört zu P3).
+
+### 6.3 Phasen-Offset umgesetzt (Commit `beb263c`)
+
+Jeder Bus läuft weiterhin alle vier (Item) bzw. fünf (External) Ticks, aber auf
+einer eigenen Phase aus seiner `unit_number`. Damit feuert nicht mehr das ganze
+Spiel im selben Tick. Zwei Details, die die Änderung nicht trivial machen:
+
+- **Der External-Bus kann die Prüfung nicht selbst tragen.**
+  `insert_item_into_external` und `extract_item_from_external` rufen
+  `EIO:update` mitten im Transfer (`NetworkBase.lua:1101`, `652`) — diese Aufrufe
+  müssen ungephaset bleiben, sonst ist der Cache direkt nach dem Schreiben des
+  Containers veraltet. Deshalb der Parameter `periodic`: nur der Sweep wird
+  gephaset.
+- **Das Tick-Gate im Controller muss weg.** Bliebe
+  `game.tick % RNS_ItemIO_Tick == 0` stehen, liefe ein Bus mit einer `entID`, die
+  nicht durch 4 teilbar ist, **nie**.
+
+Der Sweep ist damit O(Busse) pro Tick statt O(Busse) alle vier Ticks, und
+`filter_externalIO_by_valid_signal` läuft jeden Tick statt jeden fünften. Beides
+ist billig gegen einen Container-Scan. **Bei einigen Tausend Bussen braucht der
+Sweep trotzdem eine Warteschlange** — das ist P4.
+
+Nicht mitgemacht: die Fluid-Busse und der Detektor behalten ihre globalen Ticks.
+Der Offset senkt außerdem nur die Spitze, nicht den Mittelwert.
+
+### 6.4 Was der nächste Lauf klären muss
+
+Ein Lauf auf demselben `10 20 4`-Stand, gleiche Bedingungen wie 6.2:
+
+1. Syncen, Save laden, Datei leeren, zwei Minuten stehen lassen.
+2. `/rns-stress-status` — `buses total=40 withTarget=40 inNetwork=40` und
+   `members=72` müssen stehen. Weicht etwas ab, ist der Aufbau nicht vergleichbar.
+3. `F4` → `show-time-usage`, `/perf-avg-frames 600`, `mod-RNSRedux` avg/min/max
+   ablesen.
+
+**Erwartung, die die Änderung prüft:** `avg` bleibt bei rund 2,5 ms (gleiche
+Arbeit), `max` fällt deutlich unter das Budget von 16,667 ms. Bleibt `avg`
+gleich und `max` hoch, greift der Offset nicht — dann sitzt die Spitze nicht in
+der Bündelung. Fällt `avg`, ist die frühere Zahl nicht vergleichbar und wir
+suchen den Grund, statt ihn zu verbuchen.
+
+Für die Kontaktkosten danach ist die Reihenfolge im Plan Abschnitt 3.6 schon
+richtig: gezielter Zugriff statt Inventarlesen, dann Kadenz, dann Bedarf. Der
+Vergleich der beiden Aufnahmen sagt dabei, welche Seite zuerst dran ist — dazu
+muss aber bekannt sein, wie viel des Mittels auf Item- und wie viel auf
+External-Busse entfällt. Das kann der Aufbau noch nicht trennen; ein vierter
+Parameter für die Busart wäre der nächste kleine Schritt am Werkzeug.
 
 ## 7. Offene technische Schulden
 
