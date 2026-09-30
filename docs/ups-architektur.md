@@ -477,6 +477,14 @@ exakter Rate macht daraus einen messbaren Fall:
 /rns-stress-drain <itemsProSekundeProContainer>
 ```
 
+**Achtung bei `both`:** In der Vorgaberichtung des External-Busses schreibt der
+Bus in denselben Container, aus dem er liest, und füllt schneller nach als der
+Abfluss leert — die Gesamtzahl bewegt sich dann kaum, und die gemessene Rate ist
+nicht die eingestellte. Für einen einseitig leerlaufenden Container den Bus auf
+`input` bauen (`/rns-stress-build … external input`, `docs/projektstand.md` 6.15);
+dann zieht das Netz mit, und die Rate muss aus dem Dump bestimmt werden statt
+angenommen.
+
 Der Befehl **nullt die Zähler** der Busse, also ist danach
 `busSkips=` eine Fenstermessung. Er sucht die Container selbst und meldet, wie
 viele er gefunden hat — ein Regler, der still nichts tut, liefert sonst eine

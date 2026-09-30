@@ -1059,12 +1059,50 @@ Antwort stand in den Daten, aber nur, weil ein einzelner früher Wert übrig war
 liefert jeder Dump die entnommene Menge mit. Zwei Dumps ergeben die Differenz
 direkt.
 
-### 6.15 Was der Lauf entscheidet, und was nicht
+### 6.15 Weg A: die Rückkopplung ausschalten (Commit `fd76491`)
 
-Er liefert die Trefferquote für eine vorgegebene Rate — unter der Bedingung, dass
-niemand nachfüllt. **Diese Bedingung stellt der Aufbau nicht her.** Welcher Fall in
-einer echten Anlage vorliegt, klärt er nicht: das hängt daran, wie ein Bus in der
-Praxis beschaltet ist, und das kann ich nicht abschätzen.
+Der Aufbau konnte die Trefferquote nicht gegen die Kurve prüfen, weil der Bus
+seinen eigenen Container nachfüllt. Behebbar über die Richtung: Der fünfte
+Parameter von `/rns-stress-build` setzt sie:
+
+```
+/rns-stress-build 10 20 4 external input
+```
+
+`input` sperrt den Schreibpfad — der Insert-Zweig in
+`BaseNet.transfer_from_inv_to_network` verlangt die Zeichenkette `"output"` in
+`external.io` — und lässt den Lesepfad offen. Der Container läuft dann nur leer.
+
+**Was dieser Aufbau dann tut:** Das Netz zieht aus den Containern, und die 20
+Item-Busse tragen das Gezogene in ihre eigenen Kisten. Damit ist der Fluss
+vollständig und einseitig: External-Kiste → Netz → Item-Kiste.
+
+**Und genau daraus folgt eine Einschränkung, die den Lauf betrifft.** Die
+Gesamtzahl der External-Container ändert sich jetzt aus **zwei** Quellen: aus dem,
+was das Netz zieht, und aus dem Abfluss. Die Rate ist damit **nicht mehr die, die
+der Abfluss gesetzt hat**. Die Trefferquote ist deshalb gegen die **aus dem Dump
+gemessene** Rate zu prüfen, nicht gegen die eingestellte:
+
+```
+gemessene Rate = (busTruth zu Beginn − busTruth am Ende) / Fensterdauer
+Trefferquote   = (gesamt − übersprungen − gesamt/20) / gesamt
+```
+
+Beide Zahlen stehen im Dump (`busTruth` und `busSkips`), der Abflussstand steht im
+Kopf der Datei — die Prüfung ist also aus zwei Dumps allein möglich, ohne
+Zusatzannahme.
+
+**Was der Lauf klärt:** ob die Kurve aus 6.12 für einen einseitig leerlaufenden
+Container stimmt. **Was er nicht klärt:** ob ein Bus in einer echten Anlage so
+beschaltet ist. `both` ist der Vorgabewert der Mod, `input` eine bewusste Wahl des
+Spielers.
+
+### 6.16 Was Weg A klären kann, und was nicht
+
+Er liefert die Trefferquote für einen Container, aus dem nur gezogen wird. **Ob ein
+Bus in einer echten Anlage so beschaltet ist, klärt er nicht** — `both` ist der
+Vorgabewert der Mod, `input` eine Wahl des Spielers. Beide Fälle sind real, und
+welcher häufiger vorkommt, kann ich nicht abschätzen.
 
 Für den nächsten echten Eingriff ist die Folgerung davon unabhängig:
 **P5-Punkt 1, der Slot-Durchlauf, hilft bei jeder Änderungsrate** — die Abkürzung
