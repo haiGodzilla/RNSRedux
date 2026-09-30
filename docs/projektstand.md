@@ -4,7 +4,7 @@ Einstiegspunkt für die Weiterarbeit. Technischer Plan und Begründungen:
 `docs/ups-architektur.md`. Dieses Dokument beantwortet „wo stehen wir, was ist
 verifiziert, was ist der nächste Schritt".
 
-Stand: Commit `26308e5`, Branch `port/2.0`, Version 2.0.0.
+Stand: Commit `a5add2b`, Branch `port/2.0`, Version 2.0.0.
 
 ## 1. Projekt
 
@@ -119,7 +119,7 @@ Die Zählertabelle aus der Zielarchitektur **existiert bereits im Code**:
 Offen ist nur das Gegenteil: `doRefresh` → `resetTables`
 (`NetworkBase.lua:77–133`) wirft `Contents`, `interfaceCache`, `StoredPartition`,
 `connectedEntities` und `powerDraw` weg und baut alles neu auf. Der
-inkrementelle Pfad existiert, wird aber alle 600 Ticks überschrieben.
+inkrementelle Pfad existiert, wurde aber alle 600 Ticks überschrieben.
 
 **P1 heißt damit: den Neuaufbau entfernen, nicht die Buchhaltung bauen.** Das ist
 deutlich kleiner und risikoärmer als ursprünglich geplant.
@@ -141,17 +141,49 @@ Vergleich ist wertlos.
 Zwei Beziehungen, die aufgehen sollten: `tracked` = `drive` (Belegung), und die
 `drive`-Kapazität = Summe der `maxStorage` aller Mitglieds-Drives.
 
-### 5.3 Nächster Schritt
+### 5.3 Umgesetzt: P1 ist eine Auslöser-Frage (Commit `a5add2b`)
 
-Offen ist genau ein Testlauf: `/rns-debug`, dann `/rns-debug-refresh`, dann
-`/rns-debug`. Ergebnis: Dumps gleich → P1 kann wie in 5.1 zugeschnitten
-umgesetzt werden. Dumps verschieden → die Differenz ist der Arbeitsauftrag, und
-zwar bevor Produktivcode bewegt wird.
+Der periodische Vollaufbau ist gestrichen. Er war nie der normale Pfad, sondern
+ein Netz auf Verdacht: **jede** Strukturänderung setzt `shouldRefresh` ohnehin.
+Nachgeprüft an allen `:remove()`- und `new()`-Funktionen — jede ruft
+`BaseNet.update_network_controller` — und an den Ereignis-Registrierungen in
+`control.lua`: `on_player_mined_entity`, `on_robot_mined_entity`,
+`script_raised_destroy` und `on_entity_died` laufen alle über `Event.removed` →
+`obj:remove()`. Bei einer Entfernung ist das Objekt in diesem Moment noch
+Mitglied, also greift der Flag-Zweig in `update_network_controller`.
+
+Änderung: `NC.updateTick` steht auf 7200 statt 600. Der Vollaufbau läuft bei
+jeder Strukturänderung, zusätzlich als Netz alle zwei Minuten pro Controller.
+Im Dauerzustand fällt kein Aufbau mehr an.
+
+Bewusst nicht gebaut: die Austrittssubtraktion aus Abschnitt 3.2 des Plans. Sie
+würde nur die Aufbauten sparen, die mit einer Baumaßnahme zusammenfallen — und
+in diesem Moment zahlt der Baupfad ohnehin ein Vielfaches davon (Punkt g,
+Beitrittskaskade). Dafür müsste jede Austrittsbuchung die Beitrittsbuchung
+exakt spiegeln. Ohne messbaren Gewinn ist das nur zusätzliche Fehlerfläche.
+
+### 5.4 Was noch zu prüfen ist
+
+Der Eingriff ist committet, aber nicht gemessen.
+
+- **Abnahme:** `20 50` laden, dann `/rns-debug`, `/rns-debug-refresh`,
+  `/rns-debug`. Beide Dumps müssen identisch sein, inklusive `tracked`,
+  `cache`, `drive` und `external`. Das prüft die Zählertabelle selbst — sie war
+  vorher durch das Netz alle 600 Ticks gedeckt und ist es jetzt erst nach 7200.
+- **Nebenwirkung:** `power_usage` und `electric_buffer_size` werden nur im
+  Refresh-Zweig gesetzt. Sie folgen jetzt der Struktur statt dem Takt; beim
+  Anbau eines Drives muss der Controller weiterhin mitziehen.
+- **Sichtprüfung:** Drive bauen, abbauen, von Bitern zerstören lassen, dann
+  Save/Load — die Summen in der GUI müssen in allen vier Fällen stimmen.
+
+Danach ist der IO-Bus der nächste Posten (Abschnitt 6, offene Reihenfolge in
+`docs/ups-architektur.md` Abschnitt 6a).
 
 ## 6. Der IO-Bus (vermuteter Hauptposten)
 
 Der IO-Bus ist die einzige Kostenquelle, die dauerhaft und vielfach pro Sekunde
-anfällt. Der Refresh-Posten läuft alle 600 Ticks.
+anfällt. Der Refresh-Posten im Dauerbetrieb ist seit `a5add2b` entfallen; er
+fällt nur noch bei Strukturänderungen an.
 
 Belegt durch den Changelog des Originalautors, der über vier Monate wiederholt
 an Kadenz und Vollständigkeitsprüfungen nachgebessert hat, ohne die Struktur

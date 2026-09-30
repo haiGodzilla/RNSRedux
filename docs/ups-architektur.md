@@ -100,12 +100,13 @@ im selben Tick. Bei 20 Stationen sind das 20 vollständige Netzaufbauten
 gleichzeitig, alle 10 Sekunden. Gemessen: 134,731 ms in einem einzelnen Tick
 bei 20 Stationen und 1.000 Drives (Tab-Out-Frames ausgenommen).
 
-**Behoben:** Jeder Controller leitet aus seiner `unit_number` eine feste Phase
-ab (`NetworkController.lua:97`), der Vollaufbau trifft pro Tick höchstens einen
-Controller. Gleiche Frequenz, gleiche Arbeit, verteilt. Diese Änderung
-diagnostiziert, sie heilt nicht: Sie ersetzt einen 134-ms-Freeze alle 10 s durch
-einen Ruckler alle ~0,5 s. Die eigentliche Heilung ist, die Refresh-Kosten
-selbst zu senken — das ist P1.
+**Behoben in zwei Schritten.** Zuerst leitete jeder Controller aus seiner
+`unit_number` eine feste Phase ab, der Vollaufbau traf damit pro Tick höchstens
+einen Controller — das diagnostizierte nur: aus einem 134-ms-Freeze alle 10 s
+wurde ein Ruckler alle ~0,5 s. Mit `a5add2b` ist der periodische Aufbau ganz
+entfallen. `NC.updateTick` steht auf 7200 statt 600, der Aufbau läuft nur noch
+bei einer Strukturänderung sowie als Netz alle zwei Minuten pro Controller. Im
+Dauerzustand fällt kein Aufbau mehr an.
 
 Nicht behoben, gleiche Ursache eine Ebene tiefer:
 `NetworkController.lua:119–128` prüft fünf globale Tick-Modulo (Detector 3,
@@ -257,19 +258,27 @@ Engine.
 **P0 — GUI-Throttle.** Eine Zeile, bereits umgesetzt. Größter Einzelposten, kein
 Risiko.
 
-**P1 — Netzwerk-Accounting.** Nach dem Befund in 3.1 neu zugeschnitten:
-Die Zählertabelle existiert, die Aufgabe ist, den periodischen Vollaufbau aus
-dem Hot Path zu nehmen. `resetTables` darf `Contents`, `interfaceCache`,
-`StoredPartition` nicht mehr zurücksetzen; `doRefresh` wird durch einen
-inkrementellen Beitritt/Austritt ersetzt, wie in 3.2 beschrieben. Als
-Sicherheitsnetz bleibt die Prüfliste statt eines Komplettaufbaus.
+**P1 — Netzwerk-Accounting. Umgesetzt in `a5add2b`, Abnahme offen.**
+Die Zählertabelle existiert (3.1), offen war nur ihr Auslöser: der periodische
+Vollaufbau. Der ist gestrichen — jeder Beitritt und Austritt setzt
+`shouldRefresh` selbst, geprüft an allen `:remove()`- und `new()`-Funktionen
+sowie an den Ereignis-Registrierungen in `control.lua`. `NC.updateTick` ist von
+600 auf 7200 gestiegen und damit vom Taktgeber zum Sicherheitsnetz geworden.
+
+Nicht gebaut: die Austrittssubtraktion nach 3.2. Sie würde nur Aufbauten
+sparen, die mit einer Baumaßnahme zusammenfallen, und kostet dafür eine zweite,
+exakt spiegelbildliche Buchhaltung. Ebenfalls nicht gebaut: die rollende
+Prüfliste — das Zwei-Minuten-Netz deckt denselben Fall ab, solange die
+Controller-Zahl klein bleibt. Bei dreistellig vielen Controllern kippt das,
+dann ist die Prüfliste der nächste Schritt.
 
 Abnahmemaßstab: `/rns-debug` liefert vor und nach erzwungenem
 `/rns-debug-refresh` identische Werte. Geprüft werden `tracked` (Summe und
 Typenzahl), `cache`, `drive` und `external` — nicht mehr nur die
-Mitgliedszahlen. Solange dieser Vergleich nicht grün ist, ist P1 nicht fertig.
+Mitgliedszahlen. Neu belastet wird dieser Vergleich dadurch, dass das Netz
+vorher alle 600 Ticks deckte und es jetzt erst nach 7200 Ticks tut.
 
-Betrifft `NetworkBase.lua` und `NetworkController.lua`.
+Betrifft `NetworkController.lua` (geändert) und `NetworkBase.lua` (unverändert).
 
 **P2 — ItemStore mit Chunks.** Ausbau des begonnenen Moduls um dynamische
 Chunks, Item- und Quality-Schlüssel, O(1)-Abfragen. Drives darauf umstellen.
