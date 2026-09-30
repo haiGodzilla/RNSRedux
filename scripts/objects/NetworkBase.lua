@@ -1046,6 +1046,14 @@ end
 
 ----------------------------------------------------------------------------------------------Importing Items into the Network----------------------------------------------------------------------------------------------------------------------------
 function BaseNet:insert_item_into_drive(item, inv_item, drive, transferCapacity, itemstack_master, remainingStorage, exact)
+    --The drive input rejects quality items, which is the documented policy: no silent
+    --downgrade and no silent merge. The check has to sit here rather than deeper,
+    --because the split below is what shrinks the source stack -- rejecting after it
+    --would destroy the item instead of leaving it where it was.
+    --Returning the capacity untouched means the caller simply moves on to the next
+    --drive or the next item, so nothing is lost and nothing loops.
+    if not ItemStore.isStorable(inv_item) then return transferCapacity end
+
     local extractSize = math.min(math.min(transferCapacity, inv_item.count), remainingStorage)
     local splitStack = inv_item:split(itemstack_master, extractSize, exact)
     transferCapacity = transferCapacity - drive:add_or_merge_basic_item(splitStack, extractSize)
