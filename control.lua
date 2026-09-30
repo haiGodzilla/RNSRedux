@@ -282,6 +282,10 @@ end
 local function externalTotals(network)
     local buses, cached, actual = 0, 0, 0
     local skipped, read = 0, 0
+    --Distinct item types actually in the containers. The network's tracked type
+    --count only ever grows (a key that reaches zero stays), so it cannot tell
+    --whether a container picked up a type the fill never put there. This can.
+    local actualTypes = {}
     for _, obj in pairs(network.connectedEntities or {}) do
         if obj.cache ~= nil and obj.type == "item" then
             buses = buses + 1
@@ -297,12 +301,19 @@ local function externalTotals(network)
             if focused ~= nil and focused.valid == true then
                 for _, invIndex in pairs(obj.focusedEntity.inventory.output.values or {}) do
                     local inv = focused.get_inventory(invIndex)
-                    if inv ~= nil then actual = actual + inv.get_item_count() end
+                    if inv ~= nil then
+                        actual = actual + inv.get_item_count()
+                        for _, stack in pairs(inv.get_contents()) do
+                            if stack.count > 0 then actualTypes[stack.name] = true end
+                        end
+                    end
                 end
             end
         end
     end
-    return buses, cached, actual, skipped, read
+    local typeCount = 0
+    for _ in pairs(actualTypes) do typeCount = typeCount + 1 end
+    return buses, cached, actual, skipped, read, typeCount
 end
 
 --Builds the counter dump for a single network controller. Shared by /rns-debug
@@ -330,7 +341,7 @@ local function controllerCounterLine(obj)
     local drive = partition.itemDrive or {}
     local external = partition.itemExternal or {}
     local driveCount, driveClaimed, driveActual, fluidClaimed, fluidActual = driveTotals(network)
-    local busCount, busCached, busActual, busSkipped, busRead = externalTotals(network)
+    local busCount, busCached, busActual, busSkipped, busRead, busTypes = externalTotals(network)
 
     return "NC " .. obj.entID
         .. " members=" .. members
@@ -343,6 +354,7 @@ local function controllerCounterLine(obj)
         .. " truth=" .. driveCount .. "/" .. driveClaimed .. "/" .. driveActual
         .. " fluidTruth=" .. fluidClaimed .. "/" .. fluidActual
         .. " busTruth=" .. busCount .. "/" .. busCached .. "/" .. busActual
+        .. " busTypes=" .. busTypes
         .. " busSkips=" .. busSkipped .. "/" .. (busSkipped + busRead)
 end
 
@@ -505,11 +517,12 @@ commands.add_command("rns-debug-nc", "RNSRedux: dump only the controller counter
     end
     local text = table.concat(lines, "\n")
     game.print(text)
-    --The chat scrolls away and cannot be piped out of the game, so the same dump
-    --goes to script-output/rns-debug-nc.txt as well. Appended with the tick as a
-    --header: the acceptance check compares two consecutive runs of this command.
+    --The drain total goes into the header, so every dump carries the one number the
+    --next run needs to tell "the drain ran and the container refilled" from "the
+    --drain stopped". Comparing two dumps by hand was the gap that made the previous
+    --run unreadable: removed was printed once, early, and never again.
     game.print("rns-debug-nc: appended to script-output/rns-debug-nc.txt")
-    helpers.write_file("rns-debug-nc.txt", "\n# tick " .. game.tick .. "\n" .. text .. "\n", true)
+    helpers.write_file("rns-debug-nc.txt", "\n# tick " .. game.tick .. " | " .. StressTest.drainStatus() .. "\n" .. text .. "\n", true)
 end)
 
 --Debug command for M1: exercises ItemStore against a scratch inventory, without
