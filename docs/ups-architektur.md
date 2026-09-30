@@ -402,10 +402,15 @@ und pro Item in der Schleife, wo der Negativfall der Normalfall ist. Behoben in
 `55dccb0`: `getStack` fragt zuerst den Index ab, der die Antwort exakt kennt
 (`docs/projektstand.md` 8.2).
 
-**Was bleibt:** die beiden Interface-Cache-Scans (Plan-Punkt c) — echt, aber klein,
-weil die Liste pro Item-Name bei normalen Items **einen** Eintrag hat. Ein Umbau auf
-`name|quality → ein Eintrag` würde zusätzlich den Schlüssel für die spätere
-Qualitäts-Freischaltung vorbereiten. Details in `docs/projektstand.md` 8.3.
+**Was Punkt (c) betrifft: er ist kein Problem.** Die Cache-Scans laufen über n = 1,
+und das ist nachgerechnet, nicht vermutet: `Util.item_add_list_into_table` teilt zwar
+einzelne Stapel bei ungewöhnlicher Munition ab, aber der Rest bekommt dabei ein
+volles Magazin, also endet die Rekursion nach einer Teilung. Die Liste ist durch die
+Zahl der Modifier-**Werte** begrenzt. Bestätigt durch die Messdaten: `cache=16` bei
+`tracked=/16` in allen vier Läufen, also ein Eintrag pro Typ. Details in
+`docs/projektstand.md` 8.3.
+
+**P3 ist damit erledigt** — bis auf die Tatsache, dass sein Zuschnitt zu groß war.
 
 **P4 — Scheduler.** Zeitschlitze für Drives und Busse.
 

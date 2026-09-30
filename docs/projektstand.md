@@ -2237,24 +2237,43 @@ Standard-Stackgrößen unerreichbar** (7.2), also kann ich es nicht testen. Der
 Frühausstieg oben ist exakt und deckt den häufigen Fall; die Suche im Trefferfall
 bleibt.
 
-### 8.3 Was in P3 noch übrig ist
+### 8.3 Punkt (c) ist kein Problem — nachgerechnet, nicht vermutet
 
-**Die beiden Interface-Cache-Scans** sind der Plan-Punkt (c) und **echt, aber
-klein**: `add_item_to_interface_cache` und `remove_item_from_interface_cache`
-(`NetworkBase.lua:549–569`) laufen je Einlagerung/Entnahme linear über die Liste
-**eines Item-Namens**, mit `Itemstack:reload` (neue Metatable) und
-`compare_itemstacks` pro Eintrag. Die Liste ist bei normalen Items **ein** Eintrag —
-`Util.item_add_list_into_table` führt gleiche Stapel zusammen —, also ist n klein.
+Der Plan führt die Interface-Cache-Scans als Punkt (c). **Ich habe sie erst für
+quadratisch gehalten und das nachgerechnet; sie sind es nicht.**
 
-Sie wächst erst mit **modifizierten** Varianten (Munition, Haltbarkeit), und ein
-Umbau auf `name|quality → ein Eintrag` würde gleichzeitig den Schlüssel für die
-spätere Qualitäts-Freischaltung vorbereiten. **Das ist der einzige Teil von P3, der
-noch eine echte Verbesserung wäre**, und er ist klein und in sich abgeschlossen.
+**Der Verdacht:** `Util.item_add_list_into_table` (`Util.lua:177–190`) teilt Stapel
+mit ungewöhnlicher Munition oder Haltbarkeit einzeln ab und ruft sich selbst wieder
+auf. Bei 100 halbvollen Magazinen hätte das 100 Einträge ergeben, und jeder
+Einlagerungs- und Entnahmevorgang wäre ein Scan über 100 Einträge gewesen.
 
-**Was ich nicht behaupte:** ob P3 in der Praxis überhaupt messbar ist. Der ganze
-Transferpfad läuft im Basiszustand mit 15 Items/s pro Bus — das sind **0,25 Items pro
-Tick pro Bus**. Ein Umbau, der dort etwas spart, spart an einer Stelle, die einen
-Bruchteil der gemessenen 0,41 ms pro Tick ausmacht.
+**Warum es nicht passiert:** Der Aufruf ist `list:split(list, 1, true)`. Der
+`exact`-Zweig in `Itemstack:split` (`Itemstack.lua:235–252`) prüft
+`self.ammo ~= itemstack_master.ammo` — und hier ist `self` **dieselbe Tabelle** wie
+`itemstack_master`, die Bedingung also falsch. Die Ausführung fällt in den
+Normalpfad, und dort steht:
+
+```lua
+split.ammo = self.ammo
+self.ammo = prototypes.item[self.name].magazine_size
+```
+
+**Der Rest bekommt ein volles Magazin.** Damit ist die Bedingung
+`list.ammo ~= magazine_size` beim rekursiven Aufruf nicht mehr erfüllt, der
+Zweig entfällt, und der Stapel landet als **ein** Eintrag in der Liste. Die
+Rekursion endet nach einer Teilung. Dasselbe gilt für die Haltbarkeit.
+
+**Die Liste ist damit durch die Zahl der verschiedenen Modifier-Werte begrenzt**,
+nicht durch die Item-Zahl — bei einem halbvollen Magazin zwei Einträge (einer mit
+dem ungewöhnlichen Wert, einer voll).
+
+**Und die Messdaten bestätigen es, ohne dass ich etwas messen musste.** Der Dump
+zeigt `cache=16` bei `tracked=260000/16` in allen vier Läufen — sechzehn Item-Typen,
+sechzehn Cache-Einträge, also **einer pro Typ**. Die Scans laufen über n = 1.
+
+**Konsequenz: P3 ist damit erledigt.** Der Plan-Zuschnitt trägt nicht (8.1), der
+echte Fund aus P2 ist behoben (8.2), und Punkt (c) ist bei normalen wie bei
+modifizierten Items unkritisch (8.3).
 
 ## 9. Offene technische Schulden
 
@@ -2276,8 +2295,9 @@ Aus dem 1:1-Port bekannt, bewusst nicht angefasst:
 - `RNSPlayer.process_logistic_slots` nutzt entfernte Logistic-Slot-Funktionen,
   gehört zu M5.
 - `add_item_to_interface_cache` / `remove_item_from_interface_cache`
-  (`NetworkBase.lua:549–569`) sind lineare Scans pro Einlagerung/Entnahme,
-  Plan-Punkt (c). Umfang und Empfehlung in Abschnitt 8.3.
+  (`NetworkBase.lua:549–569`) sind lineare Scans pro Einlagerung/Entnahme. **Als
+  unkritisch nachgerechnet** — die Liste hat einen Eintrag pro Item-Typ, bestätigt
+  durch `cache=16` bei 16 Typen. Siehe Abschnitt 8.3.
 - Der Verweis auf die Projektnotiz „Analyse Fabrikdurchsatz" in
   `docs/ups-architektur.md` läuft ins Leere: **die Notiz liegt nicht im Repo.**
 - `filter_externalIO_by_valid_signal` (`NetworkBase.lua:1340–1355`) baut bei
