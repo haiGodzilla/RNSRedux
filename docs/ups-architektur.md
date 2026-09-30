@@ -409,9 +409,12 @@ Ebenso gestrichen: die Slot-Umrechnung „1 Slot je 100 Items".
   Grundausbau sind ein gelbes Band; für mehrere Tausend Items pro Sekunde
   braucht es viele Busse oder höhere Ausbaustufen. Das ist eine
   Balance-Entscheidung, keine technische.
-- Ob der IO-Pfad oder der Refresh-Pfad in einem realistischen Save mehr kostet.
-  Der Stresstest baut seit dem 30.09.2026 Busse, die Frage ist damit messbar
-  geworden; die Messung selbst steht noch aus.
+- **Beantwortet:** Ob der IO-Pfad oder der Refresh-Pfad mehr kostet. Gemessen am
+  30.09.2026 (`docs/projektstand.md` 6.2 und 6.8): Der IO-Pfad, und innerhalb
+  davon die External-Seite mit 513 µs pro Buslauf gegen 90 µs bei Item-IO.
+- **Offen:** Ob die External-Busse noch Container-Kontakte sparen, nachdem sie
+  ihren Container nur noch bei Änderung lesen (`docs/projektstand.md` 6.9). Die
+  Messung steht aus; das Werkzeug dafür ist `busTruth` im Dump.
 - Ob `Contents.item` an allen Aufrufstellen vollständig gebucht wird. Gelesen
   sind vier Stellen; den Beweis soll die Differenzprüfung in Abschnitt 9
   liefern, nicht eine Zählung im Quelltext.
@@ -442,17 +445,27 @@ selten mehr als einer im 100-Tick-Fenster. Stattdessen direkt messen, etwa mit
 alle Drives).
 
 **Konsistenzprüfung.** `/rns-debug` zeigt pro Controller `members`, `tracked`
-(Summe/Typenzahl), `cache`, `drive`, `external` und `truth` (Drives / behauptete
-Menge / tatsächlicher Inhalt). `/rns-debug-refresh` erzwingt den Vollaufbau.
+(Summe/Typenzahl), `cache`, `drive`, `external`, `truth` (Drives / behauptete
+Menge / tatsächlicher Inhalt), `fluidTruth` und `busTruth` (External-Busse / Cache
+/ tatsächlicher Containerinhalt). `/rns-debug-refresh` erzwingt den Vollaufbau.
 Beide Dumps müssen identisch sein — das war der Abnahmemaßstab für P1.
 
 **Dauerlast mit Bussen.** Für den Buspfad trägt der Dump-Vergleich nicht: dort
-soll sich etwas bewegen. Stattdessen zwei Läufe desselben Aufbaus, einmal mit und
-einmal ohne Busse, jeweils speichern, laden, zwei Minuten stehen lassen, dann
-`/perf-avg-frames 600` und `mod-RNSRedux` ablesen. **Die Differenz ist das
-Ergebnis.** Ob der Aufbau überhaupt wirkt, sagen `buses withTarget=`/`inNetwork=`
-aus `/rns-stress-status` und die Kisten der Item-Busse: sind die nach zwei
-Minuten leer, hat kein Bus exportiert und die Messung ist wertlos.
+soll sich etwas bewegen. Stattdessen zwei Läufe desselben Aufbaus, jeweils
+speichern, laden, zwei Minuten stehen lassen, dann `/perf-avg-frames 600` und
+`mod-RNSRedux` ablesen. **Die Differenz ist das Ergebnis**, nicht der Absolutwert.
+
+Drei Dinge prüfen den Aufbau, bevor die Zahl etwas wert ist:
+
+- `/rns-stress-status` → `buses total= withTarget= inNetwork=`; ein Bus ohne Ziel
+  tut nichts, ein Bus ohne Netz bekommt keine Updates.
+- Die Kisten der Item-Busse müssen sich füllen. Bleiben sie leer, hat kein Bus
+  exportiert.
+- `/rns-debug-nc` → `busTruth=<Busse>/<Cache>/<Container>`. Die beiden letzten
+  Zahlen müssen übereinstimmen. Der Vollaufbau baut die Zähler **aus dem Cache**
+  (`NetworkBase.addConnectables` → `init_cache`), er liest den Container nicht —
+  ein veralteter Cache wäre in jedem Dump-Vergleich unsichtbar. `busTruth` ist die
+  einzige Stelle, an der die beiden gegeneinander laufen.
 
 **Stressaufbau.** `/rns-stress-build <stationen> <drivesProStation> [busseProStation]`,
 dann
