@@ -240,8 +240,14 @@ function EIO:init_cache()
     return true
 end
 
-function EIO:update(network)
+function EIO:update(network, periodic)
     if self.io == "output" then return end
+    --periodic marks the sweep from NetworkController:updateExternalStorage, which
+    --now runs every tick; each bus answers for itself whether this is its tick.
+    --The calls from inside a transfer (insert_item_into_external,
+    --extract_item_from_external) pass nothing and must keep running unphased: the
+    --cache has to reflect the container right after it was written.
+    if periodic and (game.tick + self.entID) % Constants.Settings.RNS_ExternalStorage_Tick ~= 0 then return end
     --[[if self:check_focused_entity() == nil then
         self:flush_cache()
         self:clear_cache()

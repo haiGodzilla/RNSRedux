@@ -455,6 +455,11 @@ function IIO3:transportIO()
 end
 
 function IIO3:IO()
+    --This bus runs on one tick in RNS_ItemIO_Tick, phased by its own unit number.
+    --Same frequency as before, spread across the cycle instead of bunched with
+    --every other bus in the game. See NetworkController:update.
+    if (game.tick + self.entID) % Constants.Settings.RNS_ItemIO_Tick ~= 0 then return end
+
     if self.circuitCondition2.state and (Util.getCombinatorNetwork(self.enablerCombinator) ~= nil) then
         local amount = self.circuitCondition2.filter and Util.getCombinatorSignal(self.enablerCombinator, {type=self.circuitCondition2.filter.type, name=self.circuitCondition2.filter.name}) or storage.IIOMultiplier
         self.stackSize = math.min(math.max(amount, 1), storage.IIOMultiplier)
