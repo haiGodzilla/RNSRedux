@@ -2075,7 +2075,7 @@ trägt ihn.
 2. **Die Chunk-Größe** (`CHUNK_INITIAL = 1024`, 7.15). Eigener Schritt.
 3. **Die Item-Verteilung beim Abbau** (Andre). Eigener Schritt, weil sie denselben
    Einbau-Pfad benutzt.
-4. ~~Die Trace-Ausgaben~~ — **erledigt** (Commit `??`): die vier temporären
+4. ~~Die Trace-Ausgaben~~ — **erledigt** (Commit `36cb91e`): die vier temporären
    Schreibstellen in `Event.placed` und `ItemDrives` sind raus, der
    `storeTrace`-Helfer ebenfalls. Die `carrier`-Ermittlung in `Event.placed` bleibt:
    sie ist der Fix, nicht die Messung.
