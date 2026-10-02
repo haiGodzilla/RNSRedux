@@ -22,35 +22,33 @@ fünf Angaben:
 | `offen` | bestätigt oder plausibel, nicht behoben |
 | `ungemessen` | Code ist da, Verhalten nicht geprüft |
 | `wartet auf Test` | behoben oder gebaut, Test steht aus |
-| `behoben` | behoben **und** gemessen |
+| `behoben` | behoben **und** getestet |
 | `kein Fehler` | nachgerechnet oder gemessen, unkritisch |
 
-Stand: Commit `ca5e457`. Die Reihenfolge ist keine Priorisierung.
+Stand: Commit `f3e0422`. Die Reihenfolge ist keine Priorisierung.
 
 ## 1. Offen
 
 | ID | Bereich | Befund | Status | Beleg |
 |---|---|---|---|---|
-| B-01 | Anzeige | Hover über einen platzierten Drive zeigt `0/0`, der Klick die richtige Füllung. Ursache: Der Drive ist ein `container` mit `inventory_size = 0`, und Factorio zeigt beim Hover das Inventar — das die Mod nie benutzt. | `offen` | `docs/projektstand.md` 7.20 |
-| B-02 | ItemStore | `CHUNK_INITIAL = 1024` unabhängig von der Größe; ein 4k-Drive braucht 40 Slots, bekommt 1024. Kostet Savegröße und Bauzeit, **nicht Ticks**. | `offen` | 7.15 |
-| B-03 | Netzwerk | `NetworkBase.addConnectables` Zeilen 183/186/191: drei Prüfungen mit `and` statt `or`. Crash statt sauberer Abbruch; Zeile 186 prüft `.valid` auf einer Tabelle ohne das Feld. | `offen` | Abschnitt 9 |
-| B-04 | Fluide | `Util.fluid_add_list_into_table`: Temperaturmischung falsch gewichtet, `v.amount` wird vor der Gewichtung erhöht. | `offen` | Abschnitt 9 |
-| B-05 | Controller | `NC:createArms` übergibt einen String an `order_deconstruction("player")`; 2.0 erwartet eine ForceID. Ob das still fehlschlägt, ist ungeprüft. | `offen` | Abschnitt 9 |
-| B-06 | Grafik | Beide Select-Icons zeigen auf dieselbe Datei (Tint geht verloren), ein leerer vertikaler Balken in der Items-Spalte. | `offen` | Abschnitt 9 |
+| B-01 | Anzeige | Hover über einen platzierten Drive zeigt `0/0`, der Klick die richtige Füllung. Ursache: Der Drive ist ein `container` mit `inventory_size = 0`, und Factorio zeigt beim Hover das Inventar — das die Mod nie benutzt. Behebung berührt den Entity-Typ oder braucht Runtime-Tooltips, beides Data-Stage. | `offen` | 7.20 |
+| B-02 | ItemStore | `CHUNK_INITIAL = 1024` unabhängig von der Größe; ein 4k-Drive braucht 40 Slots, bekommt 1024. Kostet Savegröße und Bauzeit, **nicht Ticks** — `is_full` läuft über den geführten Zähler. | `offen` | 7.15 |
+| B-03 | Netzwerk | `NetworkBase.addConnectables` Zeilen 183/186/191: drei Prüfungen mit `and` statt `or`. Crash statt sauberer Abbruch; Zeile 186 prüft `.valid` auf einer Tabelle ohne das Feld. | `offen` | 1:1-Port, ungeprüft |
+| B-04 | Fluide | `Util.fluid_add_list_into_table`: Temperaturmischung falsch gewichtet, `v.amount` wird vor der Gewichtung erhöht. | `offen` | 1:1-Port, ungeprüft |
+| B-05 | Controller | `NC:createArms` übergibt einen String an `order_deconstruction("player")`; 2.0 erwartet eine ForceID. Ob das still fehlschlägt, ist ungeprüft. | `offen` | 1:1-Port, ungeprüft |
+| B-06 | Grafik | Beide Select-Icons zeigen auf dieselbe Datei (Tint geht verloren), ein leerer vertikaler Balken in der Items-Spalte. | `offen` | 1:1-Port, ungeprüft |
 | B-07 | Messung | Eine Zerlegung geht um 0,21 ms nicht auf; die 9 % Mehrkosten aus 6.6 haben keine Ursache. Möglicherweise derselbe Posten. | `offen` | 6.11, 6.12 |
-| B-08 | Performance | `filter_externalIO_by_valid_signal` baut bei jedem Aufruf verschachtelte Tabellen neu auf. Läuft seit `10154d6` nur noch auf dem Tick des Busses, die Allokation bleibt. | `offen` | Abschnitt 9 |
-| B-09 | Performance | `NC:updateExternalStorage` läuft jeden Tick und iteriert alle External-Busse, auch wenn keiner in seiner Phase ist. Bei 40 Bussen billig, bei einigen Tausend nicht. | `offen`, gehört zu P4 | Abschnitt 9 |
-| B-10 | Dokumentation | Der Verweis auf die Projektnotiz „Analyse Fabrikdurchsatz" läuft ins Leere — die Notiz liegt nicht im Repo. | `offen` | Abschnitt 9 |
-| B-18 | Texte | Item-Beschreibungen waren leer oder wiederholten den Namen. **Zwei Ursachen, beide gefunden:** (1) Schlüssel passten nicht auf die Prototyp-Namen — das Netz-Item heißt `RNS_NetworkInventoryInterface` (`constants.lua:900`), die Locale führte `RNS_NetworkInventoryBlock`; beim Controller, Wireless Transmitter und den drei IO-Bussen dasselbe Muster. Genau diese hatten **gar keine** Beschreibung. (2) Die vorhandenen Texte wiederholten den Namen („Red Cable"). **Behoben:** beide Schlüsselformen eingetragen und alle 36 Einträge durch echte Texte ersetzt, mit dem Zusammenspiel (Kabel verbinden, Controller definiert, Drives speichern, Busse tauschen, Transmitter/Receiver spannt das Netz über die Distanz). Fluid-Drive sagte „items" statt „fluid". Ramp-Items hatten `order = "a"` wie die Kabel → jetzt `"b"`. | `wartet auf Test` | `locale/en/config.cfg`, `prototypes/NetworkCable.lua` |
-| B-19 | Kollision | Die 1×1-Netzteile blockieren den Charakter. Kabel haben `collision_box` und **keine `collision_mask`**, also kollidierten sie mit der Standard-Maske inklusive Spieler. **Behoben:** Kabel, Underground-Kabel und die drei IO-Busse übernehmen die Maske des Belts — gemessen: `{water_tile, floor, transport_belt, object, meltable}`, **ohne `player`**. Die Schreibweise `{layers = {...}}` ist im eigenen Repo belegt (`others.lua:186`). Kein Regress: für RNS-Objekte existierte nie eine Maske. | `wartet auf Test` | `data.lua`, `prototypes/NetworkCable*.lua` |
-| B-20 | Kabel | Underground-Kabel: kein Sprite am Cursor, platziert unsichtbar. **Meine Blatt-Hypothese war falsch** — `NetworkCableRedRamps.png` ist 2048×512, die x-Adressierung passt. **Neue Ursache:** Der Prototyp setzt ein **Top-Level `animation`**, aber eine `assembling-machine` liest `graphics_set.animation` — so machen es die drei IO-Busse im selben Repo, und die API führt `graphics_set` als Feld dieses Typs, ein Top-Level-`animation` nicht. Ohne Grafik ist die Vorschau leer und das platzierte Teil unsichtbar. **Behoben** durch Einrücken unter `graphics_set`. | `wartet auf Test` | `prototypes/NetworkCable.lua:122–159` |
+| B-08 | Performance | `filter_externalIO_by_valid_signal` baut bei jedem Aufruf verschachtelte Tabellen neu auf. Läuft seit `10154d6` nur noch auf dem Tick des Busses, die Allokation bleibt. | `offen` | `NetworkBase.lua:1340` |
+| B-09 | Performance | `NC:updateExternalStorage` läuft jeden Tick und iteriert alle External-Busse, auch wenn keiner in seiner Phase ist. Bei 40 Bussen billig, bei einigen Tausend nicht. | `offen`, gehört zu P4 | `NetworkController.lua:175` |
+| B-10 | Dokumentation | Der Verweis auf die Projektnotiz „Analyse Fabrikdurchsatz" läuft ins Leere — die Notiz liegt nicht im Repo. | `offen` | `ups-architektur.md` Abschnitt 10 |
 
-## 2. Gebaut, aber ungemessen
+## 2. Behoben, Test steht aus
 
 | ID | Bereich | Punkt | Status | Beleg |
 |---|---|---|---|---|
 | B-11 | NII | Der Handler-Zweig für `RNS_NII_PInv_*` ist verdrahtet, aber nie mit einem Klick geprüft. | `ungemessen` | 5.13 |
 | B-12 | NII | Der Sortierschalter `RNS_NII_SortOrder` ist im Klick-Pfad behandelt, feuert aber `on_gui_element_changed` — dort fehlt der `RNS_NII`-Zweig. Vermutlich wirkungslos. | `ungemessen` | 5.13 |
+| B-18 | Texte | Item-Beschreibungen waren leer oder wiederholten den Namen. Zwei Ursachen: (1) Schlüssel passten nicht auf die Prototyp-Namen — das Netz-Item heißt `RNS_NetworkInventoryInterface` (`constants.lua:900`), die Locale führte `RNS_NetworkInventoryBlock`; dasselbe Muster beim Controller, Wireless Transmitter und den drei IO-Bussen. Genau diese hatten **gar keine** Beschreibung. (2) Die vorhandenen Texte wiederholten den Namen („Red Cable"). Behoben: beide Schlüsselformen eingetragen, alle Einträge durch echte Texte ersetzt, inklusive Zusammenspiel (Kabel verbinden, Controller definiert, Drives speichern, Busse tauschen, Transmitter/Receiver führt das Netz über die Distanz). Fluid-Drive sagte „items" statt „fluid". Ramp-Items hatten `order = "a"` wie die Kabel → jetzt `"b"`. **Im Spiel noch nicht angelesen.** | `wartet auf Test` | `locale/en/config.cfg`, `prototypes/NetworkCable.lua` |
 
 ## 3. Nachgerechnet, unkritisch
 
@@ -58,7 +56,7 @@ Stand: Commit `ca5e457`. Die Reihenfolge ist keine Priorisierung.
 |---|---|---|---|---|
 | B-13 | Netzwerk | `add`/`remove_item_from_interface_cache` sind lineare Scans, aber die Liste hat **einen Eintrag pro Item-Typ** — der Aufteilungszweig greift nur einmal, weil der Rest ein volles Magazin bekommt. Bestätigt durch `cache=16` bei 16 Typen. | `kein Fehler` | 8.3 |
 
-## 4. Behoben
+## 4. Behoben und getestet
 
 | ID | Bereich | Punkt | Beleg |
 |---|---|---|---|
@@ -66,6 +64,8 @@ Stand: Commit `ca5e457`. Die Reihenfolge ist keine Priorisierung.
 | B-15 | Platzierung | Ein fremder Entity-Tag setzte `filters` auf `nil`, `regenerate_icons` warf, und `Control.placed` zerstörte den Drive. Jetzt werden alle Felder geprüft. | `535a6d9`, 7.18 |
 | B-16 | Platzierung | `on_built_entity` hat in 2.0 kein `stack`-Feld — der Lesepfad war seit der Portierung tot. Ein **per Roboter** gebauter Drive behielt seinen Inhalt, ein von Hand gebauter nicht. Jetzt wird `consumed_items` zusätzlich gelesen. | `8d0a0f8`, 7.17 |
 | B-17 | Transfer | P2 ersetzte einen Hash-Zugriff durch eine Engine-Suche über die Chunks, pro Drive und pro Item, im Normalfall erfolglos. Der Index antwortet jetzt zuerst. | `55dccb0`, 8.2 |
+| B-19 | Kollision | Die 1×1-Netzteile blockierten den Charakter, weil für RNS-Objekte nie eine `collision_mask` definiert war. Jetzt übernehmen Kabel, Underground-Kabel und die drei IO-Busse die Belt-Maske — gemessen `{water_tile, floor, transport_belt, object, meltable}`, ohne `player`. Getestet: Kabel und Underground-Kabel begehbar, Kiste lässt sich nicht darauf setzen. Die IO-Busse sind nicht einzeln nachgeprüft, benutzen aber dieselbe Maske. | `b697f36` |
+| B-20 | Kabel | Underground-Kabel hatte kein Sprite, weil der Prototyp ein Top-Level `animation` setzte, den eine `assembling-machine` nicht liest. Unter `graphics_set` eingerückt. Getestet: Vorschau und Platzierung korrekt. | `b697f36` |
 
 ## 5. Vor dem Release zu erledigen
 

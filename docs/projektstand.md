@@ -5,9 +5,10 @@ Einstiegspunkt für die Weiterarbeit. Technischer Plan und Begründungen:
 Dieses Dokument beantwortet „wo stehen wir, was ist verifiziert, was ist der nächste
 Schritt".
 
-Stand: Commit `bb5ad52`, Branch `port/2.0`, Version 2.0.0.
-P0 und P1 sind durch, P5 ist bis auf den Item-Bus-Restposten abgeräumt (2,5 % des
-Tick-Budgets bei 40 Bussen). **Laufender Posten: P2, ItemStore.**
+Stand: Commit `f3e0422`, Branch `port/2.0`, Version 2.0.0.
+P0, P1, P2 und P3 sind durch. **Laufender Posten: eine Runde Spielbetrieb** — P2 hat
+die zentrale Datenstruktur umgebaut und ist nur mit gezielten Tests geprüft, nicht
+im Spiel. Funde im Chat melden, der Agent trägt sie in `docs/bugtracker.md` ein.
 
 ## 1. Projekt
 
@@ -2276,42 +2277,54 @@ sechzehn Cache-Einträge, also **einer pro Typ**. Die Scans laufen über n = 1.
 echte Fund aus P2 ist behoben (8.2), und Punkt (c) ist bei normalen wie bei
 modifizierten Items unkritisch (8.3).
 
-## 9. Offene technische Schulden
+## 9. Spielbetrieb: erste Runde
 
-Aus dem 1:1-Port bekannt, bewusst nicht angefasst:
+Nach der P2-Abnahme läuft eine Runde **Spielbetrieb auf einer echten Anlage**, nicht
+auf dem Stresstest. Begründung in 8.3: Die vier Altlasten aus dem Port (7.17, 7.18)
+waren alle nur im Zusammenspiel sichtbar. Ein synthetischer Aufbau hätte keinen
+davon gezeigt.
 
-- `NetworkBase.addConnectables`, Zeilen 183/186/191: drei Prüfungen mit `and`
-  statt `or` (`if x == nil and x.valid == false`). Crash statt sauberer Abbruch
-  im Fehlerfall. Zeile 186 prüft `.valid` auf einer Tabelle ohne dieses Feld.
-- `Util.fluid_add_list_into_table`: Temperaturmischung falsch gewichtet,
-  `v.amount` wird vor der Gewichtung erhöht.
-- ~~`ItemDrives.add_or_merge_basic_item`: Munition und Haltbarkeit per Modulo~~
-  — **erledigt in P2**: der Pfad liegt jetzt im Store, die Engine führt Stapel
-  über das `ammo`-Feld zusammen.
-- `NC:createArms` übergibt einen String an `order_deconstruction("player")`, in
-  2.0 erwartet die Signatur eine ForceID. Ob das still fehlschlägt, ist nicht
-  geprüft.
-- Beide Select-Icons zeigen auf dieselbe Datei (Tint geht verloren), ein leerer
-  vertikaler Balken in der Items-Spalte.
-- `RNSPlayer.process_logistic_slots` nutzt entfernte Logistic-Slot-Funktionen,
-  gehört zu M5.
-- `add_item_to_interface_cache` / `remove_item_from_interface_cache`
-  (`NetworkBase.lua:549–569`) sind lineare Scans pro Einlagerung/Entnahme. **Als
-  unkritisch nachgerechnet** — die Liste hat einen Eintrag pro Item-Typ, bestätigt
-  durch `cache=16` bei 16 Typen. Siehe Abschnitt 8.3.
-- Der Verweis auf die Projektnotiz „Analyse Fabrikdurchsatz" in
-  `docs/ups-architektur.md` läuft ins Leere: **die Notiz liegt nicht im Repo.**
-- `filter_externalIO_by_valid_signal` (`NetworkBase.lua:1340–1355`) baut bei
-  jedem Aufruf verschachtelte Tabellen neu auf und ruft `check_focused_entity`
-  auf jedem Bus. Seit `10154d6` läuft es nur noch auf dem Tick des jeweiligen
-  Busses, aber die Allokation bleibt. Kandidat für P5, wenn der Name nicht mehr
-  gebraucht wird — die Prüflogik sitzt jetzt in `updateExternalStorage`.
-- `NC:updateExternalStorage` läuft jetzt jeden Tick und iteriert dabei alle
-  External-Busse, auch wenn keiner in seiner Phase ist. Bei 40 Bussen ist das
-  billig, bei einigen Tausend nicht. Zusammen mit dem Item-Sweep derselbe
-  Posten, den P4 mit Zeitschlitzen lösen soll.
+Empfohlenes Setup: ein eigenes Save, ein Drive an einer Maschine, ein External-Bus
+an einer Kiste in beide Richtungen, NII benutzen, mittendrin speichern und laden,
+einen vollen Drive abbauen und wieder aufbauen. Der Creative Mod ist installiert,
+damit sich Mid-Game-Szenarien nachstellen lassen.
 
-## 10. Arbeitsweise
+**Erste Runde, drei Funde — alle in `docs/bugtracker.md`:**
+
+| ID | Fund | Stand |
+|---|---|---|
+| B-18 | Beschreibungen leer oder nichtssagend | beide Ursachen gefunden und behoben, Test offen |
+| B-19 | 1×1-Netzteile blockieren den Charakter | behoben, getestet |
+| B-20 | Underground-Kabel ohne Sprite | behoben, getestet |
+
+**Zwei davon waren nicht, was sie zu sein schienen** — das ist die Lehre dieser
+Runde und in beiden Fällen im Tracker festgehalten:
+
+- Bei B-18 war das „leer" kein fehlender Text, sondern ein **falscher Schlüssel**:
+  Drei Items hatten überhaupt keinen Locale-Eintrag, weil die Locale einen anderen
+  Namen führte als der Prototyp.
+- Bei B-20 war die naheliegende Erklärung (Bildadressierung) **falsch** — Andre
+  lieferte die Bildmaße, und die passten. Die Ursache war ein Feldname: Der
+  Prototyp setzte ein Top-Level-`animation`, das eine `assembling-machine` nicht
+  liest. Dasselbe Muster in drei anderen Dateien desselben Repos hätte es gezeigt,
+  wenn ich vorher verglichen hätte.
+
+## 10. Befunde
+
+**Die Liste der offenen und behobenen Punkte steht in `docs/bugtracker.md`** — mit
+IDs, Status und Beleg. Sie stand früher hier; die Doppelpflege hat zu Widersprüchen
+geführt, deshalb gibt es nur noch eine Quelle.
+
+Kurzfassung des Stands: 10 offene Punkte (B-01 bis B-10), 3 ungemessene (B-11,
+B-12, B-18), 1 als unkritisch nachgerechnet (B-13), 6 behoben und getestet (B-14 bis
+B-17, B-19, B-20).
+
+Die Erläuterungen zu den einzelnen Befunden bleiben in diesem Dokument, wo sie
+hingehören: 5.6 (Phantom-Spielstände), 5.8 (Entnahme), 7.12 (Qualitäts-Blockade),
+7.15 (Chunk-Größe), 7.17 (`on_built_entity`), 7.18 (fremder Entity-Tag), 7.20
+(Hover), 8.3 (Cache-Scans).
+
+## 11. Arbeitsweise
 
 Ein Fehler pro Runde ist normal. Manche Umgebungen brechen beim ersten Problem
 ab und zeigen nur eines. Deshalb: die tragfähige Korrektur liefern, statt alles
