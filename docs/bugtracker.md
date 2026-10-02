@@ -25,7 +25,7 @@ fünf Angaben:
 | `behoben` | behoben **und** getestet |
 | `kein Fehler` | nachgerechnet oder gemessen, unkritisch |
 
-Stand: Commit `f3e0422`. Die Reihenfolge ist keine Priorisierung.
+Stand: Commit `fba2235`. Die Reihenfolge ist keine Priorisierung.
 
 ## 1. Offen
 
@@ -48,7 +48,7 @@ Stand: Commit `f3e0422`. Die Reihenfolge ist keine Priorisierung.
 |---|---|---|---|---|
 | B-11 | NII | Der Handler-Zweig für `RNS_NII_PInv_*` ist verdrahtet, aber nie mit einem Klick geprüft. | `ungemessen` | 5.13 |
 | B-12 | NII | Der Sortierschalter `RNS_NII_SortOrder` ist im Klick-Pfad behandelt, feuert aber `on_gui_element_changed` — dort fehlt der `RNS_NII`-Zweig. Vermutlich wirkungslos. | `ungemessen` | 5.13 |
-| B-18 | Texte | Item-Beschreibungen waren leer oder wiederholten den Namen. Zwei Ursachen: (1) Schlüssel passten nicht auf die Prototyp-Namen — das Netz-Item heißt `RNS_NetworkInventoryInterface` (`constants.lua:900`), die Locale führte `RNS_NetworkInventoryBlock`; dasselbe Muster beim Controller, Wireless Transmitter und den drei IO-Bussen. Genau diese hatten **gar keine** Beschreibung. (2) Die vorhandenen Texte wiederholten den Namen („Red Cable"). Behoben: beide Schlüsselformen eingetragen, alle Einträge durch echte Texte ersetzt, inklusive Zusammenspiel (Kabel verbinden, Controller definiert, Drives speichern, Busse tauschen, Transmitter/Receiver führt das Netz über die Distanz). Fluid-Drive sagte „items" statt „fluid". Ramp-Items hatten `order = "a"` wie die Kabel → jetzt `"b"`. **Im Spiel noch nicht angelesen.** | `wartet auf Test` | `locale/en/config.cfg`, `prototypes/NetworkCable.lua` |
+| B-18 | Texte | Item-Beschreibungen waren leer oder wiederholten den Namen. Zwei Ursachen: (1) Schlüssel passten nicht auf die Prototyp-Namen — das Netz-Item heißt `RNS_NetworkInventoryInterface` (`constants.lua:900`), die Locale führte `RNS_NetworkInventoryBlock`; dasselbe Muster beim Controller, Wireless Transmitter und den drei IO-Bussen. Genau diese hatten **gar keine** Beschreibung. (2) Die vorhandenen Texte wiederholten den Namen („Red Cable"). Behoben: beide Schlüsselformen eingetragen, alle Einträge durch echte Texte ersetzt, inklusive Zusammenspiel (Kabel verbinden, Controller definiert, Drives speichern, Busse tauschen, Transmitter/Receiver führt das Netz über die Distanz). Fluid-Drive sagte „items" statt „fluid". Ramp-Items hatten `order = "a"` wie die Kabel → jetzt `"b"`. **Im Spiel noch nicht angelesen.** Nachtrag `fba2235`: zwei **entity**-seitige Schlüssel fehlten weiterhin — die Controller-Entity wiederholte den Namen (`entity-description`), der platzierte Netz-Knoten hatte gar keine Beschreibung (`entity-description` führte nur die Altform `..._Block`, der Prototyp heißt `..._Interface`). Beide ergänzt, ebenfalls ungetestet. | `wartet auf Test` | `locale/en/config.cfg`, `prototypes/NetworkCable.lua` |
 
 ## 3. Nachgerechnet, unkritisch
 

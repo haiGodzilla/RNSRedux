@@ -5,7 +5,7 @@ Einstiegspunkt für die Weiterarbeit. Technischer Plan und Begründungen:
 Dieses Dokument beantwortet „wo stehen wir, was ist verifiziert, was ist der nächste
 Schritt".
 
-Stand: Commit `f3e0422`, Branch `port/2.0`, Version 2.0.0.
+Stand: Commit `fba2235`, Branch `port/2.0`, Version 2.0.0.
 P0, P1, P2 und P3 sind durch. **Laufender Posten: eine Runde Spielbetrieb** — P2 hat
 die zentrale Datenstruktur umgebaut und ist nur mit gezielten Tests geprüft, nicht
 im Spiel. Funde im Chat melden, der Agent trägt sie in `docs/bugtracker.md` ein.
