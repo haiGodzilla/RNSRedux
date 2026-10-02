@@ -5,7 +5,7 @@ Einstiegspunkt für die Weiterarbeit. Technischer Plan und Begründungen:
 Dieses Dokument beantwortet „wo stehen wir, was ist verifiziert, was ist der nächste
 Schritt".
 
-Stand: Commit `fba2235`, Branch `port/2.0`, Version 2.0.0.
+Stand: Commit `5189eea`, Branch `port/2.0`, Version 2.0.0.
 P0, P1, P2 und P3 sind durch. **Laufender Posten: eine Runde Spielbetrieb** — P2 hat
 die zentrale Datenstruktur umgebaut und ist nur mit gezielten Tests geprüft, nicht
 im Spiel. Funde im Chat melden, der Agent trägt sie in `docs/bugtracker.md` ein.
@@ -2293,7 +2293,7 @@ damit sich Mid-Game-Szenarien nachstellen lassen.
 
 | ID | Fund | Stand |
 |---|---|---|
-| B-18 | Beschreibungen leer oder nichtssagend | beide Ursachen gefunden und behoben, Test offen |
+| B-18 | Beschreibungen leer oder nichtssagend | behoben, angelesen und in Ordnung |
 | B-19 | 1×1-Netzteile blockieren den Charakter | behoben, getestet |
 | B-20 | Underground-Kabel ohne Sprite | behoben, getestet |
 
@@ -2309,21 +2309,72 @@ Runde und in beiden Fällen im Tracker festgehalten:
   liest. Dasselbe Muster in drei anderen Dateien desselben Repos hätte es gezeigt,
   wenn ich vorher verglichen hätte.
 
+### 9.1 Zweite Runde: drei IDs abgeräumt, einer belegt, zwei Grafikbefunde
+
+**Abgeräumt.** **B-18** ist angelesen und in Ordnung — auch die beiden
+entity-seitigen Schlüssel aus `fba2235`; damit ist die Lehre aus der ersten Runde
+(Fund ≠ Symptom) auch beim zweiten Anlauf bestätigt. **B-11**, die
+Spielerinventar-Spalte, trägt: `tracked` 11/4 → 61/5 in zwei Dumps um einen Links-
+und einen Strg-Linksklick, `truth` behauptet = tatsächlich in beiden. **B-12** war
+**kein** Fehler: `GUI.on_gui_clicked` leitet jedes `RNS_NII*`-Element an
+`NII.interaction` (`Gui.lua:147–150`), und dort steht der `SortOrder`-Zweig
+(`NetworkInventoryInterface.lua:754`) — der fehlende Zweig in
+`on_gui_element_changed` war nur der zweite Weg dorthin. Gemessen: der Schalter
+sortiert um, in beide Richtungen.
+
+**B-01 ist jetzt belegt, und das Argument ist die Abwesenheit.** Der Hover zeigt
+`Storage: 0/0`, während der Klick am selben Drive `61 / 256000` liest. Der einzige
+Text der Mod mit diesem Wort ist `item-description.RNS_DriveTag_Storage`, und der
+wird ausschließlich am **geminten Item** gesetzt — als Teil einer vierzeiligen
+Beschreibung mit Filters, Priority und Mode, die im Screenshot alle fehlen.
+`Storage` und `Last user` kommen im ganzen Repo nicht vor. Die Zeile rendert also
+das Spiel, nicht die Mod, und die Zahl stammt aus dem Inventar des `container` mit
+`inventory_size = 0` — 7.20 war damit richtig. **Offen bleibt die Behebung**, und
+zwar mit einer ungeprüften Vorfrage: kennt 2.0 einen Tooltip pro Entity, oder
+hilft nur ein anderer Entity-Typ? Beides ist ungelesen.
+
+**B-21, der Footprint.** `Drives.lua:52–53` setzt Kollision 1,8 × 1,8 und Auswahl
+2 × 2, `NetworkController.lua:34–35` 2,8 × 2,8 und 3 × 3. Andres Zählung im Spiel
+nennt 2 breit × 3 tief für den Drive und 3 × 4 für den Controller. Der Rahmen darf
+**eine** Fläche sein, aber nicht zwei: entweder die Box ist zu klein oder die
+Grafik zu groß. Auffällig ist eine dritte Zahl, die eine Umrechnung erklärt: Der
+Drive zeichnet eine 512-px-Vorlage auf `scale = 1/4`, also 128 px oder **vier
+Felder** — doppelt so viel, wie die Box belegt. Der Controller zeichnet
+`size = 512, scale = 192/512`, also 192 px oder sechs Felder, bei 3 × 3 Box. In
+beiden Fällen ist die gezeichnete Fläche doppelt so groß wie der Footprint, die
+Kunst darin füllt die Vorlage also nicht. **Was sie genau füllt, ist die offene
+Frage** — und sie ist der Grund, warum 9.1 mit dem Schatten anfängt.
+
+**B-22, der Schatten.** Der Körper des Drives liegt bei `shift = {0, -138/512}`, sein
+Schatten bei `shift = {1, -0.47225}` (`Drives.lua:67` gegen `:75`): ein Feld nach
+Osten, ein Fünftel Feld nach Norden. Der Schatten ist mit 256 px auf `scale = 1/2`
+ebenfalls vier Felder breit, liegt also auf derselben Fläche wie der Körper — ohne
+Versatz müssten beide deckungsgleich sein. Der Controller hat als Gegenbeispiel gar
+keinen Schattenversatz (`NetworkController.lua:56–61`). In Andres Screenshots steht
+genau dort, ein Feld östlich der Drivereihe, eine dunkle Fläche.
+
+**Und eine Unsicherheit, die ich benennen muss:** ob eine `draw_as_shadow`-Schicht
+eine Entity überhaupt *verdecken* kann, weiß ich nicht — Schatten werden
+üblicherweise unter den Entities gezeichnet. Dann ist der Schatten nur ein
+Schönheitsfehler und B-21 trägt das Verdecktwerden allein. Der Versuch `5189eea`
+setzt den x-Versatz auf 0 und beantwortet beides zusammen: Verschiebt sich die
+dunkle Fläche unter den Drive, war der Versatz falsch — und ob die Grafik danach
+immer noch über das Feld ragt, ist ohne den Schattenlärm sauber zu sehen.
+
 ## 10. Befunde
 
 **Die Liste der offenen und behobenen Punkte steht in `docs/bugtracker.md`** — mit
 IDs, Status und Beleg. Sie stand früher hier; die Doppelpflege hat zu Widersprüchen
 geführt, deshalb gibt es nur noch eine Quelle.
 
-Kurzfassung des Stands: **10 offene** Punkte (B-01 bis B-10), **2 gebaut aber
-ungemessen** (B-11, B-12), **1 behoben mit offenem Test** (B-18, die Texte), **1 als
-unkritisch nachgerechnet** (B-13), **6 behoben und getestet** (B-14 bis B-17, B-19,
-B-20).
+Kurzfassung des Stands: **12 offene** Punkte (B-01 bis B-10, B-21, B-22), **2 als
+unkritisch nachgerechnet** (B-12, B-13), **8 behoben und getestet** (B-11, B-14 bis
+B-20). **Nichts steht mehr auf `wartet auf Test` oder `ungemessen`.**
 
 Die Erläuterungen zu den einzelnen Befunden bleiben in diesem Dokument, wo sie
 hingehören: 5.6 (Phantom-Spielstände), 5.8 (Entnahme), 7.12 (Qualitäts-Blockade),
 7.15 (Chunk-Größe), 7.17 (`on_built_entity`), 7.18 (fremder Entity-Tag), 7.20
-(Hover), 8.3 (Cache-Scans).
+(Hover), 8.3 (Cache-Scans), 9.1 (zweite Spieltest-Runde).
 
 ## 11. Arbeitsweise
 
