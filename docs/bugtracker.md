@@ -25,7 +25,7 @@ fünf Angaben:
 | `behoben` | behoben **und** getestet |
 | `kein Fehler` | nachgerechnet oder gemessen, unkritisch |
 
-Stand: Commit `8ee251d`. Die Reihenfolge ist keine Priorisierung.
+Stand: Commit `8ee251d` (Code-Stand; diese Runde ändert nur Dokumente und das Werkzeug). Die Reihenfolge ist keine Priorisierung.
 
 ## 1. Offen
 
@@ -41,8 +41,8 @@ Stand: Commit `8ee251d`. Die Reihenfolge ist keine Priorisierung.
 | B-08 | Performance | `filter_externalIO_by_valid_signal` baut bei jedem Aufruf verschachtelte Tabellen neu auf. Läuft seit `10154d6` nur noch auf dem Tick des Busses, die Allokation bleibt. | `offen` | `NetworkBase.lua:1340` |
 | B-09 | Performance | `NC:updateExternalStorage` läuft jeden Tick und iteriert alle External-Busse, auch wenn keiner in seiner Phase ist. Bei 40 Bussen billig, bei einigen Tausend nicht. | `offen`, gehört zu P4 | `NetworkController.lua:175` |
 | B-10 | Dokumentation | Der Verweis auf die Projektnotiz „Analyse Fabrikdurchsatz" läuft ins Leere — die Notiz liegt nicht im Repo. | `offen` | `ups-architektur.md` Abschnitt 10 |
-| B-21 | Grafik | **Ein Item-IO lässt sich auf ein Feld setzen, das die Grafik des Drives übermalt** (drei Screenshots). Die Zeichenfläche ist deutlich größer als der Footprint: Der Drive zeichnet 512 px auf `scale = 1/4`, also **4 × 4 Felder**, und belegt 1,8 × 1,8 Kollision / 2 × 2 Auswahl (`Drives.lua:52–53`); der Controller zeichnet 512 px auf `192/512`, also **6 × 6 Felder**, bei 2,8 × 2,8 / 3 × 3 (`NetworkController.lua:34–35`). Die gemalte Kunst darin ist nach Andres Zählung 2 breit × 3 tief bzw. 3 × 4. **Offen und messbar:** welcher Teil der Zeichenfläche bemalt ist — dafür `tools/png_bbox.py`, siehe 9.1. | `offen` | Screenshots, Prototyp-Werte, 9.1 |
-| B-22 | Grafik | Der Schatten des Drives ist eine eigene Schicht aus `DriveS.png` mit `scale = 1/2` — 128 Bildpixel, also **dieselben 4 × 4 Felder** wie der Körper, obwohl die bemalte Kunst kleiner ist. `shift = {1,-0.47225}` (`Drives.lua:75`) gegen `{0,-138/512}` beim Körper (`:67`) setzte ihn zusätzlich ein Feld nach Osten. Die Probe `5189eea` (x-Versatz auf 0) ist **zurückgenommen**, siehe 9.1: danach lag die dunkle Fläche unter dem Drive statt daneben, ein Feld östlich war sie falsch und mittig auch **zu groß**. Ursache ist damit die Größe der Schicht, nicht ihr Versatz. | `offen` | Screenshots, 9.1 |
+| B-21 | Grafik | **Auf ein Feld, das die Kunst des Drives übermalt, lässt sich ein Item-IO bauen** (Screenshots). Gemessen mit `tools/png_bbox.py`: Die Kunst ist **2,02 × 2,84 Felder** (Drive) und **3,02 × 4,27** (Controller), jeweils am **Süden** verankert, über den Footprint hinaus nach **Norden** ragend (0,82 bzw. 1,25 Felder). Footprint heute: Kollision 1,8 × 1,8 / Auswahl 2 × 2 bzw. 2,8 × 2,8 / 3 × 3. Drei Richtungen, Details in 9.1: **(A)** Footprint auf 2 × 3 / 3 × 4 (sperrt das Feld, ändert das Raster), **(B)** Kunst beschneiden (2 × 2, kein Rasterwechsel), **(C)** nur die Zeichenreihenfolge des Busses drehen (löst nur den Bus, nicht die Kabel). Empfehlung A, Entscheidung offen. | `offen` | 9.1, `png_bbox.py` |
+| B-22 | Grafik | Der Schatten des Drives ist **doppelt so groß wie der Körper**: beide Bilder sind auf 128 Bildpixel pro Feld gemalt (Körper 258 px auf `scale 1/4`, Schatten 255 px auf `scale 1/2`), der Schatten deckt damit 3,98 statt 1,99 Felder. Nicht der Versatz ist falsch, die Skalierung; bei `1/4` läge er mit `shift = {0,0}` mittig unter dem Sockel. Beim Controller ist das Schattenbild zusätzlich am eigenen Rand abgeschnitten (bemalte Fläche endet auf `x = 511`). Probe `5189eea` **zurückgenommen** (`8ee251d`) — sie hatte nur den Versatz geändert. Kosmetisch, eigener Schritt nach B-21. | `offen` | 9.1 |
 
 ## 2. Nachgerechnet, unkritisch
 

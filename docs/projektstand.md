@@ -2346,46 +2346,70 @@ einen Item-IO auf ein Feld **bauen**, das die Grafik des Drives übermalt — di
 Kollision lässt es zu, das Bild nicht. Die Zeichenflächen sind deutlich größer als
 die Footprints:
 
-| Entity | Zeichenfläche | Footprint |
+| Entity | bemalte Kunst | Footprint |
 |---|---|---|
-| Drive | 512 px × `1/4` = **4 × 4 Felder** | Kollision 1,8 × 1,8, Auswahl 2 × 2 |
-| Controller | 512 px × `192/512` = **6 × 6 Felder** | Kollision 2,8 × 2,8, Auswahl 3 × 3 |
+| Drive | 258 × 363 px = **2,02 × 2,84 Felder** | Kollision 1,8 × 1,8, Auswahl 2 × 2 |
+| Controller | 258 × 364 px = **3,02 × 4,27 Felder** | Kollision 2,8 × 2,8, Auswahl 3 × 3 |
 
-Die Fläche ist gleich, aber die **gemalte** Kunst darin ist es nicht: nach Andres
-Zählung 2 breit × 3 tief beim Drive und 3 × 4 beim Controller. **Diese eine Zahl
-entscheidet die Richtung**, und sie ist messbar statt zählbar — dafür liegt
-`tools/png_bbox.py` im Repo. Es liest die Alphagrenze einer PNG-Datei und rechnet
-sie in Felder um. Verifiziert gegen alle fünf PNG-Zeilenfilter, eine Palettendatei,
-eine Graustufendatei und eine vollständig transparente.
+**Gemessen, nicht gezählt.** Die Kunst des Drives ist 2,02 breit und 2,84 hoch, die
+des Controllers 3,02 breit und 4,27 hoch. Beide sind am **Süden** verankert — die
+Unterkante der Kunst liegt auf der Unterkante des Footprints — und ragen nach
+**Norden** über: der Drive um 0,82 Felder, der Controller um 1,25. Andres Zählung
+(2 × 3 und 3 × 4) war richtig; die Zeichenfläche war vorher nur die falsche
+Bezugsgröße. Das Werkzeug ist gegen alle fünf PNG-Zeilenfilter, eine Palettendatei,
+eine Graustufendatei und eine vollständig transparente verifiziert; die Bilder sind
+16 Bit RGBA, was es ebenfalls trägt.
 
-**Warum die Richtung nicht beliebig ist, vorab gerechnet:** Ist die Kunst 2 × 3
-Felder groß, lässt sie sich **nicht** in einen 2 × 2-Footprint skalieren — Skalierung
-ist gleichmäßig, das Seitenverhältnis bliebe 2:3 und die Breite fiele auf 1,33
-Felder. Der Drive würde also sichtbar kleiner als seine Kabel. Die Alternative wäre
-ein größerer Footprint, und die hat einen Haken, den man vorher sehen muss: Wächst
-die Kollisionsbox nach Norden, wird das Feld, auf dem heute Kabel liegen,
-unbebaubar. Der Netzaufbau hängt an genau diesen Nachbarfeldern. **Beide Wege
-bezahlt man also**, und die Zahlen sagen, wie teuer.
+**Damit sind es drei Richtungen, und jede kostet etwas anderes.**
 
-**B-22, der Schatten, und eine Probe, die ich zurückgenommen habe.** Der Körper
-liegt bei `shift = {0, -138/512}`, sein Schatten bei `{1, -0.47225}`
-(`Drives.lua:67` gegen `:75`) — ein Feld nach Osten. Der Schatten ist mit 256 px auf
-`scale = 1/2` ebenfalls vier Felder breit, liegt also auf derselben Fläche wie der
-Körper und müsste ohne Versatz deckungsgleich sein.
+**A — den Footprint an die Kunst anpassen (2 × 3 und 3 × 4).** Dann passt die Kunst
+fast exakt hinein und das Überhangfeld ist gesperrt; der Drive braucht dafür
+`shift = {0,0}` statt `-138/512`, weil 2,84 Felder Kunst in drei Felder passen. Das
+ist zugleich die **einzige** Richtung, die auch die Kabel erwischt: Deren
+Verbindungsarme werden per `rendering.draw_sprite` auf `lower-object-above-shadow`
+gezeichnet (rund zwanzig Stellen), also **unter** jeder Objekt-Ebene — ein Kabel auf
+dem Überhangfeld verschwindet heute aus demselben Grund wie der Bus. Der Preis ist
+das Raster: Ein drei Felder tiefer Drive verschiebt den Fußabdruck (Mittelpunkt
+dann in der Feldmitte statt auf der Feldecke, wie bei jeder 2 × 3-Maschine), und
+zwei Drivereihen liegen künftig 3 statt 2 Felder auseinander. Ob ein Spielstand mit
+überlappenden Drives sauber lädt, ist **ungemessen** und gehört auf eine Kopie. Der
+Projektstand führt ohnehin keinen Savegame-Migrationspfad (Abschnitt 3), das senkt
+die Hürde.
 
-**Die Probe `5189eea` hat beides widerlegt.** Mit x-Versatz 0 lag die dunkle Fläche
-nicht unter dem Drive, sondern war ein großer Block, der über den Drive hinausragt;
-ein Feld östlich war sie ebenso falsch. Damit ist der **Versatz nicht die Ursache,
-sondern die Größe der Schicht** — und beide Werte sind geraten, nicht gerechnet.
-Die Probe ist zurückgenommen: ein Eingriff ohne Wirkung gehört nicht in den Baum.
-Derselbe `png_bbox.py`-Lauf, auf `DriveS.png` mit Faktor 64 (256 px × `1/2` = 128
-Bildpixel = 4 Felder), sagt, wie groß der Schatten sein darf.
+**B — den Footprint lassen und die Kunst beschneiden.** Die obersten 0,84 Felder des
+Drives verschwinden, dann ist die Kunst 2 × 2, ohne Rasterwechsel. Kostet
+Bildqualität, der Turm ist dann abgeschnitten. Ob sich eine Schicht über `y`/`height`
+beschneiden lässt, ist **ungelesen** — steht das nicht in der 2.0-Doku, ist der Weg
+nicht begehbar.
 
-**Und eine Unsicherheit, die ich nicht auflösen kann:** ob eine
-`draw_as_shadow`-Schicht eine Entity überhaupt *verdecken* kann, weiß ich nicht —
-Schatten werden üblicherweise unter den Entities gezeichnet. Wenn ja, ist B-22 ein
-Schönheitsfehler und B-21 trägt das Verdecktwerden allein. Die Messung entscheidet
-es nicht; das sieht man erst im Spiel, wenn der Schatten stimmt.
+**C — den Footprint lassen und die Zeichenreihenfolge drehen.** Der Bus wird über den
+Drive gezeichnet. Kein Rasterwechsel, aber es widerspricht der Tiefenwirkung —
+Norden ist hinten — und es löst nur den Bus, nicht die Kabel aus A. **Ungelesen von
+mir:** Beide Enden sind in der API auffindbar (`Animation::render_layer` für die
+Bus-Animation, `LayeredSprite::render_layer` für die Ebenen des Drives), welches
+davon greift, habe ich nicht geprüft.
+
+**Empfehlung: A.** Es ist die einzige Variante, die alle Fälle erledigt, der
+Projektstand trägt keinen Savegame-Pfad, und die Ursache sitzt im Footprint: Die
+Kunst beschreibt, wie groß das Ding ist, und der Footprint sagt heute etwas anderes.
+
+**B-22, der Schatten: doppelt so groß wie der Körper.** Beide Bilder sind in
+derselben Dichte gemalt — der Körper ist 258 px breit und wird auf `1/4` gezeichnet,
+also 128 Bildpixel pro Feld; der Schatten ist 255 px breit und wird auf `1/2`
+gezeichnet, also **3,98 Felder** statt der 1,99, die zu seiner Bildbreite passen.
+**Nicht der Versatz war falsch, die Skalierung ist es.** Bei `1/4` läge der Schatten
+mit `y 0,07..0,73` und `shift = {0,0}` mittig unter dem Sockel. Damit ist auch
+{1,-0.47225} erklärt: ein Ausgleich für ein doppelt zu großes Bild.
+
+Die Probe `5189eea` ist zurückgenommen (`8ee251d`) — sie hatte nur den Versatz
+geändert und das Bild deshalb unter den Drive geschoben statt verkleinert. Beim
+Controller kommt eine zweite Sache dazu: Sein Schattenbild ist am eigenen Rand
+abgeschnitten, die bemalte Fläche endet genau auf `x = 511`. Da ist die Vorlage für
+die Zeichnung zu klein, und das heilt kein Faktor.
+
+Kosmetisch, eigener Schritt nach B-21. Ob ein Schatten überhaupt etwas verdecken
+kann, ist damit noch offen; die Werteliste der API legt Schatten unter die
+Objekt-Ebenen, aber das ist aus einer Liste gelesen, nicht gemessen.
 
 ## 10. Befunde
 
