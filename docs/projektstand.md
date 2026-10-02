@@ -5,7 +5,7 @@ Einstiegspunkt für die Weiterarbeit. Technischer Plan und Begründungen:
 Dieses Dokument beantwortet „wo stehen wir, was ist verifiziert, was ist der nächste
 Schritt".
 
-Stand: Commit `5189eea`, Branch `port/2.0`, Version 2.0.0.
+Stand: Commit `8ee251d`, Branch `port/2.0`, Version 2.0.0.
 P0, P1, P2 und P3 sind durch. **Laufender Posten: eine Runde Spielbetrieb** — P2 hat
 die zentrale Datenstruktur umgebaut und ist nur mit gezielten Tests geprüft, nicht
 im Spiel. Funde im Chat melden, der Agent trägt sie in `docs/bugtracker.md` ein.
@@ -2329,37 +2329,63 @@ wird ausschließlich am **geminten Item** gesetzt — als Teil einer vierzeilige
 Beschreibung mit Filters, Priority und Mode, die im Screenshot alle fehlen.
 `Storage` und `Last user` kommen im ganzen Repo nicht vor. Die Zeile rendert also
 das Spiel, nicht die Mod, und die Zahl stammt aus dem Inventar des `container` mit
-`inventory_size = 0` — 7.20 war damit richtig. **Offen bleibt die Behebung**, und
-zwar mit einer ungeprüften Vorfrage: kennt 2.0 einen Tooltip pro Entity, oder
-hilft nur ein anderer Entity-Typ? Beides ist ungelesen.
+`inventory_size = 0` — 7.20 war damit richtig.
 
-**B-21, der Footprint.** `Drives.lua:52–53` setzt Kollision 1,8 × 1,8 und Auswahl
-2 × 2, `NetworkController.lua:34–35` 2,8 × 2,8 und 3 × 3. Andres Zählung im Spiel
-nennt 2 breit × 3 tief für den Drive und 3 × 4 für den Controller. Der Rahmen darf
-**eine** Fläche sein, aber nicht zwei: entweder die Box ist zu klein oder die
-Grafik zu groß. Auffällig ist eine dritte Zahl, die eine Umrechnung erklärt: Der
-Drive zeichnet eine 512-px-Vorlage auf `scale = 1/4`, also 128 px oder **vier
-Felder** — doppelt so viel, wie die Box belegt. Der Controller zeichnet
-`size = 512, scale = 192/512`, also 192 px oder sechs Felder, bei 3 × 3 Box. In
-beiden Fällen ist die gezeichnete Fläche doppelt so groß wie der Footprint, die
-Kunst darin füllt die Vorlage also nicht. **Was sie genau füllt, ist die offene
-Frage** — und sie ist der Grund, warum 9.1 mit dem Schatten anfängt.
+**Und die Behebung ist jetzt recherchiert, statt vermutet.** Die 2.0-Doku führt
+`Prototype::custom_tooltip_fields`, und der Name sagt schon, was es tut: „Allows to
+add extra description items to the tooltip and Factoriopedia" — es **ergänzt**,
+es entfernt nichts. Die Runtime-Felder, die einen Tooltip am lebenden Objekt
+setzen (`LuaEntity::set_tooltip_field`), kommen erst mit 2.1. **In 2.0 gibt es
+damit keinen Weg, die Inventarzeile eines `container` loszuwerden** — nur einen
+anderen Entity-Typ. Das ist Data-Stage und berührt Öffnen, Minen und Blueprint,
+also genau die Mechanik, die P2 gerade stabil gemacht hat. Deshalb gehört die
+Entscheidung zusammen mit B-21, nicht in eine eigene Runde.
 
-**B-22, der Schatten.** Der Körper des Drives liegt bei `shift = {0, -138/512}`, sein
-Schatten bei `shift = {1, -0.47225}` (`Drives.lua:67` gegen `:75`): ein Feld nach
-Osten, ein Fünftel Feld nach Norden. Der Schatten ist mit 256 px auf `scale = 1/2`
-ebenfalls vier Felder breit, liegt also auf derselben Fläche wie der Körper — ohne
-Versatz müssten beide deckungsgleich sein. Der Controller hat als Gegenbeispiel gar
-keinen Schattenversatz (`NetworkController.lua:56–61`). In Andres Screenshots steht
-genau dort, ein Feld östlich der Drivereihe, eine dunkle Fläche.
+**B-21, der Footprint, und der Fund ist schärfer als zuerst gedacht.** Andre kann
+einen Item-IO auf ein Feld **bauen**, das die Grafik des Drives übermalt — die
+Kollision lässt es zu, das Bild nicht. Die Zeichenflächen sind deutlich größer als
+die Footprints:
 
-**Und eine Unsicherheit, die ich benennen muss:** ob eine `draw_as_shadow`-Schicht
-eine Entity überhaupt *verdecken* kann, weiß ich nicht — Schatten werden
-üblicherweise unter den Entities gezeichnet. Dann ist der Schatten nur ein
-Schönheitsfehler und B-21 trägt das Verdecktwerden allein. Der Versuch `5189eea`
-setzt den x-Versatz auf 0 und beantwortet beides zusammen: Verschiebt sich die
-dunkle Fläche unter den Drive, war der Versatz falsch — und ob die Grafik danach
-immer noch über das Feld ragt, ist ohne den Schattenlärm sauber zu sehen.
+| Entity | Zeichenfläche | Footprint |
+|---|---|---|
+| Drive | 512 px × `1/4` = **4 × 4 Felder** | Kollision 1,8 × 1,8, Auswahl 2 × 2 |
+| Controller | 512 px × `192/512` = **6 × 6 Felder** | Kollision 2,8 × 2,8, Auswahl 3 × 3 |
+
+Die Fläche ist gleich, aber die **gemalte** Kunst darin ist es nicht: nach Andres
+Zählung 2 breit × 3 tief beim Drive und 3 × 4 beim Controller. **Diese eine Zahl
+entscheidet die Richtung**, und sie ist messbar statt zählbar — dafür liegt
+`tools/png_bbox.py` im Repo. Es liest die Alphagrenze einer PNG-Datei und rechnet
+sie in Felder um. Verifiziert gegen alle fünf PNG-Zeilenfilter, eine Palettendatei,
+eine Graustufendatei und eine vollständig transparente.
+
+**Warum die Richtung nicht beliebig ist, vorab gerechnet:** Ist die Kunst 2 × 3
+Felder groß, lässt sie sich **nicht** in einen 2 × 2-Footprint skalieren — Skalierung
+ist gleichmäßig, das Seitenverhältnis bliebe 2:3 und die Breite fiele auf 1,33
+Felder. Der Drive würde also sichtbar kleiner als seine Kabel. Die Alternative wäre
+ein größerer Footprint, und die hat einen Haken, den man vorher sehen muss: Wächst
+die Kollisionsbox nach Norden, wird das Feld, auf dem heute Kabel liegen,
+unbebaubar. Der Netzaufbau hängt an genau diesen Nachbarfeldern. **Beide Wege
+bezahlt man also**, und die Zahlen sagen, wie teuer.
+
+**B-22, der Schatten, und eine Probe, die ich zurückgenommen habe.** Der Körper
+liegt bei `shift = {0, -138/512}`, sein Schatten bei `{1, -0.47225}`
+(`Drives.lua:67` gegen `:75`) — ein Feld nach Osten. Der Schatten ist mit 256 px auf
+`scale = 1/2` ebenfalls vier Felder breit, liegt also auf derselben Fläche wie der
+Körper und müsste ohne Versatz deckungsgleich sein.
+
+**Die Probe `5189eea` hat beides widerlegt.** Mit x-Versatz 0 lag die dunkle Fläche
+nicht unter dem Drive, sondern war ein großer Block, der über den Drive hinausragt;
+ein Feld östlich war sie ebenso falsch. Damit ist der **Versatz nicht die Ursache,
+sondern die Größe der Schicht** — und beide Werte sind geraten, nicht gerechnet.
+Die Probe ist zurückgenommen: ein Eingriff ohne Wirkung gehört nicht in den Baum.
+Derselbe `png_bbox.py`-Lauf, auf `DriveS.png` mit Faktor 64 (256 px × `1/2` = 128
+Bildpixel = 4 Felder), sagt, wie groß der Schatten sein darf.
+
+**Und eine Unsicherheit, die ich nicht auflösen kann:** ob eine
+`draw_as_shadow`-Schicht eine Entity überhaupt *verdecken* kann, weiß ich nicht —
+Schatten werden üblicherweise unter den Entities gezeichnet. Wenn ja, ist B-22 ein
+Schönheitsfehler und B-21 trägt das Verdecktwerden allein. Die Messung entscheidet
+es nicht; das sieht man erst im Spiel, wenn der Schatten stimmt.
 
 ## 10. Befunde
 
