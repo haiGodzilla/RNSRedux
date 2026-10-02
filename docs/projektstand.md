@@ -2315,9 +2315,10 @@ Runde und in beiden Fällen im Tracker festgehalten:
 IDs, Status und Beleg. Sie stand früher hier; die Doppelpflege hat zu Widersprüchen
 geführt, deshalb gibt es nur noch eine Quelle.
 
-Kurzfassung des Stands: 10 offene Punkte (B-01 bis B-10), 3 ungemessene (B-11,
-B-12, B-18), 1 als unkritisch nachgerechnet (B-13), 6 behoben und getestet (B-14 bis
-B-17, B-19, B-20).
+Kurzfassung des Stands: **10 offene** Punkte (B-01 bis B-10), **2 gebaut aber
+ungemessen** (B-11, B-12), **1 behoben mit offenem Test** (B-18, die Texte), **1 als
+unkritisch nachgerechnet** (B-13), **6 behoben und getestet** (B-14 bis B-17, B-19,
+B-20).
 
 Die Erläuterungen zu den einzelnen Befunden bleiben in diesem Dokument, wo sie
 hingehören: 5.6 (Phantom-Spielstände), 5.8 (Entnahme), 7.12 (Qualitäts-Blockade),
