@@ -79,7 +79,9 @@ for _, color in pairs(Constants.NetworkCables.Cables) do
     networkCableI.icon = color.underground.itemIcon
     networkCableI.icon_size = 512
     networkCableI.subgroup = Constants.ItemGroup.Category.Cable_subgroup
-    networkCableI.order = "a"
+    --"b", so the ramp sorts after the straight cable. Both were "a", which made the
+    --inventory order depend on which prototype happened to be registered first.
+    networkCableI.order = "b"
     networkCableI.stack_size = 100
     networkCableI.place_result = color.underground.name
     data:extend{networkCableI}
