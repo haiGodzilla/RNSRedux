@@ -126,6 +126,8 @@ ioE.icon = Constants.NetworkCables.fluidIO.itemIcon
 ioE.icon_size = 512
 ioE.flags = {"placeable-neutral", "player-creation"}
 ioE.collision_box = {{-0.40, -0.40}, {0.40, 0.40}}
+--Walkable: the bus sits on the ground like the cable it replaces.
+ioE.collision_mask = RNS_WalkableCollisionMask
 ioE.selection_box = {{-0.5, -0.5}, {0.5, 0.5}}
 ioE.fast_replaceable_group = Constants.Settings.RNS_FR_Cable
 ioE.max_health = 350

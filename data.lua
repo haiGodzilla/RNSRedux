@@ -1,4 +1,15 @@
 Constants = require("utils.constants")
+
+--The collision mask for the 1x1 network pieces. Taking the belt's mask is the point:
+--a belt is traversable because its mask leaves out the player layer, and nothing in
+--this mod defined a mask at all before, so every piece fell back to the per-type
+--default and blocked the character. Copying instead of listing the layers keeps this
+--right when a layer is renamed or a new one appears. Defined here because the
+--prototype files below read it, and only the data stage has data.raw.
+local beltPrototype = data.raw["transport-belt"] and data.raw["transport-belt"]["transport-belt"]
+RNS_WalkableCollisionMask = beltPrototype and table.deepcopy(beltPrototype.collision_mask)
+    or {layers = {water_tile = true, floor = true, object = true}}
+
 require("prototypes.Intermediates")
 require("prototypes.others")
 require("prototypes.Drives")

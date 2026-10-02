@@ -39,6 +39,8 @@ for _, color in pairs(Constants.NetworkCables.Cables) do
     networkCable_E.dying_explosion = "medium-explosion"
     networkCable_E.corpse = "small-remnants"
     networkCable_E.collision_box = {{-0.40, -0.40}, {0.49, 0.40}}
+    --Walkable, so the character passes over a cable instead of walking around it.
+    networkCable_E.collision_mask = RNS_WalkableCollisionMask
     networkCable_E.selection_box = {{-0.5, -0.5}, {0.5, 0.5}}
     networkCable_E.open_sound = { filename = "__base__/sound/wooden-chest-open.ogg" }
     networkCable_E.close_sound = { filename = "__base__/sound/wooden-chest-close.ogg" }
@@ -106,6 +108,8 @@ for _, color in pairs(Constants.NetworkCables.Cables) do
     networkCable_E.localised_description = {"entity-description.RNS_NetworkCableRamp", tostring(Constants.Settings.RNS_CableUnderground_Reach+1)}
     networkCable_E.flags = {"placeable-neutral", "player-creation"}
     networkCable_E.collision_box = {{-0.40, -0.40}, {0.40, 0.40}}
+    --Walkable, like the cable it belongs to.
+    networkCable_E.collision_mask = RNS_WalkableCollisionMask
     networkCable_E.selection_box = {{-0.5, -0.5}, {0.5, 0.5}}
     networkCable_E.fast_replaceable_group = Constants.Settings.RNS_FR_Cable
     networkCable_E.max_health = 350
@@ -115,37 +119,44 @@ for _, color in pairs(Constants.NetworkCables.Cables) do
     networkCable_E.close_sound = { filename = "__base__/sound/wooden-chest-close.ogg" }
     networkCable_E.vehicle_impact_sound =  { filename = "__base__/sound/car-wood-impact.ogg", volume = 1.0 }
     networkCable_E.minable = {mining_time = 0.2, result = color.underground.name}
-    networkCable_E.animation =
+    --An assembling machine draws from graphics_set.animation. The three IO buses in
+    --this mod use that field, and the API lists graphics_set for this prototype type;
+    --a top-level animation is not among its properties. Without it the entity has no
+    --graphics, so the cursor preview is empty and the placed piece is invisible.
+    networkCable_E.graphics_set =
         {
-            north = {
-                layers = {
-                    {
-                        filename = color.underground.entityE,
-                        priority = "medium",
-                        size = 512,
-                        scale = 1/16,
-                        x=0
-                    },
-                    {
-                        filename = color.underground.entityS,
-                        priority = "medium",
-                        size = 512,
-                        draw_as_shadow = true,
-                        scale = 1/16,
-                        x=0
+            animation = {
+                north = {
+                    layers = {
+                        {
+                            filename = color.underground.entityE,
+                            priority = "medium",
+                            size = 512,
+                            scale = 1/16,
+                            x=0
+                        },
+                        {
+                            filename = color.underground.entityS,
+                            priority = "medium",
+                            size = 512,
+                            draw_as_shadow = true,
+                            scale = 1/16,
+                            x=0
+                        }
                     }
                 }
             }
         }
-    networkCable_E.animation.east = table.deepcopy(networkCable_E.animation.north)
-    networkCable_E.animation.east.layers[1].x = 512
-    networkCable_E.animation.east.layers[2].x = 512
-    networkCable_E.animation.south = table.deepcopy(networkCable_E.animation.north)
-    networkCable_E.animation.south.layers[1].x = 512*2
-    networkCable_E.animation.south.layers[2].x = 512*2
-    networkCable_E.animation.west = table.deepcopy(networkCable_E.animation.north)
-    networkCable_E.animation.west.layers[1].x = 512*3
-    networkCable_E.animation.west.layers[2].x = 512*3
+    local rampAnimation = networkCable_E.graphics_set.animation
+    rampAnimation.east = table.deepcopy(rampAnimation.north)
+    rampAnimation.east.layers[1].x = 512
+    rampAnimation.east.layers[2].x = 512
+    rampAnimation.south = table.deepcopy(rampAnimation.north)
+    rampAnimation.south.layers[1].x = 512*2
+    rampAnimation.south.layers[2].x = 512*2
+    rampAnimation.west = table.deepcopy(rampAnimation.north)
+    rampAnimation.west.layers[1].x = 512*3
+    rampAnimation.west.layers[2].x = 512*3
     networkCable_E.crafting_categories = {"RNS-Nothing"}
     networkCable_E.crafting_speed = 1
     networkCable_E.energy_source =
