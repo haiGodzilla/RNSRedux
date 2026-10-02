@@ -506,7 +506,7 @@ wirkungslos sein — gelesen, nicht gemessen.
 greift und die Objekte sonst unverändert in `storage` liegen — gelesen, nicht
 gemessen. Mit P2 (ItemStore) bekommt das ohnehin einen eigenen Test.
 
-## 6. Der IO-Bus (nächster Posten, Messaufbau steht)
+## 6. Der IO-Bus (External-Seite abgeräumt, Item-Bus-Rest offen)
 
 Der IO-Bus ist die einzige Kostenquelle, die dauerhaft und vielfach pro Sekunde
 anfällt. Der Refresh-Posten im Dauerbetrieb ist seit `a5add2b` entfallen; er
@@ -1348,7 +1348,7 @@ drei Lesungen je Zustand statt einer, dann trägt die Zahl. Ein weiterer Eingrif
 ohne belastbare Differenz wäre ein Blindflug — und ich habe in dieser Sitzung
 zweimal eine Zuordnung behauptet, die nicht trug.
 
-## 7. P2 — ItemStore: das Modul steht, die Engine-Annahmen sind offen
+## 7. P2 — ItemStore: abgenommen
 
 ### 7.1 Der Zuschnitt, und die drei Befunde, die ihn bestimmen
 
