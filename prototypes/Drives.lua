@@ -72,7 +72,7 @@ function createDriveEntity(drive)
 					priority = "medium",
 					width = 256,
 					height = 256,
-					shift = {0,-0.47225},
+					shift = {1,-0.47225},
 					draw_as_shadow = true,
 					scale = 1/2
 				}
