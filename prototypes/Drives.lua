@@ -49,8 +49,11 @@ function createDriveEntity(drive)
 	driveE.max_health = 350
 	driveE.dying_explosion = "medium-explosion"
 	driveE.corpse = "medium-remnants"
-	driveE.collision_box = {{-0.90, -0.90}, {0.90, 0.90}}
-	driveE.selection_box = {{-1.0, -1.0}, {1.0, 1.0}}
+	--Two wide and three tall. The artwork measures 2.016 x 2.836 tiles
+	--(tools/png_bbox.py), so a 2 x 2 box left the top of the drive outside its
+	--own footprint and an IO bus could be built there, hidden behind the sprite.
+	driveE.collision_box = {{-0.90, -1.40}, {0.90, 1.40}}
+	driveE.selection_box = {{-1.0, -1.5}, {1.0, 1.5}}
 	driveE.inventory_size = 0
 	driveE.open_sound = { filename = "__base__/sound/wooden-chest-open.ogg" }
 	driveE.close_sound = { filename = "__base__/sound/wooden-chest-close.ogg" }
@@ -64,7 +67,10 @@ function createDriveEntity(drive)
 					priority = "medium",
 					width = 512,
 					height = 512,
-					shift = {0,-138/512},
+					--Puts the artwork's south edge on the footprint's south edge:
+					--the painted area ends 1.28125 tiles south of the canvas
+					--centre, the footprint ends at 1.5.
+					shift = {0,0.21875},
 					scale = 1/4
 				},
 				{
@@ -72,7 +78,9 @@ function createDriveEntity(drive)
 					priority = "medium",
 					width = 256,
 					height = 256,
-					shift = {1,-0.47225},
+					--Keeps the offset this shadow had relative to the body, so
+					--nothing about it changes here. Its own size is B-22.
+					shift = {1,0.016},
 					draw_as_shadow = true,
 					scale = 1/2
 				}

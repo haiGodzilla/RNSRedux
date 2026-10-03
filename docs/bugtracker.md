@@ -31,7 +31,7 @@ Stand: Commit `8ee251d` (Code-Stand; diese Runde ändert nur Dokumente und das W
 
 | ID | Bereich | Befund | Status | Beleg |
 |---|---|---|---|---|
-| B-01 | Anzeige | Hover über einen platzierten Drive zeigt `Storage: 0/0`, der Klick die richtige Füllung (61 Items im Drive, Screenshot). Die Zeile stammt **nicht** aus der Mod: der einzige Mod-Text mit diesem Wort ist `item-description.RNS_DriveTag_Storage`, und der wird nur am **geminten Item** gesetzt — als Teil einer vierzeiligen Beschreibung mit Filters, Priority und Mode, die im Screenshot alle fehlen. `Storage` und `Last user` kommen im ganzen Repo nicht vor. Angezeigt wird also das Inventar des `container` mit `inventory_size = 0` (7.20), jetzt mit Beleg. **Behebung, jetzt recherchiert:** 2.0 kennt `Prototype::custom_tooltip_fields`, das **ergänzt** Einträge, entfernt aber keine — und die Runtime-Felder (`LuaEntity::set_tooltip_field`) kommen erst mit 2.1. In 2.0 bleibt damit nur ein anderer Entity-Typ (wie die IO-Busse als `assembling-machine` und der Controller als `electric-energy-interface`). Data-Stage, berührt Öffnen/Minen/Blueprint; gehört zusammen mit B-21 entschieden. | `offen` | 7.20, Screenshots, API-Doku 2.0.72 |
+| B-01 | Anzeige | Hover über einen platzierten Drive zeigt `Storage: 0/0`, der Klick die richtige Füllung (61 Items im Drive, Screenshot). Die Zeile stammt **nicht** aus der Mod: der einzige Mod-Text mit diesem Wort ist `item-description.RNS_DriveTag_Storage`, und der wird nur am **geminten Item** gesetzt — als Teil einer vierzeiligen Beschreibung mit Filters, Priority und Mode, die im Screenshot alle fehlen. `Storage` und `Last user` kommen im ganzen Repo nicht vor. Angezeigt wird also das Inventar des `container` mit `inventory_size = 0` (7.20), jetzt mit Beleg. **Behebung, jetzt recherchiert:** 2.0 kennt `Prototype::custom_tooltip_fields`, das **ergänzt** Einträge, entfernt aber keine — und die Runtime-Felder (`LuaEntity::set_tooltip_field`) kommen erst mit 2.1. In 2.0 bleibt damit nur ein anderer Entity-Typ (wie die IO-Busse als `assembling-machine` und der Controller als `electric-energy-interface`). Data-Stage, berührt Öffnen, Minen und Blueprint; jetzt unabhängig von B-21 entscheidbar, weil der Footprint dort schon geändert ist. | `offen` | 7.20, Screenshots, API-Doku 2.0.72 |
 | B-02 | ItemStore | `CHUNK_INITIAL = 1024` unabhängig von der Größe; ein 4k-Drive braucht 40 Slots, bekommt 1024. Kostet Savegröße und Bauzeit, **nicht Ticks** — `is_full` läuft über den geführten Zähler. | `offen` | 7.15 |
 | B-03 | Netzwerk | `NetworkBase.addConnectables` Zeilen 183/186/191: drei Prüfungen mit `and` statt `or`. Crash statt sauberer Abbruch; Zeile 186 prüft `.valid` auf einer Tabelle ohne das Feld. | `offen` | 1:1-Port, ungeprüft |
 | B-04 | Fluide | `Util.fluid_add_list_into_table`: Temperaturmischung falsch gewichtet, `v.amount` wird vor der Gewichtung erhöht. | `offen` | 1:1-Port, ungeprüft |
@@ -41,17 +41,22 @@ Stand: Commit `8ee251d` (Code-Stand; diese Runde ändert nur Dokumente und das W
 | B-08 | Performance | `filter_externalIO_by_valid_signal` baut bei jedem Aufruf verschachtelte Tabellen neu auf. Läuft seit `10154d6` nur noch auf dem Tick des Busses, die Allokation bleibt. | `offen` | `NetworkBase.lua:1340` |
 | B-09 | Performance | `NC:updateExternalStorage` läuft jeden Tick und iteriert alle External-Busse, auch wenn keiner in seiner Phase ist. Bei 40 Bussen billig, bei einigen Tausend nicht. | `offen`, gehört zu P4 | `NetworkController.lua:175` |
 | B-10 | Dokumentation | Der Verweis auf die Projektnotiz „Analyse Fabrikdurchsatz" läuft ins Leere — die Notiz liegt nicht im Repo. | `offen` | `ups-architektur.md` Abschnitt 10 |
-| B-21 | Grafik | **Auf ein Feld, das die Kunst des Drives übermalt, lässt sich ein Item-IO bauen** (Screenshots). Gemessen mit `tools/png_bbox.py`: Die Kunst ist **2,02 × 2,84 Felder** (Drive) und **3,02 × 4,27** (Controller), jeweils am **Süden** verankert, über den Footprint hinaus nach **Norden** ragend (0,82 bzw. 1,25 Felder). Footprint heute: Kollision 1,8 × 1,8 / Auswahl 2 × 2 bzw. 2,8 × 2,8 / 3 × 3. Drei Richtungen, Details in 9.1: **(A)** Footprint auf 2 × 3 / 3 × 4 (sperrt das Feld, ändert das Raster), **(B)** Kunst beschneiden (2 × 2, kein Rasterwechsel), **(C)** nur die Zeichenreihenfolge des Busses drehen (löst nur den Bus, nicht die Kabel). Empfehlung A, Entscheidung offen. | `offen` | 9.1, `png_bbox.py` |
-| B-22 | Grafik | Der Schatten des Drives ist **doppelt so groß wie der Körper**: beide Bilder sind auf 128 Bildpixel pro Feld gemalt (Körper 258 px auf `scale 1/4`, Schatten 255 px auf `scale 1/2`), der Schatten deckt damit 3,98 statt 1,99 Felder. Nicht der Versatz ist falsch, die Skalierung; bei `1/4` läge er mit `shift = {0,0}` mittig unter dem Sockel. Beim Controller ist das Schattenbild zusätzlich am eigenen Rand abgeschnitten (bemalte Fläche endet auf `x = 511`). Probe `5189eea` **zurückgenommen** (`8ee251d`) — sie hatte nur den Versatz geändert. Kosmetisch, eigener Schritt nach B-21. | `offen` | 9.1 |
+| B-22 | Grafik | Der Schatten des Drives ist **doppelt so groß wie der Körper**: beide Bilder sind auf 128 Bildpixel pro Feld gemalt (Körper 258 px auf `scale 1/4`, Schatten 255 px auf `scale 1/2`), der Schatten deckt damit 3,98 statt 1,99 Felder. Nicht der Versatz ist falsch, die Skalierung; bei `1/4` läge er mit `shift = {0,0}` mittig unter dem Sockel. Beim Controller ist das Schattenbild zusätzlich am eigenen Rand abgeschnitten (bemalte Fläche endet auf `x = 511`). Probe `5189eea` **zurückgenommen** (`8ee251d`) — sie hatte nur den Versatz geändert. Mit dem neuen Footprint ist der Versatz auf `{1,0.016}` nachgeführt, damit der Abstand zum Körper derselbe bleibt. Kosmetisch, eigener Schritt nach B-21. | `offen` | 9.1 |
 
-## 2. Nachgerechnet, unkritisch
+## 2. Behoben, Test steht aus
+
+| ID | Bereich | Punkt | Status | Beleg |
+|---|---|---|---|---|
+| B-21 | Grafik | Drive und Controller sind jetzt **2 × 3** bzw. **3 × 4** Felder groß (vorher 2 × 2 und 3 × 3), Kollision 1,8 × 2,8 bzw. 2,8 × 3,8. Gemessen mit `tools/png_bbox.py`: Kunst 2,016 × 2,836 bzw. 2,834 × 3,999 Felder, jeweils mit der Unterkante auf der Unterkante des Footprints. Drive unverändert `scale = 1/4` mit `shift = {0,0.21875}`; Controller `scale = 180/512` statt `192/512` (6,25 % kleiner, sonst passt seine 4,27 Felder hohe Kunst nicht in vier) mit `shift = {0,0.5828}`. **Ungemessen:** ob die acht Drive-Bilder (vier Item-, vier Fluid-Stufe) dieselbe Unterkante im Canvas tragen — die Werte stammen von `ItemDrive4E.png`. **Und ungemessen:** beide Entities wechseln die Gitterlage in y, siehe 9.1. | `wartet auf Test` | 9.1 |
+
+## 3. Nachgerechnet, unkritisch
 
 | ID | Bereich | Punkt | Status | Beleg |
 |---|---|---|---|---|
 | B-12 | NII | Der Sortierschalter ist **nicht** wirkungslos. `GUI.on_gui_clicked` leitet jedes `RNS_NII*`-Element an `NII.interaction` (`Gui.lua:147–150`), und dort steht der `SortOrder`-Zweig (`NetworkInventoryInterface.lua:754`). Der fehlende Zweig in `on_gui_element_changed` war nur der zweite Weg dorthin. Gemessen: Andre sortiert um, in beide Richtungen. | `kein Fehler` | `Gui.lua:147`, Andre |
 | B-13 | Netzwerk | `add`/`remove_item_from_interface_cache` sind lineare Scans, aber die Liste hat **einen Eintrag pro Item-Typ** — der Aufteilungszweig greift nur einmal, weil der Rest ein volles Magazin bekommt. Bestätigt durch `cache=16` bei 16 Typen. | `kein Fehler` | 8.3 |
 
-## 3. Behoben und getestet
+## 4. Behoben und getestet
 
 | ID | Bereich | Punkt | Beleg |
 |---|---|---|---|
@@ -64,7 +69,7 @@ Stand: Commit `8ee251d` (Code-Stand; diese Runde ändert nur Dokumente und das W
 | B-19 | Kollision | Die 1×1-Netzteile blockierten den Charakter, weil für RNS-Objekte nie eine `collision_mask` definiert war. Jetzt übernehmen Kabel, Underground-Kabel und die drei IO-Busse die Belt-Maske — gemessen `{water_tile, floor, transport_belt, object, meltable}`, ohne `player`. Getestet: Kabel und Underground-Kabel begehbar, Kiste lässt sich nicht darauf setzen. Die IO-Busse sind nicht einzeln nachgeprüft, benutzen aber dieselbe Maske. | `b697f36` |
 | B-20 | Kabel | Underground-Kabel hatte kein Sprite, weil der Prototyp ein Top-Level `animation` setzte, den eine `assembling-machine` nicht liest. Unter `graphics_set` eingerückt. Getestet: Vorschau und Platzierung korrekt. | `b697f36` |
 
-## 4. Vor dem Release zu erledigen
+## 5. Vor dem Release zu erledigen
 
 - Alle Debug-Befehle entfernen und die `port_*.py`-Skripte: `/rns-debug`,
   `/rns-debug-nc`, `/rns-debug-refresh`, `/rns-debug-extract`, `/rns-store-test`,

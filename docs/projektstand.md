@@ -5,7 +5,7 @@ Einstiegspunkt für die Weiterarbeit. Technischer Plan und Begründungen:
 Dieses Dokument beantwortet „wo stehen wir, was ist verifiziert, was ist der nächste
 Schritt".
 
-Stand: Commit `8ee251d`, Branch `port/2.0`, Version 2.0.0.
+Stand: Commit `HEAD`, Branch `port/2.0`, Version 2.0.0.
 P0, P1, P2 und P3 sind durch. **Laufender Posten: eine Runde Spielbetrieb** — P2 hat
 die zentrale Datenstruktur umgebaut und ist nur mit gezielten Tests geprüft, nicht
 im Spiel. Funde im Chat melden, der Agent trägt sie in `docs/bugtracker.md` ein.
@@ -2360,38 +2360,35 @@ Bezugsgröße. Das Werkzeug ist gegen alle fünf PNG-Zeilenfilter, eine Paletten
 eine Graustufendatei und eine vollständig transparente verifiziert; die Bilder sind
 16 Bit RGBA, was es ebenfalls trägt.
 
-**Damit sind es drei Richtungen, und jede kostet etwas anderes.**
+**Weg A ist umgesetzt (Andre).** Der Drive ist 2 × 3 Felder, der Controller 3 × 4,
+und beide Bilder sitzen so, dass ihre **Unterkante auf der Unterkante des Footprints**
+liegt.
 
-**A — den Footprint an die Kunst anpassen (2 × 3 und 3 × 4).** Dann passt die Kunst
-fast exakt hinein und das Überhangfeld ist gesperrt; der Drive braucht dafür
-`shift = {0,0}` statt `-138/512`, weil 2,84 Felder Kunst in drei Felder passen. Das
-ist zugleich die **einzige** Richtung, die auch die Kabel erwischt: Deren
-Verbindungsarme werden per `rendering.draw_sprite` auf `lower-object-above-shadow`
-gezeichnet (rund zwanzig Stellen), also **unter** jeder Objekt-Ebene — ein Kabel auf
-dem Überhangfeld verschwindet heute aus demselben Grund wie der Bus. Der Preis ist
-das Raster: Ein drei Felder tiefer Drive verschiebt den Fußabdruck (Mittelpunkt
-dann in der Feldmitte statt auf der Feldecke, wie bei jeder 2 × 3-Maschine), und
-zwei Drivereihen liegen künftig 3 statt 2 Felder auseinander. Ob ein Spielstand mit
-überlappenden Drives sauber lädt, ist **ungemessen** und gehört auf eine Kopie. Der
-Projektstand führt ohnehin keinen Savegame-Migrationspfad (Abschnitt 3), das senkt
-die Hürde.
+| Entity | Footprint | Kollision | Kunst | Shift |
+|---|---|---|---|---|
+| Drive | 2 × 3 | 1,8 × 2,8 | 2,016 × 2,836 Felder, `scale 1/4` | `{0, 0.21875}` |
+| Controller | 3 × 4 | 2,8 × 3,8 | 2,834 × 3,999 Felder, `scale 180/512` | `{0, 0.5828}` |
 
-**B — den Footprint lassen und die Kunst beschneiden.** Die obersten 0,84 Felder des
-Drives verschwinden, dann ist die Kunst 2 × 2, ohne Rasterwechsel. Kostet
-Bildqualität, der Turm ist dann abgeschnitten. Ob sich eine Schicht über `y`/`height`
-beschneiden lässt, ist **ungelesen** — steht das nicht in der 2.0-Doku, ist der Weg
-nicht begehbar.
+Der Drive-Shift ist eine Rechnung, keine Schätzung: Die bemalte Fläche endet
+1,28125 Felder südlich der Canvas-Mitte, der Footprint bei 1,5 — die Differenz
+0,21875 schiebt das Bild genau dorthin. Beim Controller dasselbe mit 1,41724 gegen
+2,0 → 0,5828.
 
-**C — den Footprint lassen und die Zeichenreihenfolge drehen.** Der Bus wird über den
-Drive gezeichnet. Kein Rasterwechsel, aber es widerspricht der Tiefenwirkung —
-Norden ist hinten — und es löst nur den Bus, nicht die Kabel aus A. **Ungelesen von
-mir:** Beide Enden sind in der API auffindbar (`Animation::render_layer` für die
-Bus-Animation, `LayeredSprite::render_layer` für die Ebenen des Drives), welches
-davon greift, habe ich nicht geprüft.
+**Der Controller wird dabei um 6,25 % kleiner**, 192/512 → 180/512. Seine Kunst ist
+4,27 Felder hoch und passt in keine vier Felder; bei 180/512 misst sie 2,834 ×
+3,999 und füllt die neue Höhe auf ein Hundertstel genau. Das ist ein Indiz dafür,
+dass `192/512` nie beabsichtigt war — ein Indiz, kein Beleg. Weg B (Kunst
+beschneiden) bleibt möglich, C habe ich verworfen: Es löst nur den Bus und lässt die
+Kabel auf demselben Feld verschwinden.
 
-**Empfehlung: A.** Es ist die einzige Variante, die alle Fälle erledigt, der
-Projektstand trägt keinen Savegame-Pfad, und die Ursache sitzt im Footprint: Die
-Kunst beschreibt, wie groß das Ding ist, und der Footprint sagt heute etwas anderes.
+**Der Preis, und er ist echt: beide Entities wechseln die Gitterlage.** Die
+Kachelausrichtung hängt an der Parität der Box. Der Drive war 2 × 2, hat seinen
+Mittelpunkt also auf einer Feldecke; mit 2 × 3 sitzt er in der Feldmitte der
+mittleren Reihe. Der Controller war 3 × 3 (Feldmitte) und ist mit 3 × 4 auf der
+Feldecke. **Was das mit einem bestehenden Spielstand macht, ist ungemessen:** Die
+Entities werden beim Laden nicht verschoben, sitzen danach aber eine halbe Feldbreite
+neben dem Raster. Deshalb wird auf einer **Kopie** getestet, und ein Drive, den man
+abbaut und neu setzt, rastet auf der neuen Lage ein.
 
 **B-22, der Schatten: doppelt so groß wie der Körper.** Beide Bilder sind in
 derselben Dichte gemalt — der Körper ist 258 px breit und wird auf `1/4` gezeichnet,
@@ -2417,9 +2414,9 @@ Objekt-Ebenen, aber das ist aus einer Liste gelesen, nicht gemessen.
 IDs, Status und Beleg. Sie stand früher hier; die Doppelpflege hat zu Widersprüchen
 geführt, deshalb gibt es nur noch eine Quelle.
 
-Kurzfassung des Stands: **12 offene** Punkte (B-01 bis B-10, B-21, B-22), **2 als
-unkritisch nachgerechnet** (B-12, B-13), **8 behoben und getestet** (B-11, B-14 bis
-B-20). **Nichts steht mehr auf `wartet auf Test` oder `ungemessen`.**
+Kurzfassung des Stands: **11 offene** Punkte (B-01 bis B-10, B-22), **1 umgesetzt,
+Test offen** (B-21), **2 als unkritisch nachgerechnet** (B-12, B-13), **8 behoben und
+getestet** (B-11, B-14 bis B-20).
 
 Die Erläuterungen zu den einzelnen Befunden bleiben in diesem Dokument, wo sie
 hingehören: 5.6 (Phantom-Spielstände), 5.8 (Entnahme), 7.12 (Qualitäts-Blockade),

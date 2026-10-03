@@ -31,8 +31,10 @@ cE0.minable = {mining_time = 0.2, result = Constants.NetworkController.main.name
 cE0.max_health = 350
 cE0.dying_explosion = "medium-explosion"
 cE0.corpse = "medium-remnants"
-cE0.collision_box = {{-1.40, -1.40}, {1.40, 1.40}}
-cE0.selection_box = {{-1.5, -1.5}, {1.5, 1.5}}
+--Three wide and four tall. The artwork measures 3.02 x 4.27 tiles at 192/512
+--(tools/png_bbox.py), so the 3 x 3 box left a tile and a quarter uncovered.
+cE0.collision_box = {{-1.40, -1.90}, {1.40, 1.90}}
+cE0.selection_box = {{-1.5, -2.0}, {1.5, 2.0}}
 cE0.open_sound = { filename = "__base__/sound/wooden-chest-open.ogg" }
 cE0.close_sound = { filename = "__base__/sound/wooden-chest-close.ogg" }
 cE0.vehicle_impact_sound =  { filename = "__base__/sound/car-wood-impact.ogg", volume = 1.0 }
@@ -50,13 +52,20 @@ cE0.picture =
                 filename = Constants.NetworkController.main.entityE,
                 priority = "medium",
                 size = 512,
-                scale = 192/512
+                --180/512 instead of 192/512: at 192 the artwork is 4.27 tiles
+                --tall and cannot fit four tiles. Shrinking it by 6.25% makes it
+                --2.834 x 3.999, which fills the new footprint exactly.
+                shift = {0,0.5828},
+                scale = 180/512
             },
             {
                 filename = Constants.NetworkController.main.entityS,
                 priority = "medium",
                 draw_as_shadow = true,
                 size = 512,
+                --Same shift as the body, so its offset from the body is the one
+                --it had before. Its own size is B-22.
+                shift = {0,0.5828},
                 scale = (96 * 3)/512
             }
         }
