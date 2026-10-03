@@ -25,7 +25,7 @@ fünf Angaben:
 | `behoben` | behoben **und** getestet |
 | `kein Fehler` | nachgerechnet oder gemessen, unkritisch |
 
-Stand: Commit `8ee251d` (Code-Stand; diese Runde ändert nur Dokumente und das Werkzeug). Die Reihenfolge ist keine Priorisierung.
+Stand: Commit `7268718`. Die Reihenfolge ist keine Priorisierung.
 
 ## 1. Offen
 
