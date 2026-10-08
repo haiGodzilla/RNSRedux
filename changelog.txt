@@ -1,4 +1,29 @@
 ---------------------------------------------------------------------------------------------------
+Version: 2.0.0
+  Info:
+    - Not yet tested in game: the bugfixes listed below are statically checked only and are confirmed or dropped before release.
+  Major Features:
+    - Port of Refined Network Storage 1.0.43 to Factorio 2.0.
+    - Drive contents are stored in engine inventories, so quality, ammo, durability, health and tags are kept.
+  Changes:
+    - Quality items are refused at the drive input instead of being merged or downgraded.
+    - Wireless, the player port, the network transmitter/receiver and the detector are not researchable yet, also in existing saves.
+    - Blueprints keep IO bus throughput only up to the research level of the save they are built in.
+    - Drive is 2x3 and controller 3x4 tiles, matching their artwork.
+    - The 1x1 network pieces can be walked over.
+  Bugfixes:
+    - Fluid import booked the same fluid several times; export overwrote a different fluid in the target.
+    - Items removed from a drive or container were lost when the target took fewer than requested.
+    - Large drives stopped accepting new item types once their first inventory had no empty slot left.
+    - IO buses built from blueprints or pasted settings failed to place (constant combinator signals use 2.0 sections now).
+    - Blueprint and entity tags are validated; foreign or broken tags no longer destroy the placed entity.
+    - Inserting into the network after loading a save could raise errors until the next refresh.
+    - Changing the external bus mode called functions that did not exist.
+    - A removed player stopped every network from updating.
+  Scripting:
+    - Debug and stress test commands are admin only in multiplayer.
+    - /rns-debug-reset puts the measurement switches back to their defaults.
+---------------------------------------------------------------------------------------------------
 Version: 1.0.43
 Date: 30 May 2024
   Info:

@@ -142,7 +142,9 @@ function FIO:copy_settings(obj)
     self.color = obj.color
     --self.whitelistBlacklist = obj.whitelistBlacklist
     self.io = obj.io
-    self.enabler = obj.enabler
+    --A copy: the GUI edits the enabler in place, so a shared table made a change on one
+    --bus show up on every bus pasted from it.
+    self.enabler = Util.tagEnabler(obj.enabler, self.enabler, nil)
     self.fluidSize = obj.fluidSize
 
     self.circuitCondition1 = obj.circuitCondition1
@@ -176,26 +178,29 @@ function FIO:serialize_settings()
     return tags
 end
 
+--Every field is checked; a missing or foreign value keeps what new() set. See
+--Util.tagNumber for why.
 function FIO:deserialize_settings(tags)
-    self.color = tags["color"]
-    --self.whitelistBlacklist = tags["whitelistBlacklist"]
-    self.io = tags["io"]
-    self.enabler = tags["enabler"]
-    self.fluidSize = tags["fluidSize"]
+    self.color = Util.tagChoice(tags["color"], self.color, Constants.NetworkCables.Cables)
+    self.io = Util.tagChoice(tags["io"], self.io, Util.TagChoices.busIO)
+    self.enabler = Util.tagEnabler(tags["enabler"], self.enabler, nil)
+    --Not above what research allows: the fluid size is the bus's throughput. 0 is a
+    --value the text field sets on purpose: it stops the bus.
+    self.fluidSize = Util.tagNumber(tags["fluidSize"], self.fluidSize, 0, storage.FIOMultiplier)
 
-    self.circuitCondition1 = tags["circuitCondition1"]
-    self.circuitCondition2 = tags["circuitCondition2"]
-    self.override_fluidsize = tags["override_fluidsize"]
+    self.circuitCondition1 = Util.tagChoice(tags["circuitCondition1"], self.circuitCondition1, Util.TagChoices.circuitCondition1)
+    self.circuitCondition2 = Util.tagCircuitCondition2(tags["circuitCondition2"], self.circuitCondition2)
+    self.override_fluidsize = Util.tagBoolean(tags["override_fluidsize"], self.override_fluidsize)
 
-    self.filter = tags["filter"]
+    self.filter = Util.tagPrototypeName(tags["filter"], "fluid")
     self:set_icons(1, self.filter ~= "" and self.filter or nil)
 
-    self.priority = tags["priority"]
+    self.priority = Util.tagPriority(tags["priority"], self.priority)
     self:generateModeIcon()
 end
 
 function FIO:set_icons(index, name)
-    self.combinator.get_or_create_control_behavior().set_signal(index, name ~= nil and {signal={type="fluid", name=name}, count=1} or nil)
+    Util.setCombinatorSignal(self.combinator, index, name ~= nil and {signal={type="fluid", name=name}, count=1} or nil)
 end
 
 function FIO:toggleHoverIcon(hovering)
@@ -344,7 +349,7 @@ function FIO:IO()
     local transportCapacity = self.fluidSize * Constants.Settings.RNS_BaseFluidIO_TransferCapacity
 
     if transportCapacity <= 0 then self.processed = true return end
-    if self.circuitCondition1 == "filter" and (self.enablerCombinator.get_circuit_network(defines.wire_type.red) ~= nil or self.enablerCombinator.get_circuit_network(defines.wire_type.green) ~= nil) then
+    if self.circuitCondition1 == "filter" and (Util.getCombinatorNetwork(self.enablerCombinator) ~= nil) then
         local merged_signals = Util.getCombinatorSignals(self.enablerCombinator)
         local s1 = nil
         if merged_signals ~= nil then
@@ -721,11 +726,11 @@ function FIO:getTooltips(guiTable, mainFrame, justCreated)
         guiTable.vars.filter.elem_value = self.filter
     end
 
-    if self.circuitCondition1 == "enable/disable" and self.enabler.filter ~= nil and (self.enablerCombinator.get_circuit_network(defines.wire_type.red) ~= nil or self.enablerCombinator.get_circuit_network(defines.wire_type.green) ~= nil) then
+    if self.circuitCondition1 == "enable/disable" and self.enabler.filter ~= nil and (Util.getCombinatorNetwork(self.enablerCombinator) ~= nil) then
         guiTable.vars.enabler.elem_value = self.enabler.filter
     end
 
-    if self.circuitCondition2.state and self.circuitCondition2.filter ~= nil and (self.enablerCombinator.get_circuit_network(defines.wire_type.red) ~= nil or self.enablerCombinator.get_circuit_network(defines.wire_type.green) ~= nil) then
+    if self.circuitCondition2.state and self.circuitCondition2.filter ~= nil and (Util.getCombinatorNetwork(self.enablerCombinator) ~= nil) then
         guiTable.vars.enabler1.elem_value = self.circuitCondition2.filter
     end
     
@@ -863,12 +868,10 @@ function FIO.interaction(event, RNSPlayer)
 		if io == nil then return end
         local priority = Constants.Settings.RNS_Priorities[event.element.selected_index]
         if priority ~= io.priority then
-            local oldP = 1+Constants.Settings.RNS_Max_Priority-io.priority
             io.priority = priority
-            if io.networkController ~= nil and io.networkController.valid == true then
-                io.networkController.network.FluidIOTable[oldP][io.io][io.entID] = nil
-                io.networkController.network.FluidIOTable[1+Constants.Settings.RNS_Max_Priority-priority][io.io][io.entID] = io
-            end
+            --The refresh files the bus under its new priority. Moving it by hand never
+            --ran (valid is a method, not a field) and indexed a list of ids by id.
+            BaseNet.update_network_controller(io.networkController)
             io.processed = false
         end
 		return
@@ -876,11 +879,9 @@ function FIO.interaction(event, RNSPlayer)
         local id = event.element.tags.ID
 		local io = storage.entityTable[id]
 		if io == nil then return end
-        local from = io.io
         local to = event.element.switch_state == "left" and "input" or "output"
-        if io.networkController ~= nil then
-            io.networkController.network:transfer_io_mode(io, "fluid", from, to)
-        end
+        --See the item bus: the refresh files the bus under its new mode.
+        BaseNet.update_network_controller(io.networkController)
         io.io = to
         io.processed = false
         io:generateModeIcon()

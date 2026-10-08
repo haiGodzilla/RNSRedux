@@ -116,7 +116,8 @@ function WT:serialize_settings()
 end
 
 function WT:deserialize_settings(tags)
-    self.color = tags["color"]
+    --An unknown colour broke the arm drawing in every refresh; see Util.tagNumber.
+    self.color = Util.tagChoice(tags["color"], self.color, Constants.NetworkCables.Cables)
 end
 
 function WT:resetConnection()

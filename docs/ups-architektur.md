@@ -106,7 +106,11 @@ einen Controller — das diagnostizierte nur: aus einem 134-ms-Freeze alle 10 s
 wurde ein Ruckler alle ~0,5 s. Mit `a5add2b` ist der periodische Aufbau ganz
 entfallen. `NC.updateTick` steht auf 7200 statt 600, der Aufbau läuft nur noch
 bei einer Strukturänderung sowie als Netz alle zwei Minuten pro Controller. Im
-Dauerzustand fällt kein Aufbau mehr an.
+Dauerzustand fällt kein Aufbau mehr an. **Nachtrag 08.10.2026:** Der nicht
+committete Maßnahmen-Stack hatte zwischenzeitlich einen Auslöser eingeführt, den das
+Spiel selbst erzeugt (Containerwechsel am External-Bus, also auch Züge, B-42); der
+ist inzwischen durch inkrementelle Buchung ersetzt. Neu dazugekommen sind nur
+Auslöser aus Spieleraktionen (GUI-Wechsel, Settings-Paste); siehe 6b.
 
 Nicht behoben, gleiche Ursache eine Ebene tiefer:
 `NetworkController.lua:124–133` prüfte fünf globale Tick-Modulo (Detector 3,
@@ -295,7 +299,8 @@ sowie an den Ereignis-Registrierungen in `control.lua`. `NC.updateTick` ist von
 
 Nicht gebaut: die Austrittssubtraktion nach 3.2. Sie würde nur Aufbauten
 sparen, die mit einer Baumaßnahme zusammenfallen, und kostet dafür eine zweite,
-exakt spiegelbildliche Buchhaltung. Ebenfalls nicht gebaut: die rollende
+exakt spiegelbildliche Buchhaltung. (Die Prämisse „Aufbauten nur bei Baumaßnahmen"
+gilt nur, solange kein Simulationsereignis einen Refresh auslöst — siehe 6b.) Ebenfalls nicht gebaut: die rollende
 Prüfliste — das Zwei-Minuten-Netz deckt denselben Fall ab, solange die
 Controller-Zahl klein bleibt. Bei dreistellig vielen Controllern kippt das,
 dann ist die Prüfliste der nächste Schritt.
@@ -429,7 +434,8 @@ P1 ist durch. Die Messung hat zwei Fragen entschieden
 
 **Erstens: der IO-Bus ist der Posten, um eine Größenordnung vor allem anderen.**
 40 Busse kosten 2,5 ms pro Tick im Mittel, der Refresh-Posten ist mit `a5add2b`
-auf Strukturänderungen zusammengeschrumpft und liegt im Rauschen.
+auf Strukturänderungen zusammengeschrumpft und liegt im Rauschen. (Gilt für den
+Stand vor dem Maßnahmen-Stack; zu den neuen Auslösern siehe 6b.)
 
 **Zweitens: es ist die External-Seite.** 513 µs pro Buslauf gegen 90 µs bei
 Item-IO, also 82 % der gemischten Kosten und 25 % des Budgets bei nur 40 Bussen.
@@ -487,6 +493,49 @@ ist P4s Thema, und P2 behebt einen Fehler statt einer Kostenstelle.
 bei `IIOMultiplier = 1`. Eine Senkung auf 16 Ticks viertelt den Durchsatz,
 solange eine Charge ein Item groß ist. Das ist eine Balance-Änderung, keine
 Optimierung.
+
+### 6b Refresh-Invariante (Review vom 08.10.2026)
+
+Der Maßnahmen-Stack (bugtracker B-23 bis B-38, nicht committet) hat den Refresh zum
+Abgleich nach Zustandsänderungen gemacht: Modus-, Typ- und Prioritätswechsel aller
+Busse und Drives, IO-Moduswechsel und — der Fehlgriff — der Containerwechsel am
+External-Bus. Ein Refresh ist `doRefresh` → `resetTables` plus rekursives
+`addConnectables` über alle Drives (`forEachStack`) und alle External-Busse
+(`init_cache`): **O(Netz)**, gemessen rund 6,7 ms pro Netz mit 50 Drives (§2, vor P2).
+
+Das architecture-review hat das als „tragfähig mit Anpassungen" eingestuft und die
+Grenze so gezogen:
+
+| Auslöser | Mechanismus |
+|---|---|
+| Bau, Abbau, Drehen, Dekonstruktionsmarkierung, GUI-Wechsel von Modus/Typ/Priorität/Farbe, Settings-Paste | Refresh — selten, vom Spieler ausgelöst, Kosten akzeptiert |
+| Containerwechsel am External-Bus (auch Züge: `locomotive`, `cargo-wagon`, `artillery-wagon` stehen in `RNS_TypesWithContainer`), Reset auf dieselbe Entity | inkrementell — `inject_cache` als exaktes Spiegelbild von `flush_cache`, O(Slots) |
+| Transfer, Sweep | inkrementell, wie bisher |
+
+**Invariante:** Ein Refresh darf nur durch Bau-/Abbau-Ereignisse oder
+Spieleraktionen ausgelöst werden, nie durch Simulationsereignisse (Fahrzeuge,
+Sweeps, Transfers). Jede inkrementelle Ausbuchung braucht eine spiegelbildliche
+Einbuchung.
+
+**Umgesetzt (08.10.2026, nicht committet, ungetestet):** B-42 und B-43 — der
+External-Bus bucht nach jedem Fokuswechsel über `EIO:inject_cache` ein, das exakte
+Spiegelbild von `flush_cache`, O(Slots), kein Refresh mehr. B-45 — `runBusList`
+alloziert nur noch, wenn sich die Reihenfolge ändert, `fastScanEnabled()` wird
+einmal pro Sweep gelesen. B-44 — Settings-Paste gleicht wie das GUI per Refresh ab
+(Spieleraktion, erlaubt). B-52 — die Handbuchung vor einem Refresh (IO-Moduswechsel,
+Typwechsel des External-Busses) ist entfernt, es gibt nur noch einen Mechanismus.
+Offen ist die Messung: den Aufbau aus `docs/projektstand.md` 4.2 wiederholen, dazu
+ein Zug an einem External-Bus mit Profiler-`max`.
+
+**Rangfolge nach dem Review:** Vor den kosmetischen Punkten (B-33, B-34, B-35, B-37)
+gehören B-39 (External-Bus an elektrischen Maschinen bricht `NC:update` ab) und B-46
+(ungeprüfte Drive-Priorität aus Blueprints bricht jeden Refresh ab). B-01 nicht
+vorziehen, aber im selben Release wie B-21 entscheiden: beide brechen bestehende
+Saves.
+
+**Für den Messvergleich:** B-28 ändert `tracked` bei External-Bussen im Modus
+`output` (deren Inhalt zählt nicht mehr). Messwerte aus Läufen mit solchen Bussen
+vor und nach dem Stack sind nicht direkt vergleichbar.
 
 ## 7. Gestrichen
 
@@ -589,9 +638,10 @@ Der Befehl **nullt die Zähler** der Busse, also ist danach
 viele er gefunden hat — ein Regler, der still nichts tut, liefert sonst eine
 Messung, die wie ein sauberer Null-Effekt aussieht (`docs/projektstand.md` 6.12).
 Erwartete Trefferquote `1 - exp(-r / 12)` plus der erzwungene Volllauf alle 20
-Sweeps; Herleitung und Tabelle in `docs/projektstand.md` 6.13. **Nach einem
-Save/Load muss der Befehl erneut aufgerufen werden**, die Rate steht dann wieder
-auf 0.
+Sweeps; Herleitung und Tabelle in `docs/projektstand.md` 6.13. **Seit dem
+Maßnahmen-Stack (B-31) liegt die Rate in `storage.stressTest` und überlebt
+Save/Load** — vorher stand sie danach auf 0. Nichts setzt sie zurück: vor jedem
+Lauf ausdrücklich `/rns-stress-drain 0` oder den gewünschten Wert setzen (B-50).
 
 Drei Dinge prüfen den Aufbau, bevor die Zahl etwas wert ist:
 
@@ -614,8 +664,10 @@ Drei Dinge prüfen den Aufbau, bevor die Zahl etwas wert ist:
 - `/rns-bus-scan on|off` schaltet den Slot-Fingerabdruck ab oder an, **liest den
   Wert zurück** und nullt die Zähler. Der Dump-Kopf zeigt `busScan=<an/aus>
   hits=<übersprungen> full=<neu gebaut>`; `hits` soll im eingeschalteten Zustand
-  die Zahl der Neuaufbauten verdrängen. Nach einem Save/Load steht beides auf der
-  Code-Vorgabe, die Befehle müssen erneut laufen.
+  die Zahl der Neuaufbauten verdrängen. **Seit dem Maßnahmen-Stack (B-31)
+  liegen beide Schalter in `storage.debugOverrides` und überleben Save/Load**;
+  der Dump-Kopf zeigt nur `busScan`, nicht die Rescan-Periode (B-50). Vor jedem
+  Lauf beide ausdrücklich setzen.
 - **Der Korrektheitsbeweis für einen Eingriff am Lesepfad ist der A/B-Vergleich
   der Summen**, nicht die Zählung allein: `tracked`, `truth` und `busTruth` müssen
   bei beiden Schalterstellungen identisch sein (`docs/projektstand.md` 6.18).

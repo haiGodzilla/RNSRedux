@@ -139,10 +139,10 @@ function DT:update_signal()
 
         if self.networkController ~= nil and self.networkController.thisEntity ~= nil and self.networkController.thisEntity.valid == true and self.networkController.thisEntity.to_be_deconstructed() == false and Util.OperatorFunctions[self.enabler.operator](amount, self.enabler.number) == true then
             --self.combinator.get_or_create_control_behavior().set_signal(2,  (operatorFunctions[self.operator](amount, self.number) and {{signal={type="virtual", name="signal-red"}, count=1}} or {nil})[1])
-            self.enablerCombinator.get_or_create_control_behavior().set_signal(1, {signal={type=self.enabler.filter.type, name=self.enabler.filter.name}, count=(self.enabler.numberOutput == 1 and 1 or amount)})
+            Util.setCombinatorSignal(self.enablerCombinator, 1, {signal={type=self.enabler.filter.type, name=self.enabler.filter.name}, count=(self.enabler.numberOutput == 1 and 1 or amount)})
         else
             --self.combinator.get_or_create_control_behavior().set_signal(2,  nil)
-            self.enablerCombinator.get_or_create_control_behavior().set_signal(1, nil)
+            Util.setCombinatorSignal(self.enablerCombinator, 1, nil)
         end
     elseif self.mode == "connect/disconnect" then
         if self.readFromNetwork == false and self.filters["virtual"] ~= "" and (Util.getCombinatorNetwork(self.enablerCombinator) ~= nil) then
@@ -162,7 +162,7 @@ function DT:update_signal()
 end
 
 function DT:set_icons(index, name, type)
-    self.combinator.get_or_create_control_behavior().set_signal(index, name ~= nil and {signal={type=type, name=name}, count=1} or nil)
+    Util.setCombinatorSignal(self.combinator, index, name ~= nil and {signal={type=type, name=name}, count=1} or nil)
 end
 
 function DT:toggleHoverIcon(hovering)
@@ -247,14 +247,17 @@ end
 
 function DT:copy_settings(obj)
     self.color = obj.color
-    self.enabler = obj.enabler
+    --A copy: the GUI edits the enabler in place, so a shared table made a change on one
+    --bus show up on every bus pasted from it.
+    self.enabler = Util.tagEnabler(obj.enabler, self.enabler, "")
     self.type = obj.type
     self.filters = {
         item = obj.filters.item,
         fluid = obj.filters.fluid
     }
     self.mode = obj.mode
-    self.disconnects = obj.disconnects
+    --A copy for the same reason: the GUI sets disconnects[i] in place.
+    self.disconnects = {obj.disconnects[1], obj.disconnects[2], obj.disconnects[3], obj.disconnects[4]}
     self.readFromNetwork = obj.readFromNetwork
     self:set_icons(1, self.filters[self.type] ~= "" and self.filters[self.type] or nil, self.type)
     self:set_icons(2, self.enabler.filter.name ~= "" and self.enabler.filter.name or nil, self.enabler.filter.type)
@@ -273,14 +276,24 @@ function DT:serialize_settings()
     return tags
 end
 
+--Every field is checked; a missing or foreign value keeps what new() set. See
+--Util.tagNumber for why.
 function DT:deserialize_settings(tags)
-    self.color = tags["color"]
-    self.type = tags["type"]
-    self.enabler = tags["enabler"]
-    self.filters = tags["filters"]
-    self.mode = tags["mode"]
-    self.disconnects = tags["disconnects"]
-    self.readFromNetwork = tags["readFromNetwork"]
+    self.color = Util.tagChoice(tags["color"], self.color, Constants.NetworkCables.Cables)
+    self.type = Util.tagChoice(tags["type"], self.type, Constants.Settings.RNS_Types)
+    self.enabler = Util.tagEnabler(tags["enabler"], self.enabler, "")
+    local filters = type(tags["filters"]) == "table" and tags["filters"] or {}
+    self.filters = {
+        item = Util.tagPrototypeName(filters.item, "item"),
+        fluid = Util.tagPrototypeName(filters.fluid, "fluid"),
+        virtual = Util.tagSignal(filters.virtual) or "",
+    }
+    self.mode = Util.tagChoice(tags["mode"], self.mode, {["enable/disable"] = true, ["connect/disconnect"] = true})
+    local disconnects = type(tags["disconnects"]) == "table" and tags["disconnects"] or {}
+    for i = 1, 4 do
+        self.disconnects[i] = Util.tagBoolean(disconnects[i], self.disconnects[i])
+    end
+    self.readFromNetwork = Util.tagBoolean(tags["readFromNetwork"], self.readFromNetwork)
     self:set_icons(1, self.filters[self.type] ~= "" and self.filters[self.type] or nil, self.type)
     self:set_icons(2, self.enabler.filter.name ~= "" and self.enabler.filter.name or nil, self.enabler.filter.type)
     self:generateModeIcon()
@@ -577,10 +590,10 @@ function DT.interaction(event, RNSPlayer)
 		if io == nil then return end
         if event.element.elem_value ~= nil then
             io.filters["virtual"] = event.element.elem_value
-            io.combinator.get_or_create_control_behavior().set_signal(1, {signal=event.element.elem_value, count=1})
+            Util.setCombinatorSignal(io.combinator, 1, {signal=event.element.elem_value, count=1})
         else
             io.filters["virtual"] = ""
-            io.combinator.get_or_create_control_behavior().set_signal(1, nil)
+            Util.setCombinatorSignal(io.combinator, 1, nil)
         end
 		return
     elseif string.match(event.element.name, "RNS_Detector_Filter") then
@@ -589,10 +602,10 @@ function DT.interaction(event, RNSPlayer)
 		if io == nil then return end
         if event.element.elem_value ~= nil then
             io.filters[io.type] = event.element.elem_value
-            io.combinator.get_or_create_control_behavior().set_signal(1, {signal={type=io.type, name=event.element.elem_value}, count=1})
+            Util.setCombinatorSignal(io.combinator, 1, {signal={type=io.type, name=event.element.elem_value}, count=1})
         else
             io.filters[io.type] = ""
-            io.combinator.get_or_create_control_behavior().set_signal(1, nil)
+            Util.setCombinatorSignal(io.combinator, 1, nil)
         end
 		return
     elseif string.match(event.element.name, "RNS_Detector_Output") then
@@ -601,10 +614,10 @@ function DT.interaction(event, RNSPlayer)
 		if io == nil then return end
         if event.element.elem_value ~= nil then
             io.enabler.filter = {type=event.element.elem_value.type, name=event.element.elem_value.name}
-            io.combinator.get_or_create_control_behavior().set_signal(2, {signal={type=event.element.elem_value.type, name=event.element.elem_value.name}, count=1})
+            Util.setCombinatorSignal(io.combinator, 2, {signal={type=event.element.elem_value.type, name=event.element.elem_value.name}, count=1})
         else
             io.enabler.filter = ""
-            io.combinator.get_or_create_control_behavior().set_signal(2, nil)
+            Util.setCombinatorSignal(io.combinator, 2, nil)
         end
 		return
     elseif string.match(event.element.name, "RNS_Detector_Switch") then
@@ -635,9 +648,9 @@ function DT.interaction(event, RNSPlayer)
             io.type = type
             RNSPlayer:push_varTable(id, true)
             local filter = io.filters[io.type]
-            io.combinator.get_or_create_control_behavior().set_signal(1, filter ~= "" and {signal={type=io.type, name=filter}, count=1} or nil)
-            io.combinator.get_or_create_control_behavior().set_signal(2,  nil)
-            io.enablerCombinator.get_or_create_control_behavior().set_signal(1, nil)
+            Util.setCombinatorSignal(io.combinator, 1, filter ~= "" and {signal={type=io.type, name=filter}, count=1} or nil)
+            Util.setCombinatorSignal(io.combinator, 2,  nil)
+            Util.setCombinatorSignal(io.enablerCombinator, 1, nil)
         end
 		return
     elseif string.match(event.element.name, "RNS_Detector_Operator") then

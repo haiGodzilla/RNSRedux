@@ -243,10 +243,13 @@ function BaseNet.addConnectables(source, connections, master)
                 else
                     master.network:delta_FluidExternal_Partition(con.storedAmount, con.capacity)
                 end
-                if con.cache ~= nil then
+                --A pure output bus only receives: EIO:update returns at once for it, so
+                --contents booked here would never be corrected. Its capacity above still
+                --counts, because the insert paths ask the partition for room.
+                if con.cache ~= nil and con.io ~= "output" then
                     for i = 1, #con.cache do
                         local cached = con.cache[i]
-                        if cached ~= nil then
+                        if cached ~= nil and cached.name ~= "RNS_Empty" then
                             if con.type == "item" then
                                 master.network:increase_tracked_item_count(cached.name, cached.count)
                                 master.network:add_item_to_interface_cache(cached)
@@ -377,30 +380,9 @@ function BaseNet.postArms(object)
     end
 end
 
+--Only the detector is moved here; the buses change mode through a refresh (see their
+--interaction handlers).
 function BaseNet:transfer_io_mode(obj, type, from, to)
-    if type == "item" then
-        --[[if self.ItemIOTable[1+Constants.Settings.RNS_Max_Priority-obj.priority][from][obj.entID] ~= nil then
-            self.ItemIOTable[1+Constants.Settings.RNS_Max_Priority-obj.priority][from][obj.entID] = nil
-            self.ItemIOTable[1+Constants.Settings.RNS_Max_Priority-obj.priority][to][obj.entID] = obj
-        end]]
-        table.insert(self.ItemIOTable[1+Constants.Settings.RNS_Max_Priority-obj.priority][to], obj.processed and nil or 1, obj.entID)
-        return
-    end
-    if type == "fluid" then
-        --[[if self.FluidIOTable[1+Constants.Settings.RNS_Max_Priority-obj.priority][from][obj.entID] ~= nil then
-            self.FluidIOTable[1+Constants.Settings.RNS_Max_Priority-obj.priority][from][obj.entID] = nil
-            self.FluidIOTable[1+Constants.Settings.RNS_Max_Priority-obj.priority][to][obj.entID] = obj
-        end]]
-        table.insert(self.FluidIOTable[1+Constants.Settings.RNS_Max_Priority-obj.priority][to], obj.processed and nil or 1, obj.entID)
-        return
-    end
-    if type == "external" then
-        if self.ExternalIOTable[1+Constants.Settings.RNS_Max_Priority-obj.priority][from][obj.entID] ~= nil then
-            self.ExternalIOTable[1+Constants.Settings.RNS_Max_Priority-obj.priority][from][obj.entID] = nil
-            self.ExternalIOTable[1+Constants.Settings.RNS_Max_Priority-obj.priority][to][obj.entID] = obj
-        end
-        return
-    end
     if type == "detector" then
         if self.DetectorTable[1][from][obj.entID] ~= nil then
             self.DetectorTable[1][from][obj.entID] = nil
@@ -553,16 +535,22 @@ function BaseNet:add_item_to_interface_cache(itemstack)
 end
 
 function BaseNet:remove_item_from_interface_cache(itemstack)
-    if itemstack == nil then return end
+    if itemstack == nil or self.interfaceCache.item[itemstack.name] == nil then return end
+    --What is still to be taken out. Each entry used to be split by the full count again,
+    --so spreading a removal over two entries took out more than was removed.
+    local remaining = itemstack.count
     for i, item in pairs(self.interfaceCache.item[itemstack.name]) do
         local data = Itemstack:reload(item)
         if data:compare_itemstacks(itemstack, true) == true then
-            local split = data:split(itemstack, itemstack.count, true)
-            if data.count <= 0 then
-                self.interfaceCache.item[itemstack.name][i] = nil
-            end
-            if split.count == itemstack.count then
-                return
+            --split answers nil when an exact match would leave a stack of one that
+            --differs from the master; that entry is skipped, not dereferenced.
+            local split = data:split(itemstack, remaining, true)
+            if split ~= nil then
+                remaining = remaining - split.count
+                if data.count <= 0 then
+                    self.interfaceCache.item[itemstack.name][i] = nil
+                end
+                if remaining <= 0 then return end
             end
         end
     end
@@ -575,7 +563,8 @@ function BaseNet:add_fluid_to_interface_cache(fluid)
 end
 
 function BaseNet:remove_fluid_from_interface_cache(fluidstack)
-    if fluidstack == nil then return end
+    --A fluid the network never booked has no list; pairs(nil) threw (B-48).
+    if fluidstack == nil or self.interfaceCache.fluid[fluidstack.name] == nil then return end
     for i, fluid in pairs(self.interfaceCache.fluid[fluidstack.name]) do
         fluid.amount = fluid.amount - fluidstack.amount
         if fluid.amount <= 0 then
@@ -593,6 +582,8 @@ function BaseNet:extract_fluid_from_drive(to_tank, drive, filter, transportCapac
     local max_capacity = to_tank.thisEntity.fluidbox.get_capacity(fluid_box.index)
 
     local takeAmount = math.min(math.min(max_capacity - storedFluidAmount, transportCapacity), drive.fluidArray[filter].amount)
+    --A full target takes nothing, and the mix below would divide 0 by 0.
+    if takeAmount <= 0 then return transportCapacity end
     transportCapacity = transportCapacity - takeAmount <= 0 and 0 or transportCapacity - takeAmount
 
     local takeTemperature = drive.fluidArray[filter].temperature
@@ -622,17 +613,28 @@ function BaseNet:extract_fluid_from_external(to_tank, external, filter, transpor
 
     local max_capacity = to_tank.thisEntity.fluidbox.get_capacity(fluid_box.index)
 
-    local takeAmount = math.min(math.min(max_capacity - storedFluidAmount, transportCapacity), external.focusedEntity.thisEntity.fluidbox[external.focusedEntity.fluid_box.index].amount)
+    --The caller decided from the bus's cache, which can be a few ticks old: the source
+    --may be empty by now, or hold another fluid.
+    local sourceBox = external.focusedEntity.thisEntity.fluidbox
+    local sourceIndex = external.focusedEntity.fluid_box.index
+    local source = sourceBox[sourceIndex]
+    if source == nil or source.name ~= filter then
+        external:update(self)
+        return transportCapacity
+    end
+
+    local takeAmount = math.min(math.min(max_capacity - storedFluidAmount, transportCapacity), source.amount)
+    if takeAmount <= 0 then return transportCapacity end
     transportCapacity = transportCapacity - takeAmount <= 0 and 0 or transportCapacity - takeAmount
 
-    local takeTemperature = external.focusedEntity.thisEntity.fluidbox[external.focusedEntity.fluid_box.index].temperature
+    local takeTemperature = source.temperature
 
-    if takeAmount == external.focusedEntity.thisEntity.fluidbox[external.focusedEntity.fluid_box.index].amount then
-        external.focusedEntity.thisEntity.fluidbox[external.focusedEntity.fluid_box.index] = nil
+    if takeAmount == source.amount then
+        sourceBox[sourceIndex] = nil
     else
-        external.focusedEntity.thisEntity.fluidbox[external.focusedEntity.fluid_box.index] = {
+        sourceBox[sourceIndex] = {
             name = filter,
-            amount = external.focusedEntity.thisEntity.fluidbox[external.focusedEntity.fluid_box.index].amount - takeAmount,
+            amount = source.amount - takeAmount,
             temperature = takeTemperature
         }
     end
@@ -663,7 +665,11 @@ function BaseNet.transfer_from_network_to_tank(network, to_tank, transportCapaci
     --local networkAmount = network.Contents.fluid[filter]
     --if networkAmount <= 0 then return 0 end
     if fluid_box.filter ~= "" and fluid_box.filter ~= filter then return 0 end
-    
+    --An unlocked target can still hold another fluid; writing `filter` over it would
+    --relabel all of it.
+    local present = to_tank.thisEntity.fluidbox[fluid_box.index]
+    if present ~= nil and present.name ~= filter then return 0 end
+
     if network:has_cache("export", "drive", filter) then
         local drive = storage.entityTable[network:get_cache("export", "drive", filter)]
         if drive == nil or drive.valid == false or network:exists(drive.entID) == false then
@@ -725,83 +731,74 @@ function BaseNet.transfer_from_network_to_tank(network, to_tank, transportCapaci
     return transportCapacity
 end
 -------------------------------------------------------------------------------------------------------Inserting Fluids into the Network-------------------------------------------------------------------------------------------------------------------
-function BaseNet:insert_fluid_into_drive(drive, fluid, transportCapacity, from_tank, fluid_box)
-    local storedFluidAmount = fluid.amount
-    local storedFluidTemperature = fluid.temperature
-    local insertedAmount = drive:insert_fluid(fluid.name, math.min(transportCapacity, storedFluidAmount), storedFluidTemperature)
-    transportCapacity = transportCapacity - insertedAmount <= 0 and 0 or transportCapacity - insertedAmount
-    if storedFluidAmount - insertedAmount <= 0 then
+--The source tank as it is now. The caller reads the fluidbox once and then offers it to
+--several drives and externals in a row; fluidbox[i] is a copy, so working from that copy
+--booked the same fluid again on every call. nil when the tank no longer holds `name`.
+local function liveSourceFluid(from_tank, fluid_box, name)
+    local live = from_tank.thisEntity.fluidbox[fluid_box.index]
+    if live == nil or live.name ~= name or live.amount <= 0 then return nil end
+    return live
+end
+
+local function takeFromSource(from_tank, fluid_box, live, amount)
+    if live.amount - amount <= 0 then
         from_tank.thisEntity.fluidbox[fluid_box.index] = nil
     else
         from_tank.thisEntity.fluidbox[fluid_box.index] = {
-            name = fluid.name,
-            amount = storedFluidAmount - insertedAmount,
-            temperature = storedFluidTemperature
+            name = live.name,
+            amount = live.amount - amount,
+            temperature = live.temperature
         }
     end
-    
-    self:increase_tracked_fluid_amount(fluid.name, insertedAmount)
+end
+
+function BaseNet:insert_fluid_into_drive(drive, fluid, transportCapacity, from_tank, fluid_box)
+    local live = liveSourceFluid(from_tank, fluid_box, fluid.name)
+    if live == nil then return transportCapacity end
+    local insertedAmount = drive:insert_fluid(live.name, math.min(transportCapacity, live.amount), live.temperature)
+    if insertedAmount <= 0 then return transportCapacity end
+    transportCapacity = transportCapacity - insertedAmount <= 0 and 0 or transportCapacity - insertedAmount
+    takeFromSource(from_tank, fluid_box, live, insertedAmount)
+
+    self:increase_tracked_fluid_amount(live.name, insertedAmount)
     self:delta_FluidDrive_Partition(insertedAmount, 0)
-    self:add_fluid_to_interface_cache({name=fluid.name, amount=insertedAmount, temperature=fluid.temperature})
+    self:add_fluid_to_interface_cache({name=live.name, amount=insertedAmount, temperature=live.temperature})
     return transportCapacity
 end
 
 function BaseNet:insert_fluid_into_external(external, transportCapacity, fluid_box, fluid, from_tank)
-    local storedFluidAmount = fluid.amount
-    local storedFluidTemperature = fluid.temperature
+    local live = liveSourceFluid(from_tank, fluid_box, fluid.name)
+    if live == nil then return transportCapacity end
 
     local e_fluid_box = external.focusedEntity.fluid_box
-    local e_fluid = external.focusedEntity.thisEntity.fluidbox[e_fluid_box.index]
-    local e_max_capacity = external.focusedEntity.thisEntity.fluidbox.get_capacity(e_fluid_box.index)
+    local target = external.focusedEntity.thisEntity.fluidbox
+    local e_fluid = target[e_fluid_box.index]
+    --Never relabel what the target already holds, and respect its fluid lock.
+    if e_fluid ~= nil and e_fluid.name ~= live.name then return transportCapacity end
+    if e_fluid == nil and e_fluid_box.filter ~= "" and e_fluid_box.filter ~= live.name then return transportCapacity end
 
-    if e_fluid == nil then
-        local insertedAmount = math.min(e_max_capacity, transportCapacity)
-        transportCapacity = transportCapacity - insertedAmount <= 0 and 0 or transportCapacity - insertedAmount
-        external.focusedEntity.thisEntity.fluidbox[fluid_box.index] = {
-            name = fluid.name,
-            amount = insertedAmount,
-            temperature = storedFluidTemperature
-        }
+    local e_storedFluidAmount = e_fluid ~= nil and e_fluid.amount or 0
+    local e_storedFluidTemperature = e_fluid ~= nil and e_fluid.temperature or live.temperature
+    --Bounded by the room in the target, by the bus, and by what the source holds.
+    local insertedAmount = math.min(target.get_capacity(e_fluid_box.index) - e_storedFluidAmount, transportCapacity, live.amount)
+    if insertedAmount <= 0 then return transportCapacity end
+    transportCapacity = transportCapacity - insertedAmount <= 0 and 0 or transportCapacity - insertedAmount
 
-        if storedFluidAmount - insertedAmount <= 0 then
-            from_tank.thisEntity.fluidbox[fluid_box.index] = nil
-        else
-            from_tank.thisEntity.fluidbox[fluid_box.index] = {
-                name = fluid.name,
-                amount = storedFluidAmount - insertedAmount,
-                temperature = storedFluidTemperature
-            }
-        end
-    elseif e_fluid ~= nil then
-        local e_storedFluidAmount = e_fluid.amount
-        local e_storedFluidTemperature = e_fluid.temperature
-        local insertedAmount = math.min(e_max_capacity - e_storedFluidAmount, transportCapacity)
-        transportCapacity = transportCapacity - insertedAmount <= 0 and 0 or transportCapacity - insertedAmount
-        
-        external.focusedEntity.thisEntity.fluidbox[fluid_box.index] = {
-            name = fluid.name,
-            amount = insertedAmount + e_storedFluidAmount,
-            temperature = (e_storedFluidAmount * e_storedFluidTemperature + insertedAmount * storedFluidTemperature) / (insertedAmount + e_storedFluidAmount)
-        }
+    target[e_fluid_box.index] = {
+        name = live.name,
+        amount = e_storedFluidAmount + insertedAmount,
+        temperature = (e_storedFluidAmount * e_storedFluidTemperature + insertedAmount * live.temperature) / (e_storedFluidAmount + insertedAmount)
+    }
+    takeFromSource(from_tank, fluid_box, live, insertedAmount)
 
-        if storedFluidAmount - insertedAmount <= 0 then
-            from_tank.thisEntity.fluidbox[fluid_box.index] = nil
-        else
-            from_tank.thisEntity.fluidbox[fluid_box.index] = {
-                name = fluid.name,
-                amount = storedFluidAmount - insertedAmount,
-                temperature = storedFluidTemperature
-            }
-        end
-    end
     external:update(self)
-    --self:increase_fluid_amount(fluid.name, insertedAmount)
     return transportCapacity
 end
 
 function BaseNet.transfer_from_tank_to_network(network, from_tank, transportCapacity)
     local fluid_box = from_tank.fluid_box
     local fluid = from_tank.thisEntity.fluidbox[fluid_box.index]
+    if fluid == nil then return transportCapacity end
 
     if network:has_cache("import", "drive", fluid.name) then
         local drive = storage.entityTable[network:get_cache("import", "drive", fluid.name)]
@@ -887,11 +884,36 @@ function BaseNet.entity_is_sortable(ent)
 end
 -------------------------------------------------------------------------------------------------Extracting Items from the Network-------------------------------------------------------------------------------------------------------------------------
 function BaseNet:extract_item_from_drive(drive, inv, itemstack_master, storedItem, transferCapacity, exact)
-    local removedAmount, stack = drive:remove_item(itemstack_master, math.min(storedItem.count, transferCapacity), exact)
-    transferCapacity = transferCapacity - removedAmount
-    if stack ~= nil then inv.insert(stack) end
-    self:decrease_tracked_item_count(itemstack_master.name, removedAmount)
-    self:delta_ItemDrive_Partition(-removedAmount, 0)
+    --Take out only what the target can hold. The put-back below returns the rest as a
+    --copy of the first stack, which spreads that stack's ammo or durability over the
+    --whole rest (B-49); bounding first keeps that path for the cases the engine's
+    --estimate gets wrong (durability, filtered slots).
+    --A 0 from the estimate is not trusted: the caller has already asked can_insert, and
+    --for durability items the estimate can be wrong, which would stall them for good.
+    local wanted = math.min(storedItem.count, transferCapacity)
+    local room = inv.get_insertable_count({name = itemstack_master.name, quality = ItemStore.qualityOf(itemstack_master.quality)})
+    if room > 0 then wanted = math.min(wanted, room) end
+    if wanted <= 0 then return transferCapacity end
+    local removedAmount, stack = drive:remove_item(itemstack_master, wanted, exact)
+    if stack == nil or removedAmount <= 0 then return transferCapacity end
+    --The target can take less than was removed: only the player path bounds the
+    --capacity by free room, and can_insert promises a single item. Whatever did not go
+    --in returns to the drive, which just freed that room; only what left it is booked.
+    local inserted = inv.insert(stack)
+    if inserted < removedAmount then
+        local rest = stack:copy()
+        rest.count = removedAmount - inserted
+        local returned = drive:add_or_merge_basic_item(rest, rest.count)
+        --Not expected, since the room was freed a moment ago; logged, not hidden.
+        if returned < rest.count then
+            log("RNSRedux: " .. (rest.count - returned) .. " x " .. rest.name .. " could not return to drive " .. tostring(drive.entID))
+        end
+    end
+    if inserted <= 0 then return transferCapacity end
+    transferCapacity = transferCapacity - inserted
+    stack.count = inserted
+    self:decrease_tracked_item_count(itemstack_master.name, inserted)
+    self:delta_ItemDrive_Partition(-inserted, 0)
     self:remove_item_from_interface_cache(stack)
     return transferCapacity
 end
@@ -902,7 +924,9 @@ function BaseNet:extract_item_from_external(external, inv, transferCapacity, ite
         local einv = external.focusedEntity.thisEntity.get_inventory(external.focusedEntity.inventory.output.values[external.focusedEntity.inventory.output.index])
         if BaseNet.inventory_is_sortable(einv) then einv.sort_and_merge() end
         local _, o = einv.find_item_stack(itemstack_master.name)
-        if o == nil then break end
+        --Not in this inventory: try the next one. A break here ended the search at the
+        --first output inventory of a roboport, silo or burner machine.
+        if o == nil then goto nextInventory end
         for j = o, #einv do
             local storedAmount = einv.get_item_count(itemstack_master.name) or 0
             if storedAmount <= 0 or transferCapacity <= 0 then break end
@@ -911,12 +935,18 @@ function BaseNet:extract_item_from_external(external, inv, transferCapacity, ite
             if item.valid_for_read == false or item.count <= 0 then break end
             local inv_item = Itemstack:new(item)
             if inv_item == nil then goto next end
-            if supportModified == false and inv_item.modifed then goto next end
+            if supportModified == false and inv_item.modified then goto next end
             if itemstack_master:compare_itemstacks(inv_item, exact) then
                 local extractSize = math.min(math.min(transferCapacity, storedAmount), inv_item.count)
                 local splitStack = inv_item:split(itemstack_master, extractSize, exact)
+                if splitStack == nil then goto next end
                 if splitStack.modified == false or splitStack.health ~= 1.0 then
-                    transferCapacity = transferCapacity - inv.insert(splitStack)
+                    local inserted = inv.insert(splitStack)
+                    --What the target did not take stays in the container.
+                    inv_item.count = inv_item.count + (splitStack.count - inserted)
+                    --Nothing went in: leave the live stack alone (see insert_item_into_external).
+                    if inserted <= 0 then goto next end
+                    transferCapacity = transferCapacity - inserted
                     item.count = inv_item.count
                     if item.count > 0 then
                         if inv_item.ammo ~= nil then item.ammo = inv_item.ammo end
@@ -941,6 +971,7 @@ function BaseNet:extract_item_from_external(external, inv, transferCapacity, ite
             end
             ::next::
         end
+        ::nextInventory::
         Util.next_index(external.focusedEntity.inventory.output)
     end
     external:update(self)
@@ -988,7 +1019,7 @@ function BaseNet.transfer_from_network_to_inv(network, to_inv, itemstack_master,
                 network:remove_cache("export", "external", itemstack_master.name)
             else
                 if external:interactable() and external:target_interactable() and string.match(external.io, "input") ~= nil and external.type == "item" 
-                and external.focusedEntity.inventory.output.max ~= 0 and network:exists_in_network(external.entID)then
+                and external.focusedEntity.inventory.output.max ~= 0 and network:exists(external.entID) then
                     --local storedAmount = external.focusedEntity.thisEntity.get_item_count(itemstack_master.name)
                     --if storedAmount <= 0 then goto next end
                     transferCapacity = network:extract_item_from_external(external, inv, transferCapacity, itemstack_master, supportModified, exact)
@@ -1056,7 +1087,17 @@ function BaseNet:insert_item_into_drive(item, inv_item, drive, transferCapacity,
 
     local extractSize = math.min(math.min(transferCapacity, inv_item.count), remainingStorage)
     local splitStack = inv_item:split(itemstack_master, extractSize, exact)
-    transferCapacity = transferCapacity - drive:add_or_merge_basic_item(splitStack, extractSize)
+    if splitStack == nil then return transferCapacity end
+    local inserted = drive:add_or_merge_basic_item(splitStack, extractSize)
+    --The source keeps what the drive did not take, and the books carry only what went
+    --in. Before, the source was cut by the full split and the counters booked it too.
+    if inserted < splitStack.count then
+        inv_item.count = inv_item.count + (splitStack.count - inserted)
+        splitStack.count = inserted
+    end
+    --The live stack in `item` has not been touched yet, so nothing to undo.
+    if inserted <= 0 then return transferCapacity end
+    transferCapacity = transferCapacity - inserted
     item.count = inv_item.count
     if item.count > 0 then
         if inv_item.ammo ~= nil then item.ammo = inv_item.ammo end
@@ -1080,9 +1121,16 @@ function BaseNet:insert_item_into_external(external, item, inv_item, itemstack_m
 
             local extractSize = math.min(math.min(transferCapacity, inv_item.count), emptyStacksFillableAmount)
             local splitStack = inv_item:split(itemstack_master, extractSize, exact)
+            if splitStack == nil then goto nextInventory end
 
             if splitStack.modified == false or splitStack.health ~= 1.0 then
-                transferCapacity = transferCapacity - ext_inv.insert(splitStack)
+                local inserted = ext_inv.insert(splitStack)
+                --What the container did not take stays in the source stack.
+                inv_item.count = inv_item.count + (splitStack.count - inserted)
+                --Nothing went in: leave the live stack alone. split reset the copy's ammo
+                --and durability to full, and writing them back would refill it.
+                if inserted <= 0 then goto nextInventory end
+                transferCapacity = transferCapacity - inserted
                 item.count = inv_item.count
                 if item.count > 0 then
                     if inv_item.ammo ~= nil then item.ammo = inv_item.ammo end
@@ -1106,6 +1154,7 @@ function BaseNet:insert_item_into_external(external, item, inv_item, itemstack_m
                 end
             end
         end
+        ::nextInventory::
         Util.next_index(external.focusedEntity.inventory.input)
     end
     external:update(self)

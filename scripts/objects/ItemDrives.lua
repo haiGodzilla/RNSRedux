@@ -115,11 +115,21 @@ end
 --threw on pairs(nil) -- which took the whole placement down. Control.placed destroys
 --the entity when its handler fails, so the drive vanished from the map instead of
 --appearing with default settings.
+--Every field is also range- and type-checked (Util.tagNumber explains why): a priority
+--outside +-RNS_Max_Priority indexed a priority table that does not exist and broke every
+--refresh of the network (B-46). The filter set is rebuilt from the checked GUI filters,
+--the way the filter GUI builds it, rather than taken from the tag.
 function ID:deserialize_settings(tags)
-    if tags["priority"] ~= nil then self.priority = tags["priority"] end
-    if tags["whitelistBlacklist"] ~= nil then self.whitelistBlacklist = tags["whitelistBlacklist"] end
-    if type(tags["filters"]) == "table" then self.filters = tags["filters"] end
-    if type(tags["guiFilters"]) == "table" then self.guiFilters = tags["guiFilters"] end
+    self.priority = Util.tagPriority(tags["priority"], self.priority)
+    self.whitelistBlacklist = Util.tagChoice(tags["whitelistBlacklist"], self.whitelistBlacklist, Util.TagChoices.whitelistBlacklist)
+    local guiFilters = type(tags["guiFilters"]) == "table" and tags["guiFilters"] or {}
+    self.guiFilters = {}
+    self.filters = {}
+    for i = 1, 5 do
+        local name = Util.tagPrototypeName(guiFilters[i], "item")
+        self.guiFilters[i] = name
+        if name ~= "" then self.filters[name] = true end
+    end
     self:regenerate_icons()
 end
 
@@ -166,11 +176,13 @@ end
 function ID:getCheckArea()
     local x = self.thisEntity.position.x
     local y = self.thisEntity.position.y
+    --One tile beyond each side of the 2 x 3 footprint (B-21). The old 2 x 2 areas
+    --reached into the drive's own collision box, north and south, so it found itself.
     return {
-        [1] = {direction = 1, startP = {x-1.0, y-2.0}, endP = {x+1.0, y-1.0}}, --North
-        [2] = {direction = 2, startP = {x+1.0, y-1.0}, endP = {x+2.0, y+1.0}}, --East
-        [4] = {direction = 4, startP = {x-1.0, y+1.0}, endP = {x+1.0, y+2.0}}, --South
-        [3] = {direction = 3, startP = {x-2.0, y-1.0}, endP = {x-1.0, y+1.0}}, --West
+        [1] = {direction = 1, startP = {x-1.0, y-2.5}, endP = {x+1.0, y-1.5}}, --North
+        [2] = {direction = 2, startP = {x+1.0, y-1.5}, endP = {x+2.0, y+1.5}}, --East
+        [4] = {direction = 4, startP = {x-1.0, y+1.5}, endP = {x+1.0, y+2.5}}, --South
+        [3] = {direction = 3, startP = {x-2.0, y-1.5}, endP = {x-1.0, y+1.5}}, --West
     }
 end
 
@@ -415,12 +427,9 @@ function ID.interaction(event, RNSPlayer)
         local priority = Constants.Settings.RNS_Priorities[event.element.selected_index]
         if priority ~= io.priority then
             io.priority = priority
-            local oldP = 1+Constants.Settings.RNS_Max_Priority-io.priority
-            io.priority = priority
-            if io.networkController ~= nil and io.networkController.valid == true then
-                io.networkController.network.ItemDriveTable[oldP][io.entID] = nil
-                io.networkController.network.ItemDriveTable[1+Constants.Settings.RNS_Max_Priority-priority][io.entID] = io
-            end
+            --The refresh files the drive under its new priority. Moving it by hand never
+            --ran: it compared the controller's valid method with true.
+            BaseNet.update_network_controller(io.networkController)
         end
 		return
     elseif string.match(event.element.name, "RNS_ItemDrive_Filter") then

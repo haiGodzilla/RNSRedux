@@ -17,13 +17,34 @@ function RNSP:new(player)
     setmetatable(t, mt) --this is necessary for all objects so the objects can be reloaded when the save loads up
     mt.__index = RNSP
     t.thisEntity = player
-    t.entID = player.index
+    --A string key: updateTable is keyed by entID, and a bare player index shares its key
+    --space with entity unit numbers. For the same reason the player stays out of
+    --entityTable, where an entity with unit number == player index used to find it.
+    t.entID = RNSP.updateKey(player.index)
     t.name = player.name
     t.GUI = {}
     t.varTable = {}
     UpdateSys.addEntity(t)
-    UpdateSys.add_to_entity_table(t)
     return t
+end
+
+function RNSP.updateKey(playerIndex)
+    return "player-" .. playerIndex
+end
+
+--Saves written before the string key keep the player under its index in entityTable
+--and updateTable. Runs from onInit, which also handles on_configuration_changed.
+function RNSP.migrateKeys()
+    for _, rnsp in pairs(storage.PlayerTable or {}) do
+        if type(rnsp.entID) == "number" then
+            if storage.entityTable[rnsp.entID] == rnsp then storage.entityTable[rnsp.entID] = nil end
+            if storage.updateTable[rnsp.entID] == rnsp then storage.updateTable[rnsp.entID] = nil end
+            if rnsp.thisEntity ~= nil and rnsp.thisEntity.valid == true then
+                rnsp.entID = RNSP.updateKey(rnsp.thisEntity.index)
+                UpdateSys.addEntity(rnsp)
+            end
+        end
+    end
 end
 
 --Reconstructor
@@ -67,16 +88,18 @@ end
 
 --Deconstructor
 function RNSP:remove()
-    
+    UpdateSys.remove(self)
+    if storage.PlayerTable[self.name] == self then storage.PlayerTable[self.name] = nil end
 end
 
 function RNSP:resetConnection()
 
 end
 
---Is valid
+--Is valid. A removed player leaves an invalid LuaPlayer behind, and every access to it
+--throws; UpdateSys skips objects that report invalid.
 function RNSP:valid()
-    return true
+    return self.thisEntity ~= nil and self.thisEntity.valid == true
 end
 
 function RNSP:process_logistic_slots(network)
@@ -91,14 +114,18 @@ function RNSP:process_logistic_slots(network)
     if port == nil then return end
     if port.energy < Constants.Settings.RNS_PlayerPort_Consumption then return end
     local player_inv = self.thisEntity.get_main_inventory()
-    local highest = self.thisEntity.character.request_slot_count
-    if highest > 0 then
-        for i=1, highest do
-            local slot = self.thisEntity.character.get_personal_logistic_slot(i)
-            if slot ~= nil and slot.name ~= nil then
-                local min = slot.min
-                local max = slot.max
-                local name = slot.name
+    --2.0 removed request_slot_count and get_personal_logistic_slot. The character's
+    --requests now live in its requester point, whose filters combine all active
+    --sections: count is the minimum, max_count the maximum (nil for none).
+    local character = self.thisEntity.character
+    local point = character ~= nil and character.get_requester_point() or nil
+    if point ~= nil and point.enabled == true and point.filters ~= nil then
+        for _, filter in pairs(point.filters) do
+            --Only plain items: quality items are refused at the drive anyway.
+            if filter.name ~= nil and (filter.type == nil or filter.type == "item") and (filter.quality == nil or filter.quality == "normal") then
+                local min = filter.count
+                local max = filter.max_count or math.huge
+                local name = filter.name
                 local amount = (player_inv.get_item_count(name) or 0) + ((self.thisEntity.cursor_stack and self.thisEntity.cursor_stack.valid_for_read and self.thisEntity.cursor_stack.name == name) and self.thisEntity.cursor_stack.count or 0)
                 
                 local add = (amount <= min) and min-amount or 0

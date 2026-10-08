@@ -259,24 +259,53 @@ function NC:find_wirelessgrid_with_wirelessTransmitter(id)
     return false
 end
 
-function NC:import_items()
-    for p, priority in pairs(self.network.ItemIOTable) do
-        for i, v in pairs(priority.input) do
-            local item = storage.entityTable[v]
-            if item ~= nil and item.io == "output" then
-                table.remove(priority.input, i)
-                goto next
+--Runs every bus of one priority list once and returns the list in its next order:
+--buses that switched to the other mode drop out, and with round robin on, the ones that
+--transferred move to the back. Doing that with table.remove/table.insert inside the
+--pairs loop over the same list skipped the bus after each moved one and ran the moved
+--one a second time in the same tick.
+--This runs for 11 priorities x 2 lists every tick, most of them empty or unchanged, so
+--it allocates only once the order actually changes and otherwise hands the same list
+--back (B-45).
+local function runBusList(list, otherMode, roundRobin)
+    if list[1] == nil then return list end
+    local nextOrder, toBack = nil, nil
+    for i, id in ipairs(list) do
+        local bus = storage.entityTable[id]
+        local keep = bus ~= nil and bus.io ~= otherMode
+        local moveBack = false
+        if keep then
+            bus:IO()
+            if roundRobin and bus.processed == true then
+                bus.processed = false
+                moveBack = true
             end
-            if item ~= nil then
-                item:IO()
-                if settings.global[Constants.Settings.RNS_RoundRobin].value == true and item.processed == true then
-                    table.remove(priority.input, i)
-                    table.insert(priority.input, v)
-                    item.processed = false
-                end
-            end
-            ::next::
         end
+        if nextOrder == nil and (not keep or moveBack) then
+            nextOrder, toBack = {}, {}
+            for k = 1, i - 1 do nextOrder[k] = list[k] end
+        end
+        if nextOrder ~= nil then
+            if moveBack then
+                toBack[#toBack + 1] = id
+            elseif keep then
+                nextOrder[#nextOrder + 1] = id
+            end
+        end
+    end
+    if nextOrder == nil then return list end
+    for _, id in ipairs(toBack) do nextOrder[#nextOrder + 1] = id end
+    return nextOrder
+end
+
+local function roundRobinEnabled()
+    return settings.global[Constants.Settings.RNS_RoundRobin].value == true
+end
+
+function NC:import_items()
+    local roundRobin = roundRobinEnabled()
+    for p, priority in pairs(self.network.ItemIOTable) do
+        priority.input = runBusList(priority.input, "output", roundRobin)
     end
     --[[local import = {}
     local import_length = 0
@@ -320,23 +349,9 @@ function NC:import_items()
 end
 
 function NC:export_items()
+    local roundRobin = roundRobinEnabled()
     for p, priority in pairs(self.network.ItemIOTable) do
-        for i, v in pairs(priority.output) do
-            local item = storage.entityTable[v]
-            if item ~= nil then
-                if item.io == "input" then
-                    table.remove(priority.output, i)
-                    goto next
-                end
-                item:IO()
-                if settings.global[Constants.Settings.RNS_RoundRobin].value == true and item.processed == true then
-                    table.remove(priority.output, i)
-                    table.insert(priority.output, v)
-                    item.processed = false
-                end
-            end
-            ::next::
-        end
+        priority.output = runBusList(priority.output, "input", roundRobin)
     end
     --[[local export = {}
     local export_length = 0
@@ -388,23 +403,9 @@ function NC:updateItemIO()
 end
 
 function NC:import_fluids()
+    local roundRobin = roundRobinEnabled()
     for p, priority in pairs(self.network.FluidIOTable) do
-        for i, v in pairs(priority.input) do
-            local fluid = storage.entityTable[v]
-            if fluid ~= nil then
-                if fluid.io == "output" then
-                    table.remove(priority.input, i)
-                    goto next
-                end
-                fluid:IO()
-                if settings.global[Constants.Settings.RNS_RoundRobin].value == true and fluid.processed == true then
-                    table.remove(priority.input, i)
-                    table.insert(priority.input, v)
-                    fluid.processed = false
-                end
-            end
-            ::next::
-        end
+        priority.input = runBusList(priority.input, "output", roundRobin)
     end
     --[[local import = {}
     local import_length = 0
@@ -447,23 +448,9 @@ function NC:import_fluids()
 end
 
 function NC:export_fluids()
+    local roundRobin = roundRobinEnabled()
     for p, priority in pairs(self.network.FluidIOTable) do
-        for i, v in pairs(priority.output) do
-            local fluid = storage.entityTable[v]
-            if fluid ~= nil then
-                if fluid.io == "input" then
-                    table.remove(priority.output, i)
-                    goto next
-                end
-                fluid:IO()
-                if settings.global[Constants.Settings.RNS_RoundRobin].value == true and fluid.processed == true then
-                    table.remove(priority.output, i)
-                    table.insert(priority.output, v)
-                    fluid.processed = false
-                end
-            end
-            ::next::
-        end
+        priority.output = runBusList(priority.output, "input", roundRobin)
     end
     --[[local export = {}
     local export_length = 0
@@ -522,11 +509,13 @@ end
 function NC:getCheckArea()
     local x = self.thisEntity.position.x
     local y = self.thisEntity.position.y
+    --One tile beyond each side of the 3 x 4 footprint (B-21). The old 3 x 3 areas
+    --reached into the controller's own collision box, north and south.
     return {
-        [1] = {direction = 1, startP = {x-1.5, y-2.5}, endP = {x+1.5, y-1.5}}, --North
-        [2] = {direction = 2, startP = {x+1.5, y-1.5}, endP = {x+2.5, y+1.5}}, --East
-        [4] = {direction = 4, startP = {x-1.5, y+1.5}, endP = {x+1.5, y+2.5}}, --South
-        [3] = {direction = 3, startP = {x-2.5, y-1.5}, endP = {x-1.5, y+1.5}}, --West
+        [1] = {direction = 1, startP = {x-1.5, y-3.0}, endP = {x+1.5, y-2.0}}, --North
+        [2] = {direction = 2, startP = {x+1.5, y-2.0}, endP = {x+2.5, y+2.0}}, --East
+        [4] = {direction = 4, startP = {x-1.5, y+2.0}, endP = {x+1.5, y+3.0}}, --South
+        [3] = {direction = 3, startP = {x-2.5, y-2.0}, endP = {x-1.5, y+2.0}}, --West
     }
 end
 

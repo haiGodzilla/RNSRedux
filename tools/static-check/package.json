@@ -1,0 +1,12 @@
+{
+  "name": "rnsredux-static-check",
+  "private": true,
+  "description": "Static checks for RNSRedux without a Lua runtime. Not part of the mod.",
+  "scripts": {
+    "check": "node globals.js && node stages.js && node api.js"
+  },
+  "devDependencies": {
+    "luaparse": "0.3.1",
+    "typed-factorio": "3.36.0"
+  }
+}

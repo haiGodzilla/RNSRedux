@@ -123,7 +123,8 @@ function TR:createArms()
     if self.connected == nil or storage.entityTable[self.connected] == nil or storage.entityTable[self.connected].thisEntity == nil or storage.entityTable[self.connected].thisEntity.valid == false then return end
 
     local obj = storage.entityTable[self.connected]
-    if BaseNet.exists_in_network(obj.networkController, obj.entID) and obj.networkController.entID ~= self.networkController.entID then
+    --A transmitter that is in no network yet has no controller to compare against.
+    if BaseNet.exists_in_network(obj.networkController, obj.entID) and self.networkController ~= nil and obj.networkController.entID ~= self.networkController.entID then
         self.thisEntity.order_deconstruction("player")
     else
         self.connectedObjs[5] = {obj}

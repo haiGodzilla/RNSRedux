@@ -67,7 +67,29 @@ function onInit()
 		end
 	end
 
-    if storage.playerTable == nil then storage.playerTable = {} end
+    --storage.playerTable (lower case) was never read; PlayerTable is the live one.
+    storage.playerTable = nil
+    --A technology's enabled flag is per-force state in the save; the prototype's
+    --enabled = false only reaches new games. Researched ones stay as they are (B-36).
+    for _, force in pairs(game.forces) do
+        --A deferred technology may be queued or under research; it leaves the queue
+        --before it is disabled. The queue can only be written as a whole.
+        local queue = force.research_queue or {}
+        local kept = {}
+        for _, technology in pairs(queue) do
+            if not Constants.isDeferredToM5(technology.name) then kept[#kept + 1] = technology end
+        end
+        if #kept ~= #queue then force.research_queue = kept end
+        for name, technology in pairs(force.technologies) do
+            if technology.researched == false and Constants.isDeferredToM5(name) then
+                technology.enabled = false
+            end
+        end
+    end
+    --Measurement switches from a previous version must not skew the next run (B-50).
+    storage.debugOverrides = nil
+    if storage.stressTest ~= nil then storage.stressTest.drainRate = 0 end
+    RNSP.migrateKeys()
 	for _, player in pairs(game.players) do
 		Event.initPlayer({player_index = player.index})
 	end
@@ -121,7 +143,22 @@ function placed(event)
         game.print({"gui-description.RNS_placed_failed"})
         local entity = event.created_entity or event.entity or event.destination
         if entity ~= nil and entity.valid == true then
-            entity.destroy()
+            --new() may already have registered the object, created its hidden
+            --combinators and its store inventories. Destroying only the entity left all
+            --of that behind: an orphaned object in the tables, combinators on the map and
+            --script inventories in the save.
+            local unit = entity.unit_number
+            local obj = unit ~= nil and storage.entityTable[unit] or nil
+            if obj ~= nil and obj.remove ~= nil then Util.safeCall(obj.remove, obj) end
+            if unit ~= nil then
+                storage.entityTable[unit] = nil
+                local objInfo = storage.objectTables[entity.name]
+                if objInfo ~= nil and objInfo.tableName ~= nil and storage[objInfo.tableName] ~= nil then
+                    storage[objInfo.tableName][unit] = nil
+                end
+            end
+            --remove() may already have taken the entity with it.
+            if entity.valid == true then entity.destroy() end
         end
     end
 end
@@ -201,6 +238,9 @@ script.on_load(onLoad)
 script.on_event(defines.events.on_cutscene_cancelled, initPlayer)
 script.on_event(defines.events.on_player_created, initPlayer)
 script.on_event(defines.events.on_player_joined_game, initPlayer)
+script.on_event(defines.events.on_player_removed, function(event)
+    Util.safeCall(Event.playerRemoved, event)
+end)
 script.on_event(defines.events.on_tick, onTick)
 
 script.on_event(defines.events.on_research_finished, finished_research)
@@ -250,6 +290,22 @@ script.on_event(defines.events.on_gui_value_changed, onGuiElemChanged)
 script.on_event(defines.events.on_player_setup_blueprint, onBlueprintSetup)
 script.on_event(defines.events.on_player_configured_blueprint, onBlueprintConfigured)
 script.on_event(defines.events.on_entity_settings_pasted, onSettingsPasted)
+
+--Every command below is a development tool and goes before the release
+--(docs/bugtracker.md, section 5). Until then they are admin only in multiplayer: they
+--move items out of any network, create items and entities, and destroy entities. In
+--single player the one player may run them. The handler runs under safeCall, because
+--an error in a command handler is not caught by anything else.
+local function debugCommand(name, help, handler)
+    commands.add_command(name, help, function(event)
+        local player = event.player_index ~= nil and game.get_player(event.player_index) or nil
+        if player ~= nil and game.is_multiplayer() and not player.admin then
+            player.print("RNSRedux: /" .. name .. " is admin only in multiplayer.")
+            return
+        end
+        Util.safeCall(handler, event)
+    end)
+end
 
 --What the member drives actually hold, read from their own storage tables, next
 --to what they claim through storedAmount. The two are maintained by different
@@ -328,8 +384,11 @@ local function busScanStatus()
         hits = hits + (obj.fastScanHits or 0)
         full = full + (obj.fastScanFull or 0)
     end
-    return string.format("busScan=%s hits=%d full=%d",
-        tostring(Constants.Settings.RNS_ExternalBus_FastScan), hits, full)
+    --Both switches live in storage and survive save/load (B-50), so the header shows the
+    --rescan period too and marks values that differ from the code defaults.
+    local overridden = storage.debugOverrides ~= nil and next(storage.debugOverrides) ~= nil
+    return string.format("busScan=%s rescan=%d%s hits=%d full=%d",
+        tostring(EIO.fastScanEnabled()), EIO.rescanPeriod(), overridden and " (OVERRIDE)" or "", hits, full)
 end
 
 --Builds the counter dump for a single network controller. Shared by /rns-debug
@@ -376,7 +435,7 @@ end
 
 --Debug command: dumps the network bookkeeping from inside the mod.
 --The console runs in its own storage and cannot see ours; this can.
-commands.add_command("rns-debug", "RNSRedux: dump network and interface state", function()
+debugCommand("rns-debug", "RNSRedux: dump network and interface state", function()
     local lines = {}
     local total = 0
     for _ in pairs(storage.entityTable or {}) do total = total + 1 end
@@ -430,7 +489,7 @@ end)
 --use a filled network without running machines. The controller is identified
 --by its network reference, not by thisEntity: that field can hold a LuaPlayer,
 --whose key lookups raise.
-commands.add_command("rns-debug-refresh", "RNSRedux: force a network rebuild on every controller", function()
+debugCommand("rns-debug-refresh", "RNSRedux: force a network rebuild on every controller", function()
     local rebuilt = 0
     for _, obj in pairs(storage.entityTable or {}) do
         if obj.network ~= nil then
@@ -450,7 +509,7 @@ end)
 --where the code stops without a message.
 --Usage: /rns-debug-extract [item] [count] -- defaults to the first tracked item
 --and a count of 1.
-commands.add_command("rns-debug-extract", "RNSRedux: extract items from a network without the GUI", function(event)
+debugCommand("rns-debug-extract", "RNSRedux: extract items from a network without the GUI", function(event)
     local player = game.players[event.player_index]
     if player == nil then return end
 
@@ -514,7 +573,7 @@ end)
 
 --Debug command: the same controller counters without the per-entity noise. Two
 --runs of this fit on one screen, which a full /rns-debug dump does not.
-commands.add_command("rns-debug-nc", "RNSRedux: dump only the controller counters", function()
+debugCommand("rns-debug-nc", "RNSRedux: dump only the controller counters", function(event)
     local entries = {}
     for _, obj in pairs(storage.entityTable or {}) do
         if obj.network ~= nil then
@@ -538,7 +597,9 @@ commands.add_command("rns-debug-nc", "RNSRedux: dump only the controller counter
     --drain stopped". Comparing two dumps by hand was the gap that made the previous
     --run unreadable: removed was printed once, early, and never again.
     game.print("rns-debug-nc: appended to script-output/rns-debug-nc.txt")
-    helpers.write_file("rns-debug-nc.txt", "\n# tick " .. game.tick .. " | " .. StressTest.drainStatus() .. " | " .. busScanStatus() .. "\n" .. text .. "\n", true)
+    --Only on the machine of whoever asked (0 = the server, for the console); without
+    --for_player every peer of a multiplayer game appended to its own copy.
+    helpers.write_file("rns-debug-nc.txt", "\n# tick " .. game.tick .. " | " .. StressTest.drainStatus() .. " | " .. busScanStatus() .. "\n" .. text .. "\n", true, event.player_index or 0)
 end)
 
 --Debug command for P2: what a store written to storage survives and what it does
@@ -555,7 +616,7 @@ end)
 --stack without passing isStorable, to see whether the engine keeps the distinction.
 --A stack array handed to insert is attempted, since ItemStackIdentification's union
 --has no array member and the plan hoped otherwise.
-commands.add_command("rns-store-test", "RNSRedux: P2 store probe. First call builds, second call after a save/load inspects", function()
+debugCommand("rns-store-test", "RNSRedux: P2 store probe. First call builds, second call after a save/load inspects", function()
     local lines = {}
 
     if storage.storeProbe == nil then
@@ -739,7 +800,7 @@ commands.add_command("rns-store-test", "RNSRedux: P2 store probe. First call bui
     game.print(table.concat(lines, "\n"))
 end)
 
-commands.add_command("rns-store-reset", "RNSRedux: drop the P2 store probe and its inventories", function()
+debugCommand("rns-store-reset", "RNSRedux: drop the P2 store probe and its inventories", function()
     local probe = storage.storeProbe
     if probe ~= nil then
         if probe.store ~= nil then probe.store:destroy() end
@@ -763,14 +824,15 @@ end)
 --is false after the first increment.
 --It also zeroes the skip counters, so before and after can be compared over the
 --same window instead of as a difference of monotonic totals.
-commands.add_command("rns-bus-skip", "RNSRedux: set the external bus rescan period. <n>, 1 disables the skip", function(event)
+debugCommand("rns-bus-skip", "RNSRedux: set the external bus rescan period. <n>, 1 disables the skip", function(event)
     local n = tonumber(event.parameter or "")
     if n == nil or n < 1 then
         game.print("rns-bus-skip: usage /rns-bus-skip <n> with n >= 1")
         return
     end
-    local previous = Constants.Settings.RNS_ExternalStorage_Rescan
-    Constants.Settings.RNS_ExternalStorage_Rescan = n
+    local previous = EIO.rescanPeriod()
+    storage.debugOverrides = storage.debugOverrides or {}
+    storage.debugOverrides.rescanPeriod = n
 
     local zeroed = 0
     for _, obj in pairs(storage.entityTable or {}) do
@@ -782,18 +844,19 @@ commands.add_command("rns-bus-skip", "RNSRedux: set the external bus rescan peri
     end
 
     game.print("rns-bus-skip: period " .. tostring(previous) .. " -> "
-        .. tostring(Constants.Settings.RNS_ExternalStorage_Rescan)
+        .. tostring(EIO.rescanPeriod())
         .. ", counters zeroed on " .. zeroed .. " buses")
 end)
 
-commands.add_command("rns-bus-scan", "RNSRedux: toggle the external bus fast scan. <on|off>", function(event)
+debugCommand("rns-bus-scan", "RNSRedux: toggle the external bus fast scan. <on|off>", function(event)
     local want = string.lower(event.parameter or "")
     if want ~= "on" and want ~= "off" then
         game.print("rns-bus-scan: usage /rns-bus-scan on|off")
         return
     end
-    local previous = Constants.Settings.RNS_ExternalBus_FastScan
-    Constants.Settings.RNS_ExternalBus_FastScan = (want == "on")
+    local previous = EIO.fastScanEnabled()
+    storage.debugOverrides = storage.debugOverrides or {}
+    storage.debugOverrides.fastScan = (want == "on")
 
     local zeroed = 0
     for _, obj in pairs(storage.entityTable or {}) do
@@ -805,8 +868,20 @@ commands.add_command("rns-bus-scan", "RNSRedux: toggle the external bus fast sca
     end
 
     game.print("rns-bus-scan: " .. tostring(previous) .. " -> "
-        .. tostring(Constants.Settings.RNS_ExternalBus_FastScan)
+        .. tostring(EIO.fastScanEnabled())
         .. ", counters zeroed on " .. zeroed .. " buses")
+end)
+
+--Puts every measurement switch back to the code defaults: the bus rescan period, the
+--fast scan and the drain rate. They live in storage and survive save/load, so a run
+--starts from a known state only after this (B-50).
+debugCommand("rns-debug-reset", "RNSRedux: reset /rns-bus-skip, /rns-bus-scan and the stress drain to their defaults", function()
+    storage.debugOverrides = nil
+    if storage.stressTest ~= nil then
+        storage.stressTest.drainRate = 0
+        storage.stressTest.drainRemainder = 0
+    end
+    game.print("rns-debug-reset: " .. busScanStatus() .. " | " .. StressTest.drainStatus())
 end)
 
 --Registering the tick handler here means it survives a save/load, which a
@@ -814,41 +889,46 @@ end)
 --while the drain is off.
 script.on_nth_tick(1, StressTest.tick)
 
-commands.add_command("rns-stress-drain", "RNSRedux: drain the external containers at a fixed rate. <itemsPerSecondPerContainer>, 0 stops it",
+debugCommand("rns-stress-drain", "RNSRedux: drain the external containers at a fixed rate. <itemsPerSecondPerContainer>, 0 stops it",
     function(data)
         local rate = tonumber(data.parameter or "") or 0
         game.print(StressTest.setDrain(rate))
     end)
 
-commands.add_command("rns-stress-drain-status", "RNSRedux: report the drain rate and how much it has removed",
+debugCommand("rns-stress-drain-status", "RNSRedux: report the drain rate and how much it has removed",
     function()
         game.print(StressTest.drainStatus())
     end)
 
 --Stress test commands for UPS measurement.
-commands.add_command("rns-stress-build", "RNSRedux: build a stress network. <stations> <drivesPerStation> [busesPerStation] [mixed|item|external] [both|input|output]",
+debugCommand("rns-stress-build", "RNSRedux: build a stress network. <stations> <drivesPerStation> [busesPerStation] [mixed|item|external] [both|input|output]",
     function(data)
         local a, b, c, d, e = string.match(data.parameter or "", "(%d+)%s+(%d+)%s*(%d*)%s*(%a*)%s*(%a*)")
-        game.print(StressTest.build(tonumber(a) or 5, tonumber(b) or 10, tonumber(c) or 0, d, e))
+        --Capped well above the measured setups (20 50, buses up to 40) so a typo cannot
+        --create entities until the game freezes.
+        local stations = math.min(tonumber(a) or 5, 100)
+        local drives = math.min(tonumber(b) or 10, 200)
+        local buses = math.min(tonumber(c) or 0, 100)
+        game.print(StressTest.build(stations, drives, buses, d, e))
     end)
 
-commands.add_command("rns-stress-fill", "RNSRedux: load drives with items. <typesPerDrive> <amountPerType>",
+debugCommand("rns-stress-fill", "RNSRedux: load drives with items. <typesPerDrive> <amountPerType>",
     function(data)
         local a, b = string.match(data.parameter or "", "(%d+)%s+(%d+)")
         game.print(StressTest.fill(tonumber(a) or 10, tonumber(b) or 200))
     end)
 
-commands.add_command("rns-stress-clear", "RNSRedux: remove everything the stress builder created",
+debugCommand("rns-stress-clear", "RNSRedux: remove everything the stress builder created",
     function()
         game.print(StressTest.clear())
     end)
 
-commands.add_command("rns-stress-status", "RNSRedux: report controller members and power state",
+debugCommand("rns-stress-status", "RNSRedux: report controller members and power state",
     function()
         game.print(StressTest.status())
     end)
 
-commands.add_command("rns-stress-purge", "RNSRedux: remove every mod entity marked for deconstruction",
+debugCommand("rns-stress-purge", "RNSRedux: remove every mod entity marked for deconstruction",
     function()
         game.print(StressTest.purge())
     end)

@@ -79,10 +79,12 @@ local function grow(store)
     return true
 end
 
---First chunk that still has an empty slot, or nil.
+--First chunk that still has an empty slot, or nil. Not is_full(): that means "every
+--stack is full", so a chunk with no empty slot left but one partial stack passed as
+--having room, took nothing of a new item type, and the store never grew.
 local function chunkWithRoom(store)
     for i = 1, #store.chunks do
-        if not store.chunks[i].is_full() then return i end
+        if store.chunks[i].count_empty_stacks() > 0 then return i end
     end
     return nil
 end

@@ -5,7 +5,8 @@ Einstiegspunkt für die Weiterarbeit. Technischer Plan und Begründungen:
 Dieses Dokument beantwortet „wo stehen wir, was ist verifiziert, was ist der nächste
 Schritt".
 
-Stand: Commit `7268718`, Branch `port/2.0`, Version 2.0.0.
+Stand: Commit `0162750` plus nicht committeter Maßnahmen-Stack (08.10.2026), Branch
+`port/2.0`, Version 2.0.0.
 P0, P1, P2 und P3 sind durch. **Laufender Posten: eine Runde Spielbetrieb** — P2 hat
 die zentrale Datenstruktur umgebaut und ist nur mit gezielten Tests geprüft, nicht
 im Spiel. Funde im Chat melden, der Agent trägt sie in `docs/bugtracker.md` ein.
@@ -2414,9 +2415,17 @@ Objekt-Ebenen, aber das ist aus einer Liste gelesen, nicht gemessen.
 IDs, Status und Beleg. Sie stand früher hier; die Doppelpflege hat zu Widersprüchen
 geführt, deshalb gibt es nur noch eine Quelle.
 
-Kurzfassung des Stands: **11 offene** Punkte (B-01 bis B-10, B-22), **1 umgesetzt,
-Test offen** (B-21), **2 als unkritisch nachgerechnet** (B-12, B-13), **8 behoben und
-getestet** (B-11, B-14 bis B-20).
+Kurzfassung des Stands: **11 offene** Punkte (B-01, B-02, B-05 bis B-10, B-22, B-40,
+B-41), **31 umgesetzt, Test offen** (B-04, B-21, B-23 bis B-39, B-42 bis B-52, B-54),
+**4 als unkritisch nachgerechnet** (B-03, B-12, B-13, B-53), **8 behoben und getestet**
+(B-11, B-14 bis B-20).
+
+Am 08.10.2026 kam eine statische Gesamtanalyse dazu (ohne Spiel): Befunde und
+Begründungen stehen in den Einträgen B-23 bis B-41, der Maßnahmen-Stack ist im
+Arbeitsverzeichnis umgesetzt und mit `tools/static-check` geprüft — Syntax, Globals pro
+Stage und Abgleich mit der 2.0-API (`typed-factorio` 3.36.0 = 2.0.75). Nichts davon ist
+im Spiel getestet; die Testfälle stehen in der Beleg-Spalte. Das anschließende
+unabhängige Review steht in Abschnitt 12.
 
 Die Erläuterungen zu den einzelnen Befunden bleiben in diesem Dokument, wo sie
 hingehören: 5.6 (Phantom-Spielstände), 5.8 (Entnahme), 7.12 (Qualitäts-Blockade),
@@ -2465,3 +2474,75 @@ nicht.
 
 Hostnamen, Pfade und Zugangsdaten der Build-Umgebung stehen bewusst **nicht** in
 diesem Repo — es wird nach GitHub gepusht.
+
+## 12. Unabhängiges Review des Maßnahmen-Stacks (08.10.2026)
+
+Geprüft mit Werkzeugen, die am Stack nicht beteiligt waren: `code-review`,
+`architecture-reviewer`, `api-contract`, `security-review`, ein Plan- und ein
+Explore-Agent. Alles statisch, nichts im Spiel. Die Befunde stehen als B-42 bis
+B-53 in `docs/bugtracker.md`, die Architekturentscheidung in
+`docs/ups-architektur.md` 6b.
+
+**Die Lehre: Der Stack hat zwei Regressionen eingeführt, beide Performance.**
+
+- **B-42:** Ein Containerwechsel am External-Bus löst einen vollen Refresh aus, und
+  Lokomotiven und Wagen zählen als Container. Jeder Zug an einem Bus kostet damit
+  O(Netz). HEAD hatte an derselben Stelle einen Buchungsfehler ohne Laufzeitkosten —
+  die Korrektur hat einen Korrektheitsfehler gegen einen Performancefehler
+  getauscht. Die Begründung im Code („only a different container triggers it")
+  hat nicht bedacht, dass das Spiel selbst Container wechselt.
+- **B-45:** `runBusList` baut jede Prioritätsliste jeden Tick neu, auch leere.
+
+Beides war statisch erkennbar und ist durchgerutscht, weil der Stack auf
+Korrektheit geprüft wurde und nicht auf Tick-Kosten. Die Invariante dazu steht
+jetzt in `ups-architektur.md` 6b und in `CLAUDE.md`: Refresh nur bei Bau,
+Abbau oder Spieleraktion, nie bei Simulationsereignissen.
+
+**Fehleinschätzungen in der Analyse:**
+
+- B-39 war zu niedrig eingestuft: An elektrischen Maschinen wirft der
+  External-Bus, statt nur falsch zu lesen, und bricht `NC:update` ab.
+- B-01 war als „unabhängig von B-21" eingetragen; beide brechen bestehende Saves
+  und gehören in dasselbe Release.
+- B-36: `enabled = false` am Prototyp erreicht bestehende Saves vermutlich nicht.
+- Die Tag-Validierung (B-30) hat die Drives ausgelassen (B-46) — ausgerechnet das
+  wichtigste Release-Objekt.
+- Der Changelog-Eintrag 2.0.0 behauptet ungetestete Fixes als erledigt (B-51).
+
+**Bestätigt ohne Befund:** keine neue Sicherheitslücke durch den Stack
+(`security-review`); der Tag-Vertrag ist für gültige Blueprints aus HEAD und aus
+1.0.43 abwärtskompatibel; die Behauptung, `set_slot` werfe bei doppelten Signalen,
+ist laut API widerlegt (B-53).
+
+**Empfohlene Reihenfolge vor dem Merge:** B-42 und B-45 (Regressionen), dann B-46
+und der Sofort-Fix für B-39, dann B-43/B-44/B-48 (Buchungslücken), dann B-36
+(bestehende Saves) und B-51 (Changelog). Danach Spieltest und Neumessung nach
+4.2.
+
+### 12.1 Behebung (08.10.2026, nicht committet)
+
+Alle Review-Befunde außer den Produkt- und M5-Fragen sind umgesetzt: B-36, B-39
+(Sofort-Fix), B-42 bis B-52; alle jetzt `wartet auf Test`. Die Kernänderung ist
+B-42/B-43: der External-Bus bucht nach jedem Fokuswechsel inkrementell ein
+(`EIO:inject_cache`, Spiegelbild von `flush_cache`), statt einen Refresh auszulösen —
+damit gilt die Invariante aus `ups-architektur.md` 6b wieder. Beim Beheben von B-44
+kam B-54 dazu (Paste teilte die Enabler-Tabelle zwischen Bussen), ebenfalls behoben.
+Kleinbefunde aus der ersten Analyse, die dabei mit erledigt wurden: `init_cache`
+zählt belegte statt leerer Slots, der Off-by-one beim Kürzen des Bus-Caches.
+
+Ein zweites unabhängiges Review dieser Runde fand nichts Kritisches, aber fünf
+kleinere Punkte, alle behoben: Typ- und Moduswechsel des External-Busses und Paste
+buchen sofort mit altem Modus aus und mit neuem ein (vorher ein Fenster bis zum
+Refresh); `EIO:validate` folgte noch der alten Bedeutung von `storedAmount`; der
+tote External-Zweig in `transfer_io_mode` ist weg; zurückgestellte Techs verlassen
+vor dem Sperren die Forschungs-Warteschlange. Offen aus dem Review, außerhalb dieser
+Runde: `DataConvert_ItemToEntity` der Drives übernimmt `guiFilters` aus dem Item-Tag
+ungeprüft (Item-Tags setzt nur die Mod selbst, geringes Risiko); mehrere
+Output-Inventare teilen sich weiter einen Cache (B-39, Rest).
+
+`tools/static-check` ist grün. **Spieltest zuerst:** ein Zug an einem External-Bus
+(B-42: kein `max`-Anstieg, `/rns-debug` gleich `/rns-debug-refresh`), ein Bus an
+einem elektrischen Assembler (B-39: kein Fehler im Log), ein Blueprint mit Drive
+der Priorität 99 (B-46), ein Paste zwischen zwei Bussen (B-44, B-54), ein alter Save
+(B-36). Vor jeder Messung `/rns-debug-reset` (B-50), danach die Messung aus 4.2
+wiederholen (B-45).

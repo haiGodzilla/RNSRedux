@@ -1,8 +1,12 @@
 -- Last data stage. Space Age deletes prototypes that other mod sets keep,
 -- and by this point every other mod has had its say.
 
+--The fluid drive recipes ask for "barrel", the 2.0 name of the empty barrel as far as
+--known; 1.1 called it empty-barrel. Not verified against a 2.0 install: if barrel is
+--missing, the log says "barrel -> steel-plate" and the game still loads.
 local substitutes = {
     ["satellite"] = "low-density-structure",
+    ["barrel"] = "steel-plate",
     ["empty-barrel"] = "steel-plate",
 }
 
@@ -96,6 +100,8 @@ for signal_name, field in pairs(select_signals) do
         log("RNSRedux: " .. signal_name .. " icon -> " .. file)
     elseif signal then
         signal.icon = "__RNSRedux__/graphics/blank32.png"
+        --data.lua declares these signals with icon_size 40; the fallback image is 32.
+        signal.icon_size = 32
         log("RNSRedux: " .. signal_name .. " core sprite missing, blank icon used")
     end
 end

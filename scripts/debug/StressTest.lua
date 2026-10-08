@@ -32,10 +32,12 @@ local BUS_FILL = 4800       -- one steel chest of a 100-stack item
 --case for it. A machine drawing from a container makes the total move, and the
 --skip then fires less often. The rate here is exact, which the real thing never is,
 --and it is given per container so it does not shift when the bus count changes.
-local drainRate = 0         -- items per second per container
-local drainRemainder = 0
-local drainTaken = 0
-local drainIndex = 0
+--The state lives in storage.stressTest (drainRate in items per second per container,
+--drainRemainder, drainTaken, drainIndex). It used to be module locals, which a client
+--joining a multiplayer game starts without: the host kept draining, the client did
+--not, and the game desynced.
+--The rate is capped so a typo cannot freeze the game in the loop below.
+local MAX_DRAIN_RATE = 1000
 
 --Filtered against the active prototypes, so mod sets that drop one simply
 --contribute fewer types.
@@ -125,15 +127,16 @@ end
 --before and after are compared over the same window instead of as a difference of
 --monotonic totals.
 function StressTest.setDrain(ratePerContainer)
-    drainRate = math.max(0, ratePerContainer or 0)
-    drainRemainder = 0
-    drainTaken = 0
-    drainIndex = 0
+    storage.stressTest = storage.stressTest or {}
+    local state = storage.stressTest
+    state.drainRate = math.max(0, math.min(ratePerContainer or 0, MAX_DRAIN_RATE))
+    state.drainRemainder = 0
+    state.drainTaken = 0
+    state.drainIndex = 0
 
     local targets, itemName = discoverDrainTargets()
-    storage.stressTest = storage.stressTest or {}
-    storage.stressTest.drainChests = targets
-    storage.stressTest.busItem = itemName
+    state.drainChests = targets
+    state.busItem = itemName
 
     local zeroed = 0
     for _, obj in pairs(storage.entityTable or {}) do
@@ -145,41 +148,40 @@ function StressTest.setDrain(ratePerContainer)
     end
 
     return string.format("drain=%.2f items/s per container, found=%d containers, item=%s, skip counters zeroed on %d buses",
-        drainRate, #targets, tostring(itemName), zeroed)
+        state.drainRate, #targets, tostring(itemName), zeroed)
 end
 
 --Takes the drained items out of the containers. Called from the mod's own tick.
 function StressTest.tick()
-    if drainRate <= 0 then return end
+    local state = storage.stressTest
+    if state == nil or (state.drainRate or 0) <= 0 then return end
 
-    local state = storage.stressTest or {}
     local targets = state.drainChests or {}
     local count = #targets
     local itemName = state.busItem
     if count == 0 or itemName == nil then return end
 
-    drainRemainder = drainRemainder + (drainRate * count) / 60
-    local take = math.floor(drainRemainder)
+    state.drainRemainder = (state.drainRemainder or 0) + (state.drainRate * count) / 60
+    local take = math.floor(state.drainRemainder)
     if take <= 0 then return end
-    drainRemainder = drainRemainder - take
+    state.drainRemainder = state.drainRemainder - take
 
     for _ = 1, take do
-        drainIndex = drainIndex % count + 1
-        local chest = targets[drainIndex]
+        state.drainIndex = (state.drainIndex or 0) % count + 1
+        local chest = targets[state.drainIndex]
         if chest ~= nil and chest.valid == true then
             local inv = chest.get_inventory(defines.inventory.chest)
             --No pcall on purpose: a drain that silently does nothing would read as
             --"the rate has no effect" and send the next step the wrong way.
-            drainTaken = drainTaken + inv.remove{name = itemName, count = 1}
+            state.drainTaken = (state.drainTaken or 0) + inv.remove{name = itemName, count = 1}
         end
     end
 end
 
 function StressTest.drainStatus()
     local state = storage.stressTest or {}
-    local rate = drainRate
     return string.format("drain=%.2f items/s per container, containers=%d, removed=%d, item=%s",
-        rate, #(state.drainChests or {}), drainTaken, tostring(state.busItem))
+        state.drainRate or 0, #(state.drainChests or {}), state.drainTaken or 0, tostring(state.busItem))
 end
 
 function StressTest.build(stationCount, drivesPerStation, busesPerStation, busKind, externalIo)

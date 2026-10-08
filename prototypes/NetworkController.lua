@@ -26,7 +26,9 @@ cE0.type = "electric-energy-interface"
 cE0.name = Constants.NetworkController.main.name
 cE0.icon = Constants.NetworkController.main.itemIcon
 cE0.icon_size = 256
-cE0.flags = {"placeable-neutral", "player-creation"}
+--not-rotatable since B-21 made the footprint 3 x 4: a rotation would turn the box to
+--4 x 3 while the single picture stays upright.
+cE0.flags = {"placeable-neutral", "player-creation", "not-rotatable"}
 cE0.minable = {mining_time = 0.2, result = Constants.NetworkController.main.name}
 cE0.max_health = 350
 cE0.dying_explosion = "medium-explosion"

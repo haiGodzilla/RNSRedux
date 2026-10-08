@@ -142,7 +142,9 @@ function IIO3:copy_settings(obj)
     self.supportModified = obj.supportModified
     self.whitelistBlacklist = obj.whitelistBlacklist
     self.io = obj.io
-    self.enabler = obj.enabler
+    --A copy: the GUI edits the enabler in place, so a shared table made a change on one
+    --bus show up on every bus pasted from it.
+    self.enabler = Util.tagEnabler(obj.enabler, self.enabler, nil)
     self.stackSize = obj.stackSize
 
     self.circuitCondition1 = obj.circuitCondition1
@@ -186,6 +188,7 @@ function IIO3:serialize_settings()
     tags["guiFilters"] = self.guiFilters
     tags["supportModified"] = self.supportModified
     tags["whitelistBlacklist"] = self.whitelistBlacklist
+    tags["circuitCondition1"] = self.circuitCondition1
     tags["circuitCondition2"] = self.circuitCondition2
     tags["override_stacksize"] = self.override_stacksize
     tags["io"] = self.io
@@ -196,19 +199,27 @@ function IIO3:serialize_settings()
     return tags
 end
 
+--Every field is checked; a missing or foreign value keeps what new() set. See
+--Util.tagNumber for why.
 function IIO3:deserialize_settings(tags)
-    self.color = tags["color"]
-    self.supportModified = tags["supportModified"]
-    self.whitelistBlacklist = tags["whitelistBlacklist"]
-    self.io = tags["io"]
-    self.enabler = tags["enabler"]
-    self.stackSize = tags["stackSize"]
-    
-    self.circuitCondition1 = tags["circuitCondition1"]
-    self.circuitCondition2 = tags["circuitCondition2"]
-    self.override_stacksize = tags["override_stackize"]
-    
-    self.guiFilters = tags["guiFilters"]
+    self.color = Util.tagChoice(tags["color"], self.color, Constants.NetworkCables.Cables)
+    self.supportModified = Util.tagBoolean(tags["supportModified"], self.supportModified)
+    self.whitelistBlacklist = Util.tagChoice(tags["whitelistBlacklist"], self.whitelistBlacklist, Util.TagChoices.whitelistBlacklist)
+    self.io = Util.tagChoice(tags["io"], self.io, Util.TagChoices.busIO)
+    self.enabler = Util.tagEnabler(tags["enabler"], self.enabler, nil)
+    --Not above what research allows: the stack size is the bus's throughput. 0 is a
+    --value the text field sets on purpose: it stops the bus.
+    self.stackSize = Util.tagNumber(tags["stackSize"], self.stackSize, 0, storage.IIOMultiplier)
+
+    self.circuitCondition1 = Util.tagChoice(tags["circuitCondition1"], self.circuitCondition1, Util.TagChoices.circuitCondition1)
+    self.circuitCondition2 = Util.tagCircuitCondition2(tags["circuitCondition2"], self.circuitCondition2)
+    self.override_stacksize = Util.tagBoolean(tags["override_stacksize"], self.override_stacksize)
+
+    local guiFilters = type(tags["guiFilters"]) == "table" and tags["guiFilters"] or {}
+    self.guiFilters = {
+        [1] = Util.tagPrototypeName(guiFilters[1], "item"),
+        [2] = Util.tagPrototypeName(guiFilters[2], "item")
+    }
     self:set_icons(1, self.guiFilters[1] ~= "" and self.guiFilters[1] or nil)
     self:set_icons(2, self.guiFilters[2] ~= "" and self.guiFilters[2] or nil)
 
@@ -227,7 +238,7 @@ function IIO3:deserialize_settings(tags)
     end
     self.filters.index = self.filters.max ~= 0 and 1 or 0
 
-    self.priority = tags["priority"]
+    self.priority = Util.tagPriority(tags["priority"], self.priority)
     self:generateModeIcon()
 end
 
@@ -468,7 +479,7 @@ function IIO3:IO()
     local transportCapacity = self.stackSize * Constants.Settings.RNS_BaseItemIO_TransferCapacity--*storage.IIOMultiplier
 
     if transportCapacity <= 0 then self.processed = true return end
-    if self.circuitCondition1 == "filter" and (self.enablerCombinator.get_circuit_network(defines.wire_type.red) ~= nil or self.enablerCombinator.get_circuit_network(defines.wire_type.green) ~= nil) then
+    if self.circuitCondition1 == "filter" and (Util.getCombinatorNetwork(self.enablerCombinator) ~= nil) then
         local merged_signals = Util.getCombinatorSignals(self.enablerCombinator)
         local s1 = nil
         local s2 = nil
@@ -596,7 +607,9 @@ function IIO3:reset_focused_entity()
     end
 
     if nearest == nil then return end
-    if Constants.Settings.RNS_TypesWithContainer[nearest.type] == true then
+    --Same guard as the external bus (B-28): generator is listed as having a container
+    --but has no inventory mapping, and indexing the missing mapping threw.
+    if Constants.Settings.RNS_TypesWithContainer[nearest.type] == true and Constants.Settings.RNS_Inventory_Types[nearest.type] ~= nil then
         self.focusedEntity.thisEntity = nearest
         self.focusedEntity.oldPosition = nearest.position
         for _, inv_index in pairs(Constants.Settings.RNS_Inventory_Types[nearest.type].input) do
@@ -894,17 +907,17 @@ function IIO3:getTooltips(guiTable, mainFrame, justCreated)
         guiTable.vars.filter2.elem_value = self.guiFilters[2]
     end
     
-    if self.circuitCondition1 == "enable/disable" and self.enabler.filter ~= nil and (self.enablerCombinator.get_circuit_network(defines.wire_type.red) ~= nil or self.enablerCombinator.get_circuit_network(defines.wire_type.green) ~= nil) then
+    if self.circuitCondition1 == "enable/disable" and self.enabler.filter ~= nil and (Util.getCombinatorNetwork(self.enablerCombinator) ~= nil) then
         guiTable.vars.enabler.elem_value = self.enabler.filter
     end
 
-    if self.circuitCondition2.state and self.circuitCondition2.filter ~= nil and (self.enablerCombinator.get_circuit_network(defines.wire_type.red) ~= nil or self.enablerCombinator.get_circuit_network(defines.wire_type.green) ~= nil) then
+    if self.circuitCondition2.state and self.circuitCondition2.filter ~= nil and (Util.getCombinatorNetwork(self.enablerCombinator) ~= nil) then
         guiTable.vars.enabler1.elem_value = self.circuitCondition2.filter
     end
 end
 
 function IIO3:set_icons(index, name)
-    self.combinator.get_or_create_control_behavior().set_signal(index, name ~= nil and {signal={type="item", name=name}, count=1} or nil)
+    Util.setCombinatorSignal(self.combinator, index, name ~= nil and {signal={type="item", name=name}, count=1} or nil)
 end
 
 function IIO3.interaction(event, RNSPlayer)
@@ -1059,12 +1072,9 @@ function IIO3.interaction(event, RNSPlayer)
         local priority = Constants.Settings.RNS_Priorities[event.element.selected_index]
         if priority ~= io.priority then
             io.priority = priority
-            local oldP = 1+Constants.Settings.RNS_Max_Priority-io.priority
-            io.priority = priority
-            if io.networkController ~= nil and io.networkController.valid == true and io.networkController.network.ItemIOTable[oldP][io.io][io.entID] ~= nil then
-                io.networkController.network.ItemIOTable[oldP][io.io][io.entID] = nil
-                io.networkController.network.ItemIOTable[1+Constants.Settings.RNS_Max_Priority-priority][io.io][io.entID] = io
-            end
+            --The refresh files the bus under its new priority. Moving it by hand never
+            --ran (valid is a method, not a field) and indexed a list of ids by id.
+            BaseNet.update_network_controller(io.networkController)
             io.processed = false
         end
 		return
@@ -1086,11 +1096,10 @@ function IIO3.interaction(event, RNSPlayer)
         local id = event.element.tags.ID
 		local io = storage.entityTable[id]
 		if io == nil then return end
-        local from = io.io
         local to = event.element.switch_state == "left" and "input" or "output"
-        if io.networkController ~= nil then
-            io.networkController.network:transfer_io_mode(io, "item", from, to)
-        end
+        --The refresh files the bus under its new mode. Adding it to the new list by hand
+        --as well (transfer_io_mode) only left a duplicate for the refresh to clean up.
+        BaseNet.update_network_controller(io.networkController)
         io.io = to
         io.processed = false
         io:generateModeIcon()

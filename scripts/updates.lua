@@ -44,7 +44,11 @@ function UpdateSys.update(event)
     for _, obj in pairs(storage.updateTable) do
         if valid(obj) == true and obj.update ~= nil then
             if Util.safeCall(obj.update, obj, event) == false then
-                game.print({"gui-description.RNS_UpdateSysEntity_Failed", obj.thisEntity.name})
+                --This runs outside safeCall: reading a field of an entity or player that
+                --became invalid would throw again and end the loop for every controller.
+                local subject = obj.thisEntity
+                local name = (subject ~= nil and subject.valid == true) and subject.name or "?"
+                game.print({"gui-description.RNS_UpdateSysEntity_Failed", name})
             end
         end
     end

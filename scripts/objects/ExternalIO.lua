@@ -165,15 +165,22 @@ function EIO:clear_cache()
     self.cache = nil
     self.storedAmount = 0
     self.capacity = 0
+    --The skip guard in update compares against the last container's total; a new
+    --cache must be read in full on the next sweep.
+    self.seenCount = nil
+    self.rescanCounter = nil
 end
 
 function EIO:flush_cache(type)
     if self.cache == nil then return end
     if self.networkController ~= nil and BaseNet.exists_in_network(self.networkController, self.thisEntity.unit_number) then
         if type == nil then type = self.type end
+        --Mirrors addConnectables: a pure output bus has its capacity booked, not its
+        --contents, so only the partition is taken back.
+        local bookedContents = self.io ~= "output"
         if type == "item" then
             self.networkController.network:delta_ItemExternal_Partition(-self.storedAmount, -self.capacity)
-            for i = 1, #self.cache do
+            for i = 1, bookedContents and #self.cache or 0 do
                 local cached = self.cache[i]
                 if cached.name ~= "RNS_Empty" then
                     self.networkController.network:decrease_tracked_item_count(cached.name, cached.count)
@@ -183,7 +190,7 @@ function EIO:flush_cache(type)
         else
             self.networkController.network:delta_FluidExternal_Partition(-self.storedAmount, -self.capacity)
             local cached = self.cache[1]
-            if cached ~= nil then
+            if cached ~= nil and bookedContents then
                 self.networkController.network:decrease_tracked_fluid_amount(cached.name, cached.amount)
                 self.networkController.network:remove_fluid_from_interface_cache(cached)
             end
@@ -191,24 +198,30 @@ function EIO:flush_cache(type)
     end
 end
 
+--The exact mirror of flush_cache: books a freshly built cache into the network. Used
+--after reset_focused_entity, so a new container -- or the same one found again -- is
+--booked in O(slots). A full refresh did this before, which a train arriving in front
+--of the bus triggered once per wagon (B-42); the same-container case was not booked
+--at all (B-43).
 function EIO:inject_cache()
-    if self.cache == nil or #self.cache <= 0 then return end
+    if self.cache == nil then return end
     if self.networkController ~= nil and BaseNet.exists_in_network(self.networkController, self.thisEntity.unit_number) then
+        local bookedContents = self.io ~= "output"
         if self.type == "item" then
             self.networkController.network:delta_ItemExternal_Partition(self.storedAmount, self.capacity)
-            for i = 1, #self.cache do
+            for i = 1, bookedContents and #self.cache or 0 do
                 local cached = self.cache[i]
                 if cached.name ~= "RNS_Empty" then
                     self.networkController.network:increase_tracked_item_count(cached.name, cached.count)
-                    self.networkController.network:add_item_from_interface_cache(cached)
+                    self.networkController.network:add_item_to_interface_cache(cached)
                 end
             end
         else
             self.networkController.network:delta_FluidExternal_Partition(self.storedAmount, self.capacity)
             local cached = self.cache[1]
-            if cached ~= nil then
+            if cached ~= nil and bookedContents then
                 self.networkController.network:increase_tracked_fluid_amount(cached.name, cached.amount)
-                self.networkController.network:add_fluid_from_interface_cache(cached)
+                self.networkController.network:add_fluid_to_interface_cache(cached)
             end
         end
     end
@@ -218,15 +231,22 @@ function EIO:init_cache()
     if self.cache ~= nil then return false end
     if self.type == "item" and self.focusedEntity.inventory.output.max ~= 0 then
         self.cache = {}
+        --values holds the inventory ids reset_focused_entity found; i is only a position
+        --in that list. get_inventory(i) read the fuel inventory of an electric machine,
+        --which does not exist, and the nil threw on every sweep (B-39). Several output
+        --inventories still share one slot-indexed cache; that is the larger fix.
         for i = 1, self.focusedEntity.inventory.output.max do
-            local inv = self.focusedEntity.thisEntity.get_inventory(i)
-            if BaseNet.inventory_is_sortable(inv) then inv.sort_and_merge() end
-            for j = 1, #inv do
-                local itemstack = Itemstack:new(inv[j]) or {name = "RNS_Empty", count = 0}
-                self.cache[j] = itemstack
-                self.storedAmount = self.storedAmount + (itemstack.count <= 0 and 1 or 0)
+            local inv = self.focusedEntity.thisEntity.get_inventory(self.focusedEntity.inventory.output.values[i])
+            if inv ~= nil then
+                if BaseNet.inventory_is_sortable(inv) then inv.sort_and_merge() end
+                for j = 1, #inv do
+                    local itemstack = Itemstack:new(inv[j]) or {name = "RNS_Empty", count = 0}
+                    self.cache[j] = itemstack
+                    --Occupied slots, as update counts them; this used to count the empty ones.
+                    self.storedAmount = self.storedAmount + (itemstack.count > 0 and 1 or 0)
+                end
+                self.capacity = self.capacity + #inv
             end
-            self.capacity = self.capacity + #inv
         end
     elseif self.type == "fluid" and self.focusedEntity.fluid_box.index ~= nil and string.match(self.focusedEntity.fluid_box.flow, "output") then
         local fluid = self.focusedEntity.thisEntity.fluidbox[self.focusedEntity.fluid_box.index]
@@ -238,6 +258,22 @@ function EIO:init_cache()
         self.capacity = self.focusedEntity.thisEntity.fluidbox.get_capacity(self.focusedEntity.fluid_box.index)
     end
     return true
+end
+
+--The two measurement switches /rns-bus-skip and /rns-bus-scan set. They live in
+--storage, not in Constants: a client joining a multiplayer game reads Constants from
+--the file, so a value changed there at runtime made host and client sweep
+--differently.
+function EIO.rescanPeriod()
+    local overrides = storage.debugOverrides
+    if overrides ~= nil and overrides.rescanPeriod ~= nil then return overrides.rescanPeriod end
+    return Constants.Settings.RNS_ExternalStorage_Rescan
+end
+
+function EIO.fastScanEnabled()
+    local overrides = storage.debugOverrides
+    if overrides ~= nil and overrides.fastScan ~= nil then return overrides.fastScan end
+    return Constants.Settings.RNS_ExternalBus_FastScan
 end
 
 --The bus runs on one tick in RNS_ExternalStorage_Tick, phased by its own unit
@@ -286,12 +322,12 @@ function EIO:update(network, periodic)
         and self.focusedEntity.inventory.output.max ~= 0 then
         local total = 0
         for i = 1, self.focusedEntity.inventory.output.max do
-            local inv = self.focusedEntity.thisEntity.get_inventory(i)
+            local inv = self.focusedEntity.thisEntity.get_inventory(self.focusedEntity.inventory.output.values[i])
             if inv ~= nil then total = total + inv.get_item_count() end
         end
         self.rescanCounter = (self.rescanCounter or 0) + 1
         if total == self.seenCount
-            and self.rescanCounter < Constants.Settings.RNS_ExternalStorage_Rescan then
+            and self.rescanCounter < EIO.rescanPeriod() then
             self.skippedSweeps = (self.skippedSweeps or 0) + 1
             return
         end
@@ -312,8 +348,12 @@ function EIO:update(network, periodic)
     self.capacity = 0
 
     if self.type == "item" and self.focusedEntity.inventory.output.max ~= 0 then
+        --Read once per sweep, not once per slot: this loop is the bus's measured cost.
+        local fastScan = EIO.fastScanEnabled()
         for i = 1, self.focusedEntity.inventory.output.max do
-            local inv = self.focusedEntity.thisEntity.get_inventory(i)
+            --See init_cache: values[i] is the inventory id, i only its position.
+            local inv = self.focusedEntity.thisEntity.get_inventory(self.focusedEntity.inventory.output.values[i])
+            if inv == nil then goto nextInventory end
             if BaseNet.inventory_is_sortable(inv) then inv.sort_and_merge() end
             for j = 1, #inv do
                 --Fast path: most sweeps find every slot exactly as it was. Four cheap
@@ -327,7 +367,7 @@ function EIO:update(network, periodic)
                 --not change while it lies there.
                 --Anything that does not match falls through to the unchanged path
                 --below, so a miss only costs the comparison.
-                if Constants.Settings.RNS_ExternalBus_FastScan then
+                if fastScan then
                     local cachedSlot = self.cache[j]
                     if cachedSlot ~= nil then
                         --One reference to the slot, reused: every inv[j] is a fresh
@@ -385,13 +425,17 @@ function EIO:update(network, periodic)
                     self.cache[j] = itemstack
                 elseif cached.count ~= itemstack.count then
                     local delta = itemstack.count - cached.count
+                    --The interface cache gets the difference, like the counter; handing it
+                    --the whole stack booked 11 for a slot that went from 10 to 11.
+                    local change = itemstack:copy()
+                    change.count = math.abs(delta)
                     if delta > 0 then
                         network:increase_tracked_item_count(itemstack.name, delta)
-                        network:add_item_to_interface_cache(itemstack)
+                        network:add_item_to_interface_cache(change)
                         cached.count = cached.count + delta
                     else
                         network:decrease_tracked_item_count(itemstack.name, math.abs(delta))
-                        network:remove_item_from_interface_cache(itemstack)
+                        network:remove_item_from_interface_cache(change)
                         cached.count = cached.count - math.abs(delta)
                     end
                     self.cache[j] = itemstack
@@ -401,7 +445,9 @@ function EIO:update(network, periodic)
             self.capacity = self.capacity + #inv
             
             if #self.cache > #inv then
-                for j = #self.cache, #inv, -1 do
+                --Only the slots beyond the inventory; the lower bound #inv took the last
+                --valid slot out as well.
+                for j = #self.cache, #inv + 1, -1 do
                     local cached = self.cache[j]
                     if cached.name ~= "RNS_Empty" then
                         network:decrease_tracked_item_count(cached.name, cached.count)
@@ -410,6 +456,7 @@ function EIO:update(network, periodic)
                     self.cache[j] = {name="RNS_Empty", count=0}
                 end
             end
+            ::nextInventory::
         end
     elseif self.type == "fluid" and self.focusedEntity.fluid_box.index ~= nil and string.match(self.focusedEntity.fluid_box.flow, "output") then
         local fluid = self.focusedEntity.thisEntity.fluidbox[self.focusedEntity.fluid_box.index]
@@ -425,7 +472,7 @@ function EIO:update(network, periodic)
             network:increase_tracked_fluid_amount(fluid.name, fluid.amount)
             network:add_fluid_to_interface_cache(fluid)
             self.cache[1] = fluid
-        elseif fluid.name ~= cached.name or fluid.tempurature ~= cached.tempurature then
+        elseif fluid.name ~= cached.name or fluid.temperature ~= cached.temperature then
             network:decrease_tracked_fluid_amount(cached.name, cached.amount)
             network:remove_fluid_from_interface_cache(cached)
             network:increase_tracked_fluid_amount(fluid.name, fluid.amount)
@@ -433,13 +480,15 @@ function EIO:update(network, periodic)
             self.cache[1] = fluid
         elseif fluid.amount ~= cached.amount then
             local delta = fluid.amount - cached.amount
+            --Only the difference, as for items.
+            local change = {name = fluid.name, amount = math.abs(delta), temperature = fluid.temperature}
             if delta > 0 then
                 network:increase_tracked_fluid_amount(fluid.name, delta)
-                network:add_fluid_to_interface_cache(fluid)
+                network:add_fluid_to_interface_cache(change)
                 cached.amount = cached.amount + delta
             else
                 network:decrease_tracked_fluid_amount(fluid.name, math.abs(delta))
-                network:remove_fluid_from_interface_cache(fluid)
+                network:remove_fluid_from_interface_cache(change)
                 cached.amount = cached.amount - math.abs(delta)
             end
         end
@@ -457,13 +506,18 @@ end
 function EIO:validate()
     if self.cache == nil then return end
     for k, v in pairs(self.cache) do
+        --RNS_Empty marks an empty slot and is no prototype. Dropping it would punch a hole
+        --into the slot-indexed cache, which every later #self.cache relies on.
+        if v.name == "RNS_Empty" then goto continue end
         if self.type == "fluid" and prototypes.fluid[v.name] == nil then
             self.storedAmount = self.storedAmount - v.amount
             self.cache[k] = nil
         elseif self.type == "item" and prototypes.item[v.name] == nil then
-            self.storedAmount = self.storedAmount - v.count
-            self.cache[k] = nil
+            --storedAmount counts occupied slots for items (init_cache, update).
+            self.storedAmount = self.storedAmount - 1
+            self.cache[k] = {name = "RNS_Empty", count = 0}
         end
+        ::continue::
     end
 end
 
@@ -473,7 +527,9 @@ function EIO:copy_settings(obj)
     self.whitelistBlacklist = obj.whitelistBlacklist
     self.io = obj.io
     self.type = obj.type
-    self.enabler = obj.enabler
+    --A copy: the GUI edits the enabler in place, so a shared table made a change on one
+    --bus show up on every bus pasted from it.
+    self.enabler = Util.tagEnabler(obj.enabler, self.enabler, nil)
 
     self.filters = {
         item = obj.filters.item,
@@ -497,7 +553,7 @@ function EIO:copy_settings(obj)
 end
 
 function EIO:set_icons(index, name, type)
-    self.combinator.get_or_create_control_behavior().set_signal(index, name ~= nil and {signal={type=type, name=name}, count=1} or nil)
+    Util.setCombinatorSignal(self.combinator, index, name ~= nil and {signal={type=type, name=name}, count=1} or nil)
 end
 
 function EIO:serialize_settings()
@@ -516,21 +572,34 @@ function EIO:serialize_settings()
     return tags
 end
 
+--Every field is checked; a missing or foreign value keeps what new() set. See
+--Util.tagNumber for why.
 function EIO:deserialize_settings(tags)
-    self.color = tags["color"]
-    self.onlyModified = tags["onlyModified"]
-    self.whitelistBlacklist = tags["whitelistBlacklist"]
-    self.io = tags["io"]
-    self.type = tags["type"]
-    self.enabler = tags["enabler"]
+    self.color = Util.tagChoice(tags["color"], self.color, Constants.NetworkCables.Cables)
+    self.onlyModified = Util.tagBoolean(tags["onlyModified"], self.onlyModified)
+    self.whitelistBlacklist = Util.tagChoice(tags["whitelistBlacklist"], self.whitelistBlacklist, Util.TagChoices.whitelistBlacklist)
+    self.io = Util.tagChoice(tags["io"], self.io, Constants.Settings.RNS_Modes)
+    self.type = Util.tagChoice(tags["type"], self.type, Constants.Settings.RNS_Types)
+    self.enabler = Util.tagEnabler(tags["enabler"], self.enabler, nil)
 
-    self.filters = tags["filters"]
-    self.guiFilters = tags["guiFilters"]
+    --The filter sets are rebuilt from the GUI filters the way the filter GUI does it,
+    --rather than taken from the tag.
+    local guiFilters = type(tags["guiFilters"]) == "table" and tags["guiFilters"] or {}
+    self.guiFilters = {item = {}, fluid = {}}
+    self.filters = {item = {}, fluid = {}}
+    for _, kind in pairs({"item", "fluid"}) do
+        local given = type(guiFilters[kind]) == "table" and guiFilters[kind] or {}
+        for i = 1, 10 do
+            local name = Util.tagPrototypeName(given[i], kind)
+            self.guiFilters[kind][i] = name
+            if name ~= "" and kind == self.type then self.filters[kind][name] = true end
+        end
+    end
     for i=1, 10 do
         self:set_icons(i, self.guiFilters[self.type][i] ~= "" and self.guiFilters[self.type][i] or nil, self.type)
     end
 
-    self.priority = tags["priority"]
+    self.priority = Util.tagPriority(tags["priority"], self.priority)
     self:generateModeIcon()
 end
 
@@ -650,7 +719,9 @@ function EIO:reset_focused_entity()
             end
         end
     end
-    if Constants.Settings.RNS_TypesWithContainer[nearest.type] == true then
+    --A type can be listed as having a container without an inventory mapping (generator);
+    --indexing the missing mapping threw on every sweep.
+    if Constants.Settings.RNS_TypesWithContainer[nearest.type] == true and Constants.Settings.RNS_Inventory_Types[nearest.type] ~= nil then
         self.focusedEntity.thisEntity = nearest
         self.focusedEntity.oldPosition = nearest.position
         for _, inv_index in pairs(Constants.Settings.RNS_Inventory_Types[nearest.type].input) do
@@ -669,6 +740,11 @@ function EIO:reset_focused_entity()
         if self.focusedEntity.inventory.output.max ~= 0 then self.focusedEntity.inventory.output.index = 1 end
     end
     self:init_cache()
+    --flush_cache above took the old target out of the books; this puts the new one --
+    --or the same one, found again -- back in. Incremental on purpose: vehicles count as
+    --containers, so a train at the bus resets it once per wagon, and a full refresh
+    --per wagon is O(network) (docs/ups-architektur.md 6b).
+    self:inject_cache()
 end
 
 --Makes sure the focused entity is still in front or else try to search for a new one
@@ -916,7 +992,7 @@ function EIO:getTooltips(guiTable, mainFrame, justCreated)
             GuiApi.add_checkbox(guiTable, "RNS_NetworkCableIO_External_Modified", settingsFrame, {"gui-description.RNS_Modified"}, {"gui-description.RNS_Modified_description"}, self.onlyModified, false, {ID=self.thisEntity.unit_number})
         end
 
-        if self.enablerCombinator.get_circuit_network(defines.wire_type.red) ~= nil or self.enablerCombinator.get_circuit_network(defines.wire_type.green) ~= nil then
+        if Util.getCombinatorNetwork(self.enablerCombinator) ~= nil then
             local enableFrame = GuiApi.add_frame(guiTable, "EnableFrame", bottomFrame, "vertical")
             enableFrame.style = Constants.Settings.RNS_Gui.frame_1
             enableFrame.style.vertically_stretchable = true
@@ -946,7 +1022,7 @@ function EIO:getTooltips(guiTable, mainFrame, justCreated)
             guiTable.vars.filters[self.type][i].elem_value = self.guiFilters[self.type][i]
         end
     end
-    if self.enabler.filter ~= nil and (self.enablerCombinator.get_circuit_network(defines.wire_type.red) ~= nil or self.enablerCombinator.get_circuit_network(defines.wire_type.green) ~= nil) then
+    if self.enabler.filter ~= nil and (Util.getCombinatorNetwork(self.enablerCombinator) ~= nil) then
         guiTable.vars.enabler.elem_value = self.enabler.filter
     end
 end
@@ -987,10 +1063,10 @@ function EIO.interaction(event, RNSPlayer)
 		if io == nil then return end
         if event.element.elem_value ~= nil then
             io.guiFilters[event.element.tags.type][event.element.tags.index] = event.element.elem_value
-            io.combinator.get_or_create_control_behavior().set_signal(event.element.tags.index, {signal={type=event.element.tags.type, name=event.element.elem_value}, count=1})
+            Util.setCombinatorSignal(io.combinator, event.element.tags.index, {signal={type=event.element.tags.type, name=event.element.elem_value}, count=1})
         else
             io.guiFilters[event.element.tags.type][event.element.tags.index] = ""
-            io.combinator.get_or_create_control_behavior().set_signal(event.element.tags.index, nil)
+            Util.setCombinatorSignal(io.combinator, event.element.tags.index, nil)
         end
 
         io.filters = {
@@ -1023,13 +1099,15 @@ function EIO.interaction(event, RNSPlayer)
 		if io == nil then return end
         local mode = Constants.Settings.RNS_ModeN[event.element.selected_index]
         if mode ~= io.io then
+            --Re-booked at once under the new mode: flush_cache and inject_cache decide by
+            --io whether the contents count, so the flush has to run with the old mode and
+            --the inject with the new one. Without that, a reset before the refresh took
+            --out contents an output bus never booked. The refresh still re-files the bus.
+            io:flush_cache()
             io.io = mode
+            io:inject_cache()
             io:generateModeIcon()
-            if mode == "input" then
-                io:inject_cache()
-            elseif mode == "output" then
-                io:flush_cache()
-            end
+            BaseNet.update_network_controller(io.networkController)
         end
 		return
     elseif string.match(event.element.name, "RNS_NetworkCableIO_External_Type") then
@@ -1038,13 +1116,16 @@ function EIO.interaction(event, RNSPlayer)
 		if io == nil then return end
         local type = Constants.Settings.RNS_TypeN[event.element.selected_index]
         if type ~= io.type then
+            --Un-booked with the old type at once, so the books are right until the refresh
+            --below files the bus under its new type; clear_cache makes init_cache read it.
             io:flush_cache(io.type)
             io:clear_cache()
             io.type = type
+            BaseNet.update_network_controller(io.networkController)
             RNSPlayer:push_varTable(id, true)
             for i=1, 10 do
                 local filter = io.guiFilters[io.type][i]
-                io.combinator.get_or_create_control_behavior().set_signal(i, filter ~= "" and {signal={type=io.type, name=filter}, count=1} or nil)
+                Util.setCombinatorSignal(io.combinator, i, filter ~= "" and {signal={type=io.type, name=filter}, count=1} or nil)
             end
         end
 		return
@@ -1054,12 +1135,10 @@ function EIO.interaction(event, RNSPlayer)
 		if io == nil then return end
         local priority = Constants.Settings.RNS_Priorities[event.element.selected_index]
         if priority ~= io.priority then
-            local oldP = 1+Constants.Settings.RNS_Max_Priority-io.priority
             io.priority = priority
-            if io.networkController ~= nil and io.networkController.valid == true then
-                io.networkController.network.ExternalIOTable[oldP][io.entID] = nil
-                io.networkController.network.ExternalIOTable[1+Constants.Settings.RNS_Max_Priority-priority][io.entID] = io
-            end
+            --The refresh files the bus under its new priority. Moving it by hand never
+            --ran (valid is a method, not a field) and skipped the per-type level.
+            BaseNet.update_network_controller(io.networkController)
         end
 		return
     elseif string.match(event.element.name, "RNS_NetworkCableIO_External_WhitelistBlacklist") then

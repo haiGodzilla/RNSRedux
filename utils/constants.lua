@@ -12,12 +12,14 @@ Constants.Settings = {
     RNS_Priorities = {},
     RNS_WirelessTransmitter_Color = "RNS_WirelessTransmitter_Area_Color",
     RNS_StorageDrive_Whitelist = "RNS_StorageDrive_Whitelist",
+    --Filter icons on the drive. B-21 moved the drive body down by 0.48828 tiles
+    --(shift -138/512 -> 0.21875); the icons follow by the same amount.
     RNS_DriveSprite_Offset = {
-        [1] = {0, -0.45},
-        [2] = {-0.5, -1.2},
-        [3] = {0.5, -1.2},
-        [4] = {-0.5, 0.3},
-        [5] = {0.5, 0.3},
+        [1] = {0, -0.45 + 0.48828},
+        [2] = {-0.5, -1.2 + 0.48828},
+        [3] = {0.5, -1.2 + 0.48828},
+        [4] = {-0.5, 0.3 + 0.48828},
+        [5] = {0.5, 0.3 + 0.48828},
     },
     RNS_ColorG = {
         [1] = {"gui-description.RNS_RED"},
@@ -149,8 +151,8 @@ Constants.Settings = {
                 defines.inventory.rocket_silo_rocket,
                 defines.inventory.rocket_silo_input,
             },
+            --2.0 has no rocket_silo_result; the entry evaluated to nil and was skipped.
             output = {
-                defines.inventory.rocket_silo_result,
                 defines.inventory.rocket_silo_output,
             }
         },
@@ -246,13 +248,12 @@ Constants.Settings = {
                 defines.inventory.roboport_material,
             }
         },
+        --2.0 removed defines.inventory.rocket, so both lists were already empty in
+        --practice (the nil entry is skipped). Kept empty on purpose until the rocket's
+        --2.0 inventory is mapped.
         ["rocket-silo-rocket"] = {
-            input = {
-                defines.inventory.rocket,
-            },
-            output = {
-                defines.inventory.rocket,
-            }
+            input = {},
+            output = {}
         },
         ["logistic-container"] = {
             input = {
@@ -1294,7 +1295,7 @@ Constants.Recipies = {
             {Constants.Drives.FluidDrive.FluidDrive25k.name, 3},
             {"copper-cable", 4},
             {Constants.Intermediates.CalculatorProcessor.name, 4},
-            {"empty-barrel", 2}
+            {"barrel", 2}
         },
         count = 1
     },
@@ -1307,7 +1308,7 @@ Constants.Recipies = {
             {Constants.Drives.FluidDrive.FluidDrive100k.name, 3},
             {Constants.Intermediates.LogicProcessor.name, 4},
             {"plastic-bar", 4},
-            {"empty-barrel", 2}
+            {"barrel", 2}
         },
         count = 1
     },
@@ -1320,7 +1321,7 @@ Constants.Recipies = {
             {Constants.Drives.FluidDrive.FluidDrive400k.name, 3},
             {Constants.Intermediates.EngineeringProcessor.name, 4},
             {"low-density-structure", 4},
-            {"empty-barrel", 2}
+            {"barrel", 2}
         },
         count = 1
     }
@@ -2412,4 +2413,22 @@ Constants.Technologies = {
         }
     },
 }
+--Wireless, the player port, the transmitter pair and the detector are M5, not part of
+--the first release (docs/projektstand.md, section 3), and parts of them still use 1.1
+--behaviour. Read by both stages: prototypes/Technologies.lua disables these
+--technologies for new games, and onInit (also run on on_configuration_changed)
+--disables them for forces of an existing save, where a technology's enabled flag is
+--per-force runtime state that the prototype no longer reaches. M5 only has to empty
+--this list.
+Constants.DeferredToM5 = {
+    ["RNS-circuit-handling"] = true,
+    ["RNS-wireless-interaction"] = true,
+    ["RNS-personal-logistics"] = true,
+    ["RNS-long-distance-connections"] = true,
+}
+
+function Constants.isDeferredToM5(technologyName)
+    return Constants.DeferredToM5[technologyName] == true
+        or string.find(technologyName, "^RNS%-wireless%-range%-bonus%-") ~= nil
+end
 return Constants

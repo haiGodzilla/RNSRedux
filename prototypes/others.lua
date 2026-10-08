@@ -87,7 +87,11 @@ sprite7.layers = {
         filename = Constants.NetworkController.states.stableE,
         priority = "medium",
         size = 512,
-        scale = (96 * 3)/512
+        --The body went from 192/512 to 180/512 and gained a shift in B-21
+        --(prototypes/NetworkController.lua); the same factor and shift keep the
+        --overlay on it: 288 * 180/192 = 270.
+        scale = 270/512,
+        shift = {0, 0.5828}
     }
 }
 data:extend{sprite7}
@@ -100,7 +104,11 @@ sprite8.layers = {
         filename = Constants.NetworkController.states.unstableE,
         priority = "medium",
         size = 512,
-        scale = (96 * 3)/512
+        --The body went from 192/512 to 180/512 and gained a shift in B-21
+        --(prototypes/NetworkController.lua); the same factor and shift keep the
+        --overlay on it: 288 * 180/192 = 270.
+        scale = 270/512,
+        shift = {0, 0.5828}
     }
 }
 data:extend{sprite8}

@@ -7,6 +7,17 @@ function Event.initPlayer(event)
 	end
 end
 
+--The player is gone by the time this fires, so its RNSP is found by the invalid
+--LuaPlayer it holds. Without this, a new player with the same name inherited the dead
+--object.
+function Event.playerRemoved(event)
+	for _, rnsp in pairs(storage.PlayerTable) do
+		if rnsp:valid() == false then
+			rnsp:remove()
+		end
+	end
+end
+
 function Event.tick(event)
     UpdateSys.update(event)
     GUI.update()
@@ -189,7 +200,21 @@ function Event.onSettingsPasted(event)
 
 	if o2.copy_settings == nil then return end
     if o1.thisEntity.name == o2.thisEntity.name then
+		--A paste can change mode, type, priority and colour at once, like the GUI, so it
+		--is reconciled like the GUI: the external bus drops its cache (init_cache reads
+		--the new type), arms follow the new colour, and the refresh files everything
+		--anew (B-44). Before, a pasted bus could drop out of every IO list.
+		if o2.clear_cache ~= nil then
+			--Un-booked with the old type and mode before copy_settings changes them.
+			o2:flush_cache()
+			o2:clear_cache()
+		end
 		o2:copy_settings(o1)
+		if o2.createArms ~= nil then
+			o2:createArms()
+			BaseNet.postArms(o2)
+		end
+		BaseNet.update_network_controller(o2.network and o2 or o2.networkController)
     end
 end
 
@@ -286,7 +311,8 @@ function Event.on_cancelled_deconstruction(event)
     local type = entity.type
     if type == "entity-ghost" then return end
 
-	if storage.entityTable[entity.unit_number] ~= nil then
+	--Same guard as on_marked_for_deconstruction: the wireless grid has no arms.
+	if storage.entityTable[entity.unit_number] ~= nil and storage.entityTable[entity.unit_number].createArms then
 		local obj = storage.entityTable[entity.unit_number]
 		obj:createArms()
     	BaseNet.postArms(obj)
