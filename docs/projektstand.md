@@ -5,7 +5,7 @@ Einstiegspunkt für die Weiterarbeit. Technischer Plan und Begründungen:
 Dieses Dokument beantwortet „wo stehen wir, was ist verifiziert, was ist der nächste
 Schritt".
 
-Stand: Commit `975695c` (08.10.2026), Branch `port/2.0`, Version 2.0.0.
+Stand: Commit `ec55cf6` (09.10.2026), Branch `port/2.0`, Version 2.0.0.
 P0, P1, P2 und P3 sind durch. **Erste Runde Spielbetrieb gelaufen** (08.10.2026, §9.2):
 Save/Load, der Blueprint-Rundlauf (filterlos), die Settings-Paste und die
 NII-Extraktion sind grün; die Filterauswahl an den IO-Bussen war ein Regress aus dem
