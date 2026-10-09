@@ -2476,16 +2476,25 @@ aufbauen — die Zahlen ziehen mit.
 den Rohwert mit allen Nachkommastellen; die Anzeige rundet jetzt (`math.floor`), die
 Buchhaltung bleibt exakt. Test offen.
 
+**Weitere Tests (09.10.2026).** Paste mit Filter überträgt alle Eigenschaften (B-44,
+B-54 grün), ein Zug am External-Bus erzeugt keinen `max`-Ausschlag (B-42 grün), die
+Fluid-Drive-Anzeige ist ganzzahlig (B-59 grün). Der Item-Verlust-Test (B-24/B-49) blieb
+konsistent, ist aber nicht als exakte Menge gemessen. B-46 ist per GUI nicht prüfbar
+(Priorität nur −5…5); der 99er-Fall braucht einen von Hand geänderten Blueprint-String.
+Neuer Fund **B-60**: im NII verschwinden bestehende Einträge, wenn ein neuer Item-Typ
+hinzukommt.
+
 ## 10. Befunde
 
 **Die Liste der offenen und behobenen Punkte steht in `docs/bugtracker.md`** — mit
 IDs, Status und Beleg. Sie stand früher hier; die Doppelpflege hat zu Widersprüchen
 geführt, deshalb gibt es nur noch eine Quelle.
 
-Kurzfassung des Stands: **13 offene** Punkte (B-01, B-02, B-05 bis B-10, B-22, B-40,
-B-41, B-56, B-57), **30 umgesetzt, Test offen** (B-04, B-21, B-24 bis B-38, B-42 bis
-B-52, B-54, B-59), **4 als unkritisch nachgerechnet** (B-03, B-12, B-13, B-53),
-**12 behoben und getestet** (B-11, B-14 bis B-20, B-23, B-39, B-55, B-58).
+Kurzfassung des Stands: **14 offene** Punkte (B-01, B-02, B-05 bis B-10, B-22, B-40,
+B-41, B-56, B-57, B-60), **26 umgesetzt, Test offen** (B-04, B-21, B-24 bis B-38, B-43,
+B-45 bis B-52), **4 als unkritisch nachgerechnet** (B-03, B-12, B-13, B-53),
+**16 behoben und getestet** (B-11, B-14 bis B-20, B-23, B-39, B-42, B-44, B-54, B-55,
+B-58, B-59).
 
 Am 08.10.2026 lief zusätzlich die erste Runde Spielbetrieb auf der neuen Umgebung
 (§9.2). Sie hat den Stack teilweise abgenommen — Save/Load, Blueprint-Rundlauf,
