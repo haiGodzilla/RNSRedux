@@ -25,7 +25,7 @@ fünf Angaben:
 | `behoben` | behoben **und** getestet |
 | `kein Fehler` | nachgerechnet oder gemessen, unkritisch |
 
-Stand: Commit `e03d2e3` (09.10.2026), Branch `port/2.0`, Version 2.0.0. Der
+Stand: Commit `faf01e6` (09.10.2026), Branch `port/2.0`, Version 2.0.0. Der
 Maßnahmen-Stack (B-23 bis B-38) und die Behebung des Reviews (B-42 bis B-53, dazu
 B-54) sind committet und statisch geprüft; die erste Runde Spielbetrieb lief am
 08.10.2026 (`projektstand.md` §9.2) und fand B-55. Die Reihenfolge ist keine
