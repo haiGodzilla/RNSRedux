@@ -2434,6 +2434,18 @@ es ab. Behoben mit einer expliziten `normal`-Qualität. Weil `set_icons` auch in
 **mit** Filter getroffen — die beiden grünen Läufe oben waren filterlos und decken das
 nicht ab.
 
+**Nachtrag 09.10.2026: B-55 ist im Spiel bestätigt.** Der erste Retest lief noch gegen
+eine veraltete Mod-Kopie im Mod-Verzeichnis — Factorio lädt **nicht** dieses Repo,
+sondern eine Kopie; `rnssync` war nicht gelaufen. Derselbe Fehler erschien erneut und
+ließ sich damit als Deploy-Problem statt als Codefehler einordnen. Nach dem Spiegeln
+läuft die Filterauswahl, und Items fließen mit gesetztem Filter in den Ofen.
+
+**Zweiter Fund: B-56.** Ein IO-Bus direkt an einem Mining Drill tut nichts; nur
+Miner → Kiste → Bus funktioniert. Ursache ist ein Altbestand aus 1.1: der Drill steht
+in `RNS_Inventory_Types`, fehlte aber im Gate `RNS_TypesWithContainer`, das
+`reset_focused_entity` zusätzlich verlangt. Die Item-Beschreibung verspricht „chest or
+machine". Behoben mit einer Zeile; die Einschränkung bei Burner-Drills steht in B-56.
+
 ## 10. Befunde
 
 **Die Liste der offenen und behobenen Punkte steht in `docs/bugtracker.md`** — mit
@@ -2442,13 +2454,14 @@ geführt, deshalb gibt es nur noch eine Quelle.
 
 Kurzfassung des Stands: **11 offene** Punkte (B-01, B-02, B-05 bis B-10, B-22, B-40,
 B-41), **32 umgesetzt, Test offen** (B-04, B-21, B-23 bis B-39, B-42 bis B-52, B-54,
-B-55), **4 als unkritisch nachgerechnet** (B-03, B-12, B-13, B-53), **8 behoben und
-getestet** (B-11, B-14 bis B-20).
+B-56), **4 als unkritisch nachgerechnet** (B-03, B-12, B-13, B-53), **9 behoben und
+getestet** (B-11, B-14 bis B-20, B-55).
 
 Am 08.10.2026 lief zusätzlich die erste Runde Spielbetrieb auf der neuen Umgebung
 (§9.2). Sie hat den Stack teilweise abgenommen — Save/Load, Blueprint-Rundlauf,
-Settings-Paste und NII-Extraktion sind grün — und mit B-55 eine Regression gefunden,
-die die Filterauswahl an jedem IO-Bus lahmlegte.
+Settings-Paste und NII-Extraktion sind grün — und mit B-55 eine Regression gefunden
+(Filterauswahl an jedem IO-Bus), die behoben und am 09.10.2026 im Spiel bestätigt ist.
+Aus derselben Runde stammt B-56: ein IO-Bus direkt an einem Mining Drill.
 
 Am 08.10.2026 kam eine statische Gesamtanalyse dazu (ohne Spiel): Befunde und
 Begründungen stehen in den Einträgen B-23 bis B-41, der Maßnahmen-Stack ist im
@@ -2491,9 +2504,12 @@ zurück, keiner auf fehlendes Wissen.
 ### Umgebung und Test
 
 Entwicklung und Factorio laufen auf **demselben Mac**. Der Agent arbeitet direkt in
-diesem Repository — der frühere getrennte Nur-Lese-Checkout mit `git pull --ff-only`
-und `rsync` (fish-Funktion `rnssync`) entfällt. Änderungen werden autonom vorgenommen,
-nachgefragt wird nur bei Entscheidungen; **Commit und Push erst nach Absprache.**
+diesem Repository; der frühere getrennte Nur-Lese-Checkout mit `git pull --ff-only`
+entfällt. Factorio liest trotzdem eine **Kopie** im Mod-Verzeichnis: nach jeder
+Änderung mit der lokalen `rnssync`-Funktion spiegeln und den Spielstand neu laden,
+sonst läuft der alte Code weiter — das hat die B-55-Korrektur eine Testrunde gekostet.
+Änderungen werden autonom vorgenommen, nachgefragt wird nur bei Entscheidungen;
+**Commit und Push erst nach Absprache.**
 
 - Reload des Spielstands genügt für Control-Stage-Änderungen (`scripts/`).
 - Programmneustart nötig bei Data-Stage-Änderungen (`prototypes/`, `data.lua`).

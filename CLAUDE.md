@@ -18,7 +18,7 @@ The tracker header and `projektstand.md` carry a "Stand: Commit `<hash>`" line. 
 
 ## Workflow constraints (from `projektstand.md` §11)
 
-- **Single Mac.** Development and Factorio now run on the same machine, and the agent edits this repository directly. The earlier split — a separate, read-only tester checkout that received `git pull --ff-only` and an `rsync` into the mod directory (fish function `rnssync`) — is gone. The agent applies changes autonomously and asks only when a decision is needed; **commits and pushes happen after agreeing with the user**.
+- **Single Mac, but one local copy.** Development and Factorio now run on the same machine. The agent edits this repository directly; the separate read-only tester checkout and its `git pull --ff-only` are gone. Factorio still reads a **copy** in its mod directory, so after every change the repo must be mirrored there with the local `rnssync` fish function and the save reloaded — otherwise the old code keeps running (this cost the B-55 fix one test round). The agent applies changes autonomously and asks only when a decision is needed; **commits and pushes happen after agreeing with the user**.
 - **Restart requirements:**
   - Changes in the control stage (`control.lua`, `scripts/`, `utils/Util.lua`) only need a save reload.
   - Changes in the data stage (`data*.lua`, `prototypes/`, `settings.lua`, `utils/constants.lua`) need a full game restart.

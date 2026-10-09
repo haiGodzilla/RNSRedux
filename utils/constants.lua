@@ -132,6 +132,13 @@ Constants.Settings = {
         ["linked-container"] = true,
         ["locomotive"] = true,
         ["logistic-container"] = true,
+        --mining-drill is present in RNS_Inventory_Types (input fuel, output
+        --burnt_result + chest) but was missing here. reset_focused_entity requires
+        --both maps, so no bus could focus a drill and only miner -> chest -> bus
+        --worked; the item description promises "chest or machine". Caveat: fuel and
+        --chest both map to index 1 on a burner drill, so the output list is ambiguous
+        --there. The electric drill (index 1 = output) is the case this was for.
+        ["mining-drill"] = true,
         ["reactor"] = true,
         ["roboport"] = true,
         ["rocket-silo"] = true,
