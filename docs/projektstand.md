@@ -2481,8 +2481,9 @@ B-54 grün), ein Zug am External-Bus erzeugt keinen `max`-Ausschlag (B-42 grün)
 Fluid-Drive-Anzeige ist ganzzahlig (B-59 grün). Der Item-Verlust-Test (B-24/B-49) blieb
 konsistent, ist aber nicht als exakte Menge gemessen. B-46 ist per GUI nicht prüfbar
 (Priorität nur −5…5); der 99er-Fall braucht einen von Hand geänderten Blueprint-String.
-Neuer Fund **B-60**: im NII verschwinden bestehende Einträge, wenn ein neuer Item-Typ
-hinzukommt.
+Neuer Fund **B-60**: im NII verschwinden bestehende Einträge für einen
+Sekundenbruchteil, wenn ein neuer Item-Typ hinzukommt; `/rns-debug` ist im Fenster nicht
+ausführbar. Verdacht: reine Anzeige (der Stapel kommt identisch zurück).
 
 ## 10. Befunde
 
