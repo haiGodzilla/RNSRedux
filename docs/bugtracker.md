@@ -25,10 +25,11 @@ fünf Angaben:
 | `behoben` | behoben **und** getestet |
 | `kein Fehler` | nachgerechnet oder gemessen, unkritisch |
 
-Stand: Commit `0162750` plus der nicht committete Maßnahmen-Stack vom 08.10.2026
-(B-23 bis B-38, statisch geprüft mit `tools/static-check`, nicht im Spiel), das
-unabhängige Review dieses Stacks (B-42 bis B-53) und dessen Behebung (ebenfalls ohne Spiel).
-Die Reihenfolge ist keine Priorisierung.
+Stand: Commit `975695c` (08.10.2026), Branch `port/2.0`, Version 2.0.0. Der
+Maßnahmen-Stack (B-23 bis B-38) und die Behebung des Reviews (B-42 bis B-53, dazu
+B-54) sind committet und statisch geprüft; die erste Runde Spielbetrieb lief am
+08.10.2026 (`projektstand.md` §9.2) und fand B-55. Die Reihenfolge ist keine
+Priorisierung.
 
 ## 1. Offen
 
@@ -81,6 +82,7 @@ Die Reihenfolge ist keine Priorisierung.
 | B-51 | Prozess | `changelog.txt` 2.0.0 führt die Stack-Fixes als erledigte Bugfixes, obwohl alle `wartet auf Test` sind (Hausregel: kein Erfolg ohne Messung); „not researchable yet“ gilt für bestehende Saves nicht (B-36); `Date:` fehlt. Fix: Bugfix-Zeilen erst nach dem Test übernehmen, bis dahin als ungetestet kennzeichnen. **Umgesetzt:** `Info`-Zeile im Changelog kennzeichnet die Bugfixes als ungetestet. | `wartet auf Test` | Review 08.10.2026|
 | B-52 | Wartung | Doppelte Mechanismen nach dem Stack: `transfer_io_mode` fügt vor dem Refresh von Hand ein (`ItemIOV3.lua`, `FluidIO.lua`; `obj.processed and nil or 1` ergibt immer 1), und der Typwechsel des External-Busses bucht per `flush_cache` aus, unmittelbar bevor `resetTables` alles neu baut. Totes bzw. doppeltes Werk, das eigene Fehlerpfade mitbringt (B-48). Fix: die Handbuchung entfernen, nur Refresh. **Umgesetzt:** `transfer_io_mode` nur noch für den Detector, IO-Moduswechsel der Item-/Fluid-Busse nur per Refresh. **Korrektur nach dem zweiten Review:** Typ- und Moduswechsel des External-Busses sowie Paste buchen wieder sofort aus (mit altem Typ/Modus) bzw. beim Moduswechsel sofort ein — der Refresh allein ließ ein Fenster, in dem ein Reset Inhalte eines Output-Busses ausbuchte, die nie gebucht waren. `EIO:validate` zieht für Items einen Slot statt der Stückzahl ab (Bedeutung von `storedAmount` seit `init_cache`-Korrektur). | `wartet auf Test` | Review 08.10.2026|
 | B-54 | Blueprint | **Neu beim Beheben von B-44 gefunden und behoben:** `copy_settings` übernahm die Enabler-Tabelle (Item-, Fluid-, External-Bus, Detector) und beim Detector `disconnects` per Referenz; das GUI ändert beide in place, also änderte eine Einstellung am einen Bus auch jeden Bus, auf den sie per Paste kopiert worden war. Jetzt Kopien (`Util.tagEnabler`, Array-Kopie). | `wartet auf Test` | Test: Bus A auf B pasten, an A den Enabler-Wert ändern — B bleibt unverändert |
+| B-55 | GUI | **Regression aus dem Stack.** `Util.setCombinatorSignal` setzte den Filter-Slot mit `min` ≠ 0, gab aber keine Qualität an. `LuaLogisticSection.set_slot` wertet eine fehlende Qualität als „any quality" und lehnt das bei `min` ≠ 0 ab: `Can't specify non zero request with non trivial item filter condition`. Damit brach **jede Filterauswahl an jedem IO-Bus** (Item, Fluid, External) und am Detector ab, das GUI schloss sich mit „Failed to update GUI". Behoben: `quality = signal.quality or "normal"` — gültig für Item-, Fluid- und virtuelle Signale. Betrifft auch `deserialize_settings` (Blueprint oder Paste mit Filter), nicht nur den Klick. | `wartet auf Test` | Test 2/4, Andre, 08.10.2026; API 2.0.75 |
 
 ## 3. Nachgerechnet, unkritisch
 

@@ -359,6 +359,12 @@ end
 --nil (clear the slot) or {signal = SignalID, count = n}. set_slot refuses a signal that
 --another slot of the section already holds, which for the icon slots only means the
 --icon shows once.
+--The quality has to be explicit: a signal without one reads as the "any quality"
+--filter, and LuaLogisticSection.set_slot rejects that whenever min is non-zero
+--("Can't specify non zero request with non trivial item filter condition"). Every
+--caller here passes a plain item, fluid or virtual signal with no quality, so it
+--defaults to normal. Normal is also valid for fluids and virtual signals, which have
+--no quality of their own.
 function Util.setCombinatorSignal(combinator, index, entry)
     if combinator == nil or combinator.valid == false then return end
     local behavior = combinator.get_or_create_control_behavior()
@@ -371,7 +377,7 @@ function Util.setCombinatorSignal(combinator, index, entry)
         return
     end
     section.set_slot(index, {
-        value = {type = signal.type or "item", name = signal.name, quality = signal.quality},
+        value = {type = signal.type or "item", name = signal.name, quality = signal.quality or "normal"},
         min = entry.count or 1
     })
 end

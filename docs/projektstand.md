@@ -5,11 +5,12 @@ Einstiegspunkt für die Weiterarbeit. Technischer Plan und Begründungen:
 Dieses Dokument beantwortet „wo stehen wir, was ist verifiziert, was ist der nächste
 Schritt".
 
-Stand: Commit `0162750` plus nicht committeter Maßnahmen-Stack (08.10.2026), Branch
-`port/2.0`, Version 2.0.0.
-P0, P1, P2 und P3 sind durch. **Laufender Posten: eine Runde Spielbetrieb** — P2 hat
-die zentrale Datenstruktur umgebaut und ist nur mit gezielten Tests geprüft, nicht
-im Spiel. Funde im Chat melden, der Agent trägt sie in `docs/bugtracker.md` ein.
+Stand: Commit `975695c` (08.10.2026), Branch `port/2.0`, Version 2.0.0.
+P0, P1, P2 und P3 sind durch. **Erste Runde Spielbetrieb gelaufen** (08.10.2026, §9.2):
+Save/Load, der Blueprint-Rundlauf (filterlos), die Settings-Paste und die
+NII-Extraktion sind grün; die Filterauswahl an den IO-Bussen war ein Regress aus dem
+Static-Stack und ist behoben (B-55). Funde im Chat melden, der Agent trägt sie in
+`docs/bugtracker.md` ein.
 
 ## 1. Projekt
 
@@ -2409,6 +2410,30 @@ Kosmetisch, eigener Schritt nach B-21. Ob ein Schatten überhaupt etwas verdecke
 kann, ist damit noch offen; die Werteliste der API legt Schatten unter die
 Objekt-Ebenen, aber das ist aus einer Liste gelesen, nicht gemessen.
 
+### 9.2 Dritte Runde: der Stack im Spiel, ein Regress gefunden
+
+Erste Runde auf der neuen Umgebung (Entwicklung und Factorio auf demselben Mac).
+Geprüft wurde der committete Static-Stack `975695c`, nicht neu gebauter Code.
+
+| Test | Ergebnis |
+|---|---|
+| Konsistenz `/rns-debug-nc` → `/rns-debug-refresh` → `/rns-debug` | `truth` behauptet = tatsächlich in beiden Dumps. Das Netz war live (Import), also kein statischer P1-Lauf, aber die Buchhaltung hält. |
+| Save/Load mit Import | keine Fehler, alle Items da |
+| Extraktion über das NII | funktioniert, auch per Shortcut |
+| Blueprint-Rundlauf | bestanden, filterlos |
+| Settings-Paste zwischen zwei Bussen | bestanden, filterlos |
+| B-39 (Bus an einem elektrischen Ofen) | vom Filter-Regress überlagert, **noch offen** |
+| B-42 (Zug am External-Bus) | nicht getestet, keine Züge vorhanden |
+
+**Der Fund: B-55.** Die Filterauswahl an jedem IO-Bus brach mit
+`Can't specify non zero request with non trivial item filter condition` ab, das GUI
+schloss sich. Ursache war `Util.setCombinatorSignal` aus dem Stack: der Slot wurde mit
+`min` ≠ 0, aber ohne Qualität gesetzt; die Engine wertet das als „any quality" und lehnt
+es ab. Behoben mit einer expliziten `normal`-Qualität. Weil `set_icons` auch in
+`deserialize_settings` läuft, hätte derselbe Fehler jeden Blueprint und jede Paste
+**mit** Filter getroffen — die beiden grünen Läufe oben waren filterlos und decken das
+nicht ab.
+
 ## 10. Befunde
 
 **Die Liste der offenen und behobenen Punkte steht in `docs/bugtracker.md`** — mit
@@ -2416,9 +2441,14 @@ IDs, Status und Beleg. Sie stand früher hier; die Doppelpflege hat zu Widerspr�
 geführt, deshalb gibt es nur noch eine Quelle.
 
 Kurzfassung des Stands: **11 offene** Punkte (B-01, B-02, B-05 bis B-10, B-22, B-40,
-B-41), **31 umgesetzt, Test offen** (B-04, B-21, B-23 bis B-39, B-42 bis B-52, B-54),
-**4 als unkritisch nachgerechnet** (B-03, B-12, B-13, B-53), **8 behoben und getestet**
-(B-11, B-14 bis B-20).
+B-41), **32 umgesetzt, Test offen** (B-04, B-21, B-23 bis B-39, B-42 bis B-52, B-54,
+B-55), **4 als unkritisch nachgerechnet** (B-03, B-12, B-13, B-53), **8 behoben und
+getestet** (B-11, B-14 bis B-20).
+
+Am 08.10.2026 lief zusätzlich die erste Runde Spielbetrieb auf der neuen Umgebung
+(§9.2). Sie hat den Stack teilweise abgenommen — Save/Load, Blueprint-Rundlauf,
+Settings-Paste und NII-Extraktion sind grün — und mit B-55 eine Regression gefunden,
+die die Filterauswahl an jedem IO-Bus lahmlegte.
 
 Am 08.10.2026 kam eine statische Gesamtanalyse dazu (ohne Spiel): Befunde und
 Begründungen stehen in den Einträgen B-23 bis B-41, der Maßnahmen-Stack ist im
@@ -2430,7 +2460,8 @@ unabhängige Review steht in Abschnitt 12.
 Die Erläuterungen zu den einzelnen Befunden bleiben in diesem Dokument, wo sie
 hingehören: 5.6 (Phantom-Spielstände), 5.8 (Entnahme), 7.12 (Qualitäts-Blockade),
 7.15 (Chunk-Größe), 7.17 (`on_built_entity`), 7.18 (fremder Entity-Tag), 7.20
-(Hover), 8.3 (Cache-Scans), 9.1 (zweite Spieltest-Runde).
+(Hover), 8.3 (Cache-Scans), 9.1 (zweite Spieltest-Runde), 9.2 (dritte Runde, der
+Stack im Spiel).
 
 ## 11. Arbeitsweise
 
@@ -2457,16 +2488,12 @@ Regeln, die sich in dieser Sitzung als notwendig erwiesen haben:
 Fünf Fehlschläge in eigenen Patch-Skripten gingen auf fehlende Verifikation
 zurück, keiner auf fehlendes Wissen.
 
-### Sync und Test
+### Umgebung und Test
 
-Codeänderungen laufen ausschließlich über die `repo_*`-Werkzeuge. Das Repo auf
-dem Rechner des Testernutzers ist eine **Nur-Lese-Kopie**; Handarbeit dort
-bricht den `--ff-only`-Pull.
-
-Ablauf nach jeder Änderung: commit, push, dann auf der Testseite
-`git pull --ff-only` und `rsync` ins Mod-Verzeichnis (zusammengefasst in der
-fish-Funktion `rnssync`). Kein Symlink — Factorio folgt Symlinks auf macOS
-nicht.
+Entwicklung und Factorio laufen auf **demselben Mac**. Der Agent arbeitet direkt in
+diesem Repository — der frühere getrennte Nur-Lese-Checkout mit `git pull --ff-only`
+und `rsync` (fish-Funktion `rnssync`) entfällt. Änderungen werden autonom vorgenommen,
+nachgefragt wird nur bei Entscheidungen; **Commit und Push erst nach Absprache.**
 
 - Reload des Spielstands genügt für Control-Stage-Änderungen (`scripts/`).
 - Programmneustart nötig bei Data-Stage-Änderungen (`prototypes/`, `data.lua`).
