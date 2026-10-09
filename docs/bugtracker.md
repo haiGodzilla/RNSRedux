@@ -29,7 +29,63 @@ Stand: Commit `69887b4` (09.10.2026), Branch `port/2.0`, Version 2.0.0. Der
 Maßnahmen-Stack (B-23 bis B-38) und die Behebung des Reviews (B-42 bis B-53, dazu
 B-54) sind committet und statisch geprüft; die erste Runde Spielbetrieb lief am
 08.10.2026 (`projektstand.md` §9.2) und fand B-55. Die Reihenfolge ist keine
-Priorisierung.
+Priorisierung; die Kritikalität steht unten.
+
+**Kritikalität.** Jeder offene und jeder noch ungetestete Punkt trägt eine der vier
+Stufen. Sie steuert die Reihenfolge der Arbeit, nicht den Status.
+
+| Stufe | Bedeutung |
+|---|---|
+| `kritisch` | Datenverlust, Absturz oder Release-Blocker; vor dem Merge |
+| `hoch` | betrifft ein Release-Objekt oder die Buchhaltung spürbar |
+| `mittel` | relevant, aber mit Ausweichweg oder auf einen Fall begrenzt |
+| `niedrig` | kosmetisch oder Randeffekt |
+
+| ID | Stufe | Kurzbegründung |
+|---|---|---|
+| B-24 | `kritisch` | Item-Verlust beim Teil-Insert |
+| B-05 | `hoch` | fremde Force kann ein Netz anzapfen oder stilllegen |
+| B-25 | `hoch` | Blueprint zerstörte jeden IO-Bus |
+| B-26 | `hoch` | Fehler bei jedem Insert nach dem Laden |
+| B-28 | `hoch` | Phantombestand/Moduswechsel am External-Bus |
+| B-30 | `hoch` | kaputter Blueprint brach jeden Refresh ab |
+| B-32 | `hoch` | Buchungsfehler im Netz |
+| B-43 | `hoch` | Buchhaltung driftet nach einem Reset |
+| B-46 | `hoch` | Drive-Priorität aus Blueprint bricht Refresh |
+| B-21 | `mittel` | Footprint/Grid, berührt bestehende Saves |
+| B-27 | `mittel` | Lücken im Slot-Cache |
+| B-29 | `mittel` | Multiplayer, entfernter Spieler |
+| B-31 | `mittel` | MP: Debug-Befehle, Desync |
+| B-36 | `mittel` | M5-Techs in bestehenden Saves |
+| B-40 | `mittel` | Store-Leck/Lifecycle bei Plattform und Klon |
+| B-45 | `mittel` | Tick-Allokation im Buspfad |
+| B-47 | `mittel` | Item-IO an Generator |
+| B-48 | `mittel` | Fluid-Cache nil-Guard |
+| B-49 | `mittel` | Munition/Haltbarkeit beim Teil-Export |
+| B-57 | `mittel` | nur Maschinen mit mehreren Output-Inventaren |
+| B-01 | `niedrig` | Anzeige (Hover 0/0); Behebung an B-21 gekoppelt |
+| B-02 | `niedrig` | Savegröße/Bauzeit, nicht Ticks |
+| B-04 | `niedrig` | Temperaturanzeige im NII |
+| B-06 | `niedrig` | Grafik-Tönung |
+| B-07 | `niedrig` | offene Messung |
+| B-08 | `niedrig` | Allokation im Buspfad |
+| B-09 | `niedrig` | gehört zu P4 |
+| B-10 | `niedrig` | toter Doku-Verweis |
+| B-22 | `niedrig` | Schatten-Skalierung |
+| B-33 | `niedrig` | Grafik/Prüfflächen |
+| B-34 | `niedrig` | Tech-Icons |
+| B-35 | `niedrig` | Rezept-Zutat |
+| B-37 | `niedrig` | französische Locale |
+| B-38 | `niedrig` | Wartung |
+| B-41 | `niedrig` | M5-Umfang |
+| B-50 | `niedrig` | Mess-Overrides |
+| B-51 | `niedrig` | Changelog-Text |
+| B-52 | `niedrig` | doppelte Mechanik |
+| B-56 | `niedrig` | IO-Bus am Drill |
+| B-60 | `niedrig` | NII-Flackern, reine Anzeige |
+
+Geschlossene Punkte (Abschnitte 3 und 4) führen keine Kritikalität. Wird ein Punkt
+geschlossen, fällt er aus dieser Tabelle.
 
 ## 1. Offen
 

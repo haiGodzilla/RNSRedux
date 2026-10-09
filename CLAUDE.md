@@ -12,7 +12,7 @@ The project is run from three German-language docs. Code comments and commit mes
 
 - `docs/projektstand.md` is the entry point. It covers current state, verified measurements, decisions, and the next step. Section numbers like "7.20" or "6.8" in code comments and commits refer to this doc.
 - `docs/ups-architektur.md` is the performance architecture and the milestone plan **P0–P6**. P0–P3 are done. P5 (external IO) is largely done — two of the three measures, measured at 2.5% of the tick budget. P4 (scheduler) and P6 (cleanup) are open.
-- `docs/bugtracker.md` is the single source for findings (`B-01`…). Its status values are `offen`, `ungemessen`, `wartet auf Test`, `behoben`, and `kein Fehler`. When a finding changes, update the tracker and the summary in `projektstand.md` §10 together.
+- `docs/bugtracker.md` is the single source for findings (`B-01`…). Its status values are `offen`, `ungemessen`, `wartet auf Test`, `behoben`, and `kein Fehler`. Every open or untested finding also carries a criticality (`kritisch`, `hoch`, `mittel`, `niedrig`) in the tracker's Kritikalität table. When a finding changes, update the tracker and the summary in `projektstand.md` §10 together.
 
 The tracker header and `projektstand.md` carry a "Stand: Commit `<hash>`" line. Commits titled "docs: fill in the commit hash" keep that line current.
 
