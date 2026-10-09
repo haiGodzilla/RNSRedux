@@ -2455,16 +2455,20 @@ den Drill **trotzdem nicht** anfassen lassen; der Gate-Eintrag ist wieder entfer
 Nächster Verdacht: der Zugriff auf das Output-Inventar (`get_output_inventory()` statt
 Index). Details in B-56.
 
+**B-39 bestanden (09.10.2026).** External-Bus an einer **elektrischen** Maschine: Log
+ohne `RNSRedux error`, die übrigen Netze laufen weiter. Der Cache pro Inventar bleibt
+als B-57 offen.
+
 ## 10. Befunde
 
 **Die Liste der offenen und behobenen Punkte steht in `docs/bugtracker.md`** — mit
 IDs, Status und Beleg. Sie stand früher hier; die Doppelpflege hat zu Widersprüchen
 geführt, deshalb gibt es nur noch eine Quelle.
 
-Kurzfassung des Stands: **12 offene** Punkte (B-01, B-02, B-05 bis B-10, B-22, B-40,
-B-41, B-56), **31 umgesetzt, Test offen** (B-04, B-21, B-23 bis B-39, B-42 bis B-52,
-B-54), **4 als unkritisch nachgerechnet** (B-03, B-12, B-13, B-53), **9 behoben und
-getestet** (B-11, B-14 bis B-20, B-55).
+Kurzfassung des Stands: **13 offene** Punkte (B-01, B-02, B-05 bis B-10, B-22, B-40,
+B-41, B-56, B-57), **30 umgesetzt, Test offen** (B-04, B-21, B-23 bis B-38, B-42 bis
+B-52, B-54), **4 als unkritisch nachgerechnet** (B-03, B-12, B-13, B-53), **10 behoben
+und getestet** (B-11, B-14 bis B-20, B-39, B-55).
 
 Am 08.10.2026 lief zusätzlich die erste Runde Spielbetrieb auf der neuen Umgebung
 (§9.2). Sie hat den Stack teilweise abgenommen — Save/Load, Blueprint-Rundlauf,
