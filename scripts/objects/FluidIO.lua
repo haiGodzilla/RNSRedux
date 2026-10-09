@@ -377,7 +377,10 @@ function FIO:IO()
     if self:target_interactable() == false then self.processed = true return end
 
     
-    if self.filter == "" then self.processed = true return end
+    --Output needs a filter to know which fluid to push; input reads whatever the
+    --tank holds, so an empty filter means "any fluid" there (B-58). Without this, a
+    --fluid bus at a filled tank did nothing and gave no message.
+    if self.filter == "" and self.io == "output" then self.processed = true return end
     if self.networkController == nil or self.networkController.valid == false or self.networkController.stable == false then self.processed = true return end
     local network = self.networkController.network
 
@@ -390,7 +393,7 @@ function FIO:IO()
     --if storedAmount <= 0 and self.io == "input" then self.processed = true return end
     if storedAmount == target.thisEntity.fluidbox.get_capacity(fluid_box.index) and self.io == "output" then self.processed = true return end
 
-    if self.io == "input" and string.match(fluid_box.flow, "output") ~= nil and fluid ~= nil and self.filter == fluid.name and network:is_full() == false then
+    if self.io == "input" and string.match(fluid_box.flow, "output") ~= nil and fluid ~= nil and (self.filter == "" or self.filter == fluid.name) and network:is_full() == false then
         BaseNet.transfer_from_tank_to_network(network, target, transportCapacity)
     elseif self.io == "output" and string.match(fluid_box.flow, "input") ~= nil and self.filter ~= "" and (network.Contents.fluid[self.filter] or 0) > 0 and network:is_empty() == false then
         BaseNet.transfer_from_network_to_tank(network, target, transportCapacity, self.filter)

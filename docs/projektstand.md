@@ -2464,7 +2464,8 @@ sobald sein Filter gesetzt ist — ohne Filter steigt er still aus (B-58, UX-Fal
 einer Pumpe funktioniert er ebenfalls. Ein IO-Bus an einem Zug-Waggon läuft funktional
 (der `inject_cache`-Pfad aus B-42/B-43); die Profiler-Frage aus B-42 bleibt offen. Für
 B-23 sind Import und Export damit belegt, die **exakte Menge** (keine Duplikation —
-30 statt 60 bei zwei Drives) aber noch nicht gemessen.
+30 statt 60 bei zwei Drives) aber noch nicht gemessen. B-58 (Input ohne Filter) ist
+umgesetzt, Test offen.
 
 ## 10. Befunde
 
@@ -2472,10 +2473,10 @@ B-23 sind Import und Export damit belegt, die **exakte Menge** (keine Duplikatio
 IDs, Status und Beleg. Sie stand früher hier; die Doppelpflege hat zu Widersprüchen
 geführt, deshalb gibt es nur noch eine Quelle.
 
-Kurzfassung des Stands: **14 offene** Punkte (B-01, B-02, B-05 bis B-10, B-22, B-40,
-B-41, B-56 bis B-58), **30 umgesetzt, Test offen** (B-04, B-21, B-23 bis B-38, B-42 bis
-B-52, B-54), **4 als unkritisch nachgerechnet** (B-03, B-12, B-13, B-53), **10 behoben
-und getestet** (B-11, B-14 bis B-20, B-39, B-55).
+Kurzfassung des Stands: **13 offene** Punkte (B-01, B-02, B-05 bis B-10, B-22, B-40,
+B-41, B-56, B-57), **31 umgesetzt, Test offen** (B-04, B-21, B-23 bis B-38, B-42 bis
+B-52, B-54, B-58), **4 als unkritisch nachgerechnet** (B-03, B-12, B-13, B-53),
+**10 behoben und getestet** (B-11, B-14 bis B-20, B-39, B-55).
 
 Am 08.10.2026 lief zusätzlich die erste Runde Spielbetrieb auf der neuen Umgebung
 (§9.2). Sie hat den Stack teilweise abgenommen — Save/Load, Blueprint-Rundlauf,
