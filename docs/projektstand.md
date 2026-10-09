@@ -2460,12 +2460,19 @@ ohne `RNSRedux error`, die übrigen Netze laufen weiter. Der Cache pro Inventar 
 als B-57 offen.
 
 **Fluid- und Fahrzeug-Tests (09.10.2026).** Der Fluid IO Bus importiert aus einem Tank,
-sobald sein Filter gesetzt ist — ohne Filter steigt er still aus (B-58, UX-Falle). An
-einer Pumpe funktioniert er ebenfalls. Ein IO-Bus an einem Zug-Waggon läuft funktional
-(der `inject_cache`-Pfad aus B-42/B-43); die Profiler-Frage aus B-42 bleibt offen. Für
-B-23 sind Import und Export damit belegt, die **exakte Menge** (keine Duplikation —
-30 statt 60 bei zwei Drives) aber noch nicht gemessen. B-58 (Input ohne Filter) ist
-umgesetzt, Test offen.
+sobald sein Filter gesetzt ist — ohne Filter stieg er still aus (B-58, jetzt umgesetzt).
+An einer Pumpe funktioniert er ebenfalls. Ein IO-Bus an einem Zug-Waggon läuft
+funktional (der `inject_cache`-Pfad aus B-42/B-43); die Profiler-Frage aus B-42 bleibt
+offen.
+
+**B-23 gemessen (09.10.2026).** Ein Tank mit 25.000 Wasser (Offshore-Pumpe → Rohr →
+Tank) über den Fluid-Bus importiert: der Fluid-Drive zeigt 25.000 — keine Duplikation,
+kein Verlust. Die krummen Zwischenwerte (19.844,626874506) waren der Füllstand während
+des langsamen Pumpens; Fluidmengen sind in Factorio `double`, das ist kein Mod-Befund.
+Ebenfalls geprüft: einen Drive abbauen, die Controller-Zahlen beobachten und ihn wieder
+aufbauen — die Zahlen ziehen mit.
+
+**B-58** (Input ohne Filter) ist umgesetzt, Test offen.
 
 ## 10. Befunde
 
@@ -2474,9 +2481,9 @@ IDs, Status und Beleg. Sie stand früher hier; die Doppelpflege hat zu Widerspr�
 geführt, deshalb gibt es nur noch eine Quelle.
 
 Kurzfassung des Stands: **13 offene** Punkte (B-01, B-02, B-05 bis B-10, B-22, B-40,
-B-41, B-56, B-57), **31 umgesetzt, Test offen** (B-04, B-21, B-23 bis B-38, B-42 bis
+B-41, B-56, B-57), **30 umgesetzt, Test offen** (B-04, B-21, B-24 bis B-38, B-42 bis
 B-52, B-54, B-58), **4 als unkritisch nachgerechnet** (B-03, B-12, B-13, B-53),
-**10 behoben und getestet** (B-11, B-14 bis B-20, B-39, B-55).
+**11 behoben und getestet** (B-11, B-14 bis B-20, B-23, B-39, B-55).
 
 Am 08.10.2026 lief zusätzlich die erste Runde Spielbetrieb auf der neuen Umgebung
 (§9.2). Sie hat den Stack teilweise abgenommen — Save/Load, Blueprint-Rundlauf,
