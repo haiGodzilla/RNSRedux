@@ -2440,11 +2440,20 @@ sondern eine Kopie; `rnssync` war nicht gelaufen. Derselbe Fehler erschien erneu
 ließ sich damit als Deploy-Problem statt als Codefehler einordnen. Nach dem Spiegeln
 läuft die Filterauswahl, und Items fließen mit gesetztem Filter in den Ofen.
 
-**Zweiter Fund: B-56.** Ein IO-Bus direkt an einem Mining Drill tut nichts; nur
-Miner → Kiste → Bus funktioniert. Ursache ist ein Altbestand aus 1.1: der Drill steht
-in `RNS_Inventory_Types`, fehlte aber im Gate `RNS_TypesWithContainer`, das
-`reset_focused_entity` zusätzlich verlangt. Die Item-Beschreibung verspricht „chest or
-machine". Behoben mit einer Zeile; die Einschränkung bei Burner-Drills steht in B-56.
+**Weitere Spieltests (09.10.2026):** Ein Steinofen mit zwei Input-Bussen (Holz,
+Eisenerz) und einem Output-Bus (Eisenplatten) läuft; mehrere Busse an einem Ziel
+funktionieren. Ebenso ein einzelner Bus mit zwei Filtern (Holz und Eisenerz). Das
+deckt die Mehrfachbelegung von Filtern und das Zusammenspiel mehrerer Busse an einem
+Ziel ab, ohne die spezifischen Tracker-Testfälle (Blueprint mit Priorität 99,
+Enabler-Paste, Moduswechsel unter Last) zu ersetzen.
+
+**Zweiter Fund: B-56 — offen geblieben.** Ein IO-Bus direkt an einem Mining Drill tut
+nichts; nur Miner → Kiste → Bus funktioniert. Der Drill steht in
+`RNS_Inventory_Types`, fehlte aber im Gate `RNS_TypesWithContainer`, das
+`reset_focused_entity` zusätzlich verlangt. Ein Versuch mit ergänztem Gate hat den Bus
+den Drill **trotzdem nicht** anfassen lassen; der Gate-Eintrag ist wieder entfernt.
+Nächster Verdacht: der Zugriff auf das Output-Inventar (`get_output_inventory()` statt
+Index). Details in B-56.
 
 ## 10. Befunde
 
@@ -2452,16 +2461,17 @@ machine". Behoben mit einer Zeile; die Einschränkung bei Burner-Drills steht in
 IDs, Status und Beleg. Sie stand früher hier; die Doppelpflege hat zu Widersprüchen
 geführt, deshalb gibt es nur noch eine Quelle.
 
-Kurzfassung des Stands: **11 offene** Punkte (B-01, B-02, B-05 bis B-10, B-22, B-40,
-B-41), **32 umgesetzt, Test offen** (B-04, B-21, B-23 bis B-39, B-42 bis B-52, B-54,
-B-56), **4 als unkritisch nachgerechnet** (B-03, B-12, B-13, B-53), **9 behoben und
+Kurzfassung des Stands: **12 offene** Punkte (B-01, B-02, B-05 bis B-10, B-22, B-40,
+B-41, B-56), **31 umgesetzt, Test offen** (B-04, B-21, B-23 bis B-39, B-42 bis B-52,
+B-54), **4 als unkritisch nachgerechnet** (B-03, B-12, B-13, B-53), **9 behoben und
 getestet** (B-11, B-14 bis B-20, B-55).
 
 Am 08.10.2026 lief zusätzlich die erste Runde Spielbetrieb auf der neuen Umgebung
 (§9.2). Sie hat den Stack teilweise abgenommen — Save/Load, Blueprint-Rundlauf,
 Settings-Paste und NII-Extraktion sind grün — und mit B-55 eine Regression gefunden
 (Filterauswahl an jedem IO-Bus), die behoben und am 09.10.2026 im Spiel bestätigt ist.
-Aus derselben Runde stammt B-56: ein IO-Bus direkt an einem Mining Drill.
+Am 09.10.2026 kamen weitere grüne Tests dazu (mehrere Busse an einem Ziel, ein Bus mit
+zwei Filtern). B-56 (IO-Bus an einem Mining Drill) blieb offen.
 
 Am 08.10.2026 kam eine statische Gesamtanalyse dazu (ohne Spiel): Befunde und
 Begründungen stehen in den Einträgen B-23 bis B-41, der Maßnahmen-Stack ist im
