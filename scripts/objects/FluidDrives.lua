@@ -285,7 +285,7 @@ function FD:DataConvert_EntityToItem(tag)
     local description = {"", tag.prototype.localised_description}
 
     tags.storage = self.fluidArray
-    Util.add_list_into_table(description, {{"item-description.RNS_DriveTag_Storage", self:getStorageSize(), self.maxStorage}})
+    Util.add_list_into_table(description, {{"item-description.RNS_DriveTag_Storage", math.floor(self:getStorageSize()), self.maxStorage}})
 
     tags.filters = self.filters
     tags.guiFilters = self.guiFilters
@@ -321,8 +321,8 @@ function FD:getTooltips(guiTable, mainFrame, justCreated)
         infoFrame.style.right_padding = 3
         GuiApi.add_subtitle(guiTable, "", infoFrame, {"gui-description.RNS_Information"})
 
-        GuiApi.add_label(guiTable, "Capacity", infoFrame, {"gui-description.RNS_FluidDrive_Capacity", self:getStorageSize(), self.maxStorage}, Constants.Settings.RNS_Gui.orange, nil, true)
-        GuiApi.add_progress_bar(guiTable, "CapacityBar", infoFrame, "", self:getStorageSize() .. "/" .. self.maxStorage, true, nil, self:getStorageSize()/self.maxStorage, 200, 25)
+        GuiApi.add_label(guiTable, "Capacity", infoFrame, {"gui-description.RNS_FluidDrive_Capacity", math.floor(self:getStorageSize()), self.maxStorage}, Constants.Settings.RNS_Gui.orange, nil, true)
+        GuiApi.add_progress_bar(guiTable, "CapacityBar", infoFrame, "", math.floor(self:getStorageSize()) .. "/" .. self.maxStorage, true, nil, self:getStorageSize()/self.maxStorage, 200, 25)
 
         local filtersFrame = GuiApi.add_frame(guiTable, "FiltersFrame", mainFrame, "vertical", true)
 		filtersFrame.style = Constants.Settings.RNS_Gui.frame_1
@@ -377,8 +377,8 @@ function FD:getTooltips(guiTable, mainFrame, justCreated)
     local capacity = guiTable.vars.Capacity
     local capacityBar = guiTable.vars.CapacityBar
 
-    capacity.caption = {"gui-description.RNS_FluidDrive_Capacity", self:getStorageSize(), self.maxStorage}
-    capacityBar.tooltip = self:getStorageSize() .. "/" .. self.maxStorage
+    capacity.caption = {"gui-description.RNS_FluidDrive_Capacity", math.floor(self:getStorageSize()), self.maxStorage}
+    capacityBar.tooltip = math.floor(self:getStorageSize()) .. "/" .. self.maxStorage
     capacityBar.value = self:getStorageSize()/self.maxStorage
 end
 

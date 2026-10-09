@@ -2472,7 +2472,9 @@ des langsamen Pumpens; Fluidmengen sind in Factorio `double`, das ist kein Mod-B
 Ebenfalls geprüft: einen Drive abbauen, die Controller-Zahlen beobachten und ihn wieder
 aufbauen — die Zahlen ziehen mit.
 
-**B-58** (Input ohne Filter) ist umgesetzt, Test offen.
+**B-58** (Input ohne Filter) ist im Spiel bestätigt. **B-59:** Die Fluid-Drive-UI zeigte
+den Rohwert mit allen Nachkommastellen; die Anzeige rundet jetzt (`math.floor`), die
+Buchhaltung bleibt exakt. Test offen.
 
 ## 10. Befunde
 
@@ -2482,8 +2484,8 @@ geführt, deshalb gibt es nur noch eine Quelle.
 
 Kurzfassung des Stands: **13 offene** Punkte (B-01, B-02, B-05 bis B-10, B-22, B-40,
 B-41, B-56, B-57), **30 umgesetzt, Test offen** (B-04, B-21, B-24 bis B-38, B-42 bis
-B-52, B-54, B-58), **4 als unkritisch nachgerechnet** (B-03, B-12, B-13, B-53),
-**11 behoben und getestet** (B-11, B-14 bis B-20, B-23, B-39, B-55).
+B-52, B-54, B-59), **4 als unkritisch nachgerechnet** (B-03, B-12, B-13, B-53),
+**12 behoben und getestet** (B-11, B-14 bis B-20, B-23, B-39, B-55, B-58).
 
 Am 08.10.2026 lief zusätzlich die erste Runde Spielbetrieb auf der neuen Umgebung
 (§9.2). Sie hat den Stack teilweise abgenommen — Save/Load, Blueprint-Rundlauf,
