@@ -166,7 +166,7 @@ geschlossen, fällt er aus dieser Tabelle.
 ## 5. Vor dem Release zu erledigen
 
 - Alle Debug-Befehle entfernen und die `port_*.py`-Skripte: `/rns-debug`,
-  `/rns-debug-nc`, `/rns-debug-refresh`, `/rns-debug-extract`, `/rns-store-test`,
+  `/rns-debug-nc`, `/rns-debug-bus`, `/rns-debug-refresh`, `/rns-debug-extract`, `/rns-store-test`,
   `/rns-store-reset`, `/rns-bus-skip`, `/rns-bus-scan`, `/rns-stress-*`, das
   StressTest-Modul, dazu alle Schreibzugriffe nach `script-output`
   (`rns-debug-nc.txt`, `rns-debug.txt`).

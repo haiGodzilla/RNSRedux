@@ -307,6 +307,63 @@ local function debugCommand(name, help, handler)
     end)
 end
 
+--The IO bus state the counter dump leaves out (B-43). A bus can be absent from the
+--network's sweep lists -- so it never runs -- or have lost its focus, and no counter
+--would show it. Per item, fluid and external bus: mode, priority, the controller it
+--points at, whether that controller holds it in the expected priority/mode list, and
+--the focused target.
+debugCommand("rns-debug-bus", "RNSRedux: dump the state of every IO bus", function()
+    local function isListed(net, kind, priority, mode, busType, entID)
+        if net == nil then return false end
+        local p = 1 + Constants.Settings.RNS_Max_Priority - (priority or 0)
+        if kind == "item" then
+            local list = net.ItemIOTable and net.ItemIOTable[p] and net.ItemIOTable[p][mode]
+            if list ~= nil then
+                for _, id in ipairs(list) do if id == entID then return true end end
+            end
+        elseif kind == "fluid" then
+            local list = net.FluidIOTable and net.FluidIOTable[p] and net.FluidIOTable[p][mode]
+            if list ~= nil then
+                for _, id in ipairs(list) do if id == entID then return true end end
+            end
+        elseif kind == "external" then
+            return net.ExternalIOTable ~= nil and net.ExternalIOTable[p] ~= nil
+                and net.ExternalIOTable[p][busType] ~= nil
+                and net.ExternalIOTable[p][busType][entID] ~= nil
+        end
+        return false
+    end
+    local lines = {}
+    local count = 0
+    for _, obj in pairs(storage.entityTable or {}) do
+        local ent = obj.thisEntity
+        local name = (ent ~= nil and ent.valid == true) and ent.name or nil
+        if name ~= nil and string.match(name, "RNS_NetworkCableIO") ~= nil then
+            count = count + 1
+            local kind = string.match(name, "Fluid") and "fluid"
+                or (string.match(name, "External") and "external" or "item")
+            local nc = obj.networkController
+            local ncID = (nc ~= nil and nc.entID ~= nil) and nc.entID or -1
+            local inNet = nc ~= nil and BaseNet.exists_in_network(nc, obj.entID) or false
+            local net = (nc ~= nil and nc.network ~= nil) and nc.network or nil
+            local listed = net ~= nil and isListed(net, kind, obj.priority, obj.io, obj.type, obj.entID) or false
+            local t = obj.focusedEntity and obj.focusedEntity.thisEntity
+            local focus = (t ~= nil and t.valid == true) and t.name or "nil"
+            local out, inp = 0, 0
+            if obj.focusedEntity ~= nil and obj.focusedEntity.inventory ~= nil then
+                out = obj.focusedEntity.inventory.output.max or 0
+                inp = obj.focusedEntity.inventory.input.max or 0
+            end
+            lines[#lines + 1] = string.format(
+                "%s id=%d io=%s type=%s pr=%s nc=%d inNet=%s listed=%s proc=%s focus=%s out=%d in=%d",
+                name, obj.entID, tostring(obj.io), tostring(obj.type), tostring(obj.priority),
+                ncID, tostring(inNet), tostring(listed), tostring(obj.processed), focus, out, inp)
+        end
+    end
+    game.print("rns-debug-bus: " .. count .. " IO buses")
+    for _, line in ipairs(lines) do game.print(line) end
+end)
+
 --What the member drives actually hold, read from their own storage tables, next
 --to what they claim through storedAmount. The two are maintained by different
 --code paths, and a network-level comparison is meaningless while they disagree:
