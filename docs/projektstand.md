@@ -2498,11 +2498,11 @@ UI-Fund **B-61**: das Öffnen des NII öffnet zusätzlich die Vanilla-Fenster.
 IDs, Status und Beleg. Sie stand früher hier; die Doppelpflege hat zu Widersprüchen
 geführt, deshalb gibt es nur noch eine Quelle.
 
-Kurzfassung des Stands: **16 offene** Punkte (B-01, B-02, B-05 bis B-10, B-22, B-40,
-B-41, B-43, B-56, B-57, B-60, B-61), **20 umgesetzt, Test offen** (B-04, B-21, B-27,
-B-29, B-31 bis B-38, B-45 bis B-52), **4 als unkritisch nachgerechnet** (B-03, B-12,
-B-13, B-53), **21 behoben und getestet** (B-11, B-14 bis B-20, B-23 bis B-26, B-28, B-30,
-B-39, B-42, B-44, B-54, B-55, B-58, B-59).
+Kurzfassung des Stands: **14 offene** Punkte (B-01, B-02, B-06 bis B-10, B-22, B-40,
+B-41, B-43, B-56, B-57, B-60), **21 umgesetzt, Test offen** (B-04, B-05, B-21, B-27,
+B-29, B-31, B-33 bis B-38, B-45 bis B-52, B-61), **4 als unkritisch nachgerechnet**
+(B-03, B-12, B-13, B-53), **22 behoben und getestet** (B-11, B-14 bis B-20, B-23 bis
+B-26, B-28, B-30, B-32, B-39, B-42, B-44, B-54, B-55, B-58, B-59).
 
 Am 08.10.2026 lief zusätzlich die erste Runde Spielbetrieb auf der neuen Umgebung
 (§9.2). Sie hat den Stack teilweise abgenommen — Save/Load, Blueprint-Rundlauf,

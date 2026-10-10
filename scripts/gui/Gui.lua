@@ -96,7 +96,17 @@ function GUI.on_gui_opened(event)
     local RNSPlayer = getRNSPlayer(event.player_index)
 
     if event.entity ~= nil and event.entity.valid == true then
-        if player.selected and (player.selected.name == Constants.NetworkInventoryInterface.name or player.selected.name == Constants.WirelessGrid.name) then
+        --The NII window already shows the player inventory, so the relative anchor
+        --(which opens the character screen as well) is not wanted. Open it as a
+        --standalone window instead (B-61).
+        if player.selected and player.selected.name == Constants.NetworkInventoryInterface.name then
+            if Util.safeCall(GUI.open_tooltip_gui, RNSPlayer, player, player.selected) == false then
+                player.print({"gui-description.RNS_openGui_falied"})
+                Event.clear_gui(event)
+            end
+            return
+        end
+        if player.selected and player.selected.name == Constants.WirelessGrid.name then
             if Util.safeCall(GUI.open_relative_tooltip_gui, RNSPlayer, player, player.selected, defines.relative_gui_type.controller_gui, defines.relative_gui_position.left) == false then
                 player.print({"gui-description.RNS_openGui_falied"})
                 Event.clear_gui(event)

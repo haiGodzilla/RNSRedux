@@ -192,7 +192,7 @@ function BaseNet.addConnectables(source, connections, master)
             if connections[con.entID] ~= nil then goto continue end
 
             if con.thisEntity.name == Constants.NetworkController.main.name and con.entID ~= master.entID then
-                con.thisEntity.order_deconstruction("player")
+                con.thisEntity.order_deconstruction(master.thisEntity.force)
                 goto continue
             end
 
@@ -306,14 +306,19 @@ function BaseNet.generateArms(object)
                             or (obj.thisEntity.name == Constants.Detector.name and obj:is_disconnection_direction(area.direction) and obj.newState == true) then
                             --Do nothing
                         else
-                            if obj.color == nil then
-                                object.arms[area.direction] = Util.newRender(rendering.draw_sprite{sprite=Constants.NetworkCables.Cables[object.color].sprites[area.direction].name, target=object.thisEntity, surface=object.thisEntity.surface, render_layer="lower-object-above-shadow"})
-                                object.connectedObjs[area.direction] = {obj}
-                                BaseNet.join_network(object, obj)
-                            elseif obj.color ~= "" and obj.color == object.color then
-                                object.arms[area.direction] = Util.newRender(rendering.draw_sprite{sprite=Constants.NetworkCables.Cables[object.color].sprites[area.direction].name, target=object.thisEntity, surface=object.thisEntity.surface, render_layer="lower-object-above-shadow"})
-                                object.connectedObjs[area.direction] = {obj}
-                                BaseNet.join_network(object, obj)
+                            --A foreign force must neither tap this network nor kill it by
+                            --joining a second controller (B-05). Forces connect only among
+                            --themselves.
+                            if obj.thisEntity.force == object.thisEntity.force then
+                                if obj.color == nil then
+                                    object.arms[area.direction] = Util.newRender(rendering.draw_sprite{sprite=Constants.NetworkCables.Cables[object.color].sprites[area.direction].name, target=object.thisEntity, surface=object.thisEntity.surface, render_layer="lower-object-above-shadow"})
+                                    object.connectedObjs[area.direction] = {obj}
+                                    BaseNet.join_network(object, obj)
+                                elseif obj.color ~= "" and obj.color == object.color then
+                                    object.arms[area.direction] = Util.newRender(rendering.draw_sprite{sprite=Constants.NetworkCables.Cables[object.color].sprites[area.direction].name, target=object.thisEntity, surface=object.thisEntity.surface, render_layer="lower-object-above-shadow"})
+                                    object.connectedObjs[area.direction] = {obj}
+                                    BaseNet.join_network(object, obj)
+                                end
                             end
                         end
                         break
