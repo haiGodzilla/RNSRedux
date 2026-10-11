@@ -1,0 +1,893 @@
+FIO = {
+    thisEntity = nil,
+    entID = nil,
+    networkController = nil,
+    arms = nil,
+    connectedObjs = nil,
+    cardinals = nil,
+    filter = nil,
+    --whitelistBlacklist = "blacklist",
+    ioIcon = nil,
+    color = "RED",
+    io = "output",
+    processed=false,
+    focusedEntity=nil,
+    enabler = nil,
+    enablerCombinator = nil,
+    combinator=nil,
+    priority = 0,
+    powerUsage = 80,
+    fluidSize = 1,
+    circuitCondition1 = "enable/disable",
+    circuitCondition2 = {
+        state = false,
+        filter = nil
+    },
+    override_fluidsize = false,
+    oldDirection = defines.direction.north,
+}
+
+function FIO:new(object)
+    if object == nil then return end
+    local t = {}
+    local mt = {}
+    setmetatable(t, mt)
+    mt.__index = FIO
+    t.thisEntity = object
+    t.entID = object.unit_number
+    Util.newRender(rendering.draw_sprite{sprite=Constants.NetworkCables.Cables[t.color].sprites[5].name, target=t.thisEntity, surface=t.thisEntity.surface, render_layer="lower-object-above-shadow"})
+    t:generateModeIcon()
+    t.fluidSize = storage.FIOMultiplier
+    t.oldDirection = t:getDirection()
+    t.cardinals = {
+        [1] = false, --N
+        [2] = false, --E
+        [3] = false, --S
+        [4] = false, --W
+    }
+    t.arms = {
+        [1] = nil, --N
+        [2] = nil, --E
+        [3] = nil, --S
+        [4] = nil, --W
+    }
+    t.connectedObjs = {
+        [1] = {}, --N
+        [2] = {}, --E
+        [3] = {}, --S
+        [4] = {}, --W
+    }
+    t.filter = ""
+    t.focusedEntity = {
+        thisEntity = nil,
+        oldPosition = nil,
+        fluid_box = {
+            index = nil,
+            pipe_index = nil,
+            filter = "",
+            target_position = nil,
+            flow = ""
+        }
+    }
+    t.combinator = object.surface.create_entity{
+        name="rns_Combinator",
+        position=object.position,
+        force="neutral"
+    }
+    t.combinator.destructible = false
+    t.combinator.operable = false
+    t.combinator.minable = false
+    t.enabler = {
+        operator = "<",
+        number = 0,
+        filter = nil,
+        numberOutput = 1
+    }
+    t.enablerCombinator = object.surface.create_entity{
+        name="rns_Combinator_2",
+        position=object.position,
+        force="neutral"
+    }
+    t.enablerCombinator.destructible = false
+    t.enablerCombinator.operable = false
+    t.enablerCombinator.minable = false
+    UpdateSys.add_to_entity_table(t)
+    t:createArms()
+    BaseNet.postArms(t)
+    BaseNet.update_network_controller(t.networkController)
+    --UpdateSys.addEntity(t)
+    return t
+end
+
+function FIO:rebuild(object)
+    if object == nil then return end
+    local mt = {}
+    mt.__index = FIO
+    setmetatable(object, mt)
+end
+
+function FIO:remove()
+    if self.combinator ~= nil then self.combinator.destroy() end
+    if self.enablerCombinator ~= nil then self.enablerCombinator.destroy() end
+    --UpdateSys.remove(self)
+    UpdateSys.remove_from_entity_table(self)
+    BaseNet.postArms(self)
+    --[[if self.networkController ~= nil then
+        self.networkController.network.FluidIOTable[Constants.Settings.RNS_Max_Priority+1-self.priority][self.entID] = nil
+        self.networkController.network.shouldRefresh = true
+    end]]
+    BaseNet.update_network_controller(self.networkController, self.entID)
+end
+
+function FIO:valid()
+    return self.thisEntity ~= nil and self.thisEntity.valid == true
+end
+
+--[[function FIO:update()
+    if valid(self) == false then
+        self:remove()
+        return
+    end
+    if valid(self.networkController) == false then
+        self.networkController = nil
+    end
+    if self.thisEntity.to_be_deconstructed() == true then return end
+    if self.focusedEntity.thisEntity ~= nil and self.focusedEntity.thisEntity.valid == false then
+        self:reset_focused_entity()
+    end
+    --if game.tick % 25 then self:createArms() end
+end]]
+
+function FIO:copy_settings(obj)
+    self.color = obj.color
+    --self.whitelistBlacklist = obj.whitelistBlacklist
+    self.io = obj.io
+    --A copy: the GUI edits the enabler in place, so a shared table made a change on one
+    --bus show up on every bus pasted from it.
+    self.enabler = Util.tagEnabler(obj.enabler, self.enabler, nil)
+    self.fluidSize = obj.fluidSize
+
+    self.circuitCondition1 = obj.circuitCondition1
+    self.circuitCondition2 = {
+        state = obj.circuitCondition2.state,
+        filter = obj.circuitCondition2.filter
+    }
+    self.override_fluidsize = obj.override_fluidsize
+
+    self.filter = obj.filter
+    self:set_icons(1, self.filter ~= "" and self.filter or nil)
+
+    self.priority = obj.priority
+    self:generateModeIcon()
+end
+
+function FIO:serialize_settings()
+    local tags = {}
+
+    tags["color"] = self.color
+    tags["filter"] = self.filter
+    --tags["whitelistBlacklist"] = self.whitelistBlacklist
+    tags["circuitCondition1"] = self.circuitCondition1
+    tags["circuitCondition2"] = self.circuitCondition2
+    tags["override_fluidsize"] = self.override_fluidsize
+    tags["io"] = self.io
+    tags["priority"] = self.priority
+    tags["enabler"] = self.enabler
+    tags["fluidSize"] = self.fluidSize
+
+    return tags
+end
+
+--Every field is checked; a missing or foreign value keeps what new() set. See
+--Util.tagNumber for why.
+function FIO:deserialize_settings(tags)
+    self.color = Util.tagChoice(tags["color"], self.color, Constants.NetworkCables.Cables)
+    self.io = Util.tagChoice(tags["io"], self.io, Util.TagChoices.busIO)
+    self.enabler = Util.tagEnabler(tags["enabler"], self.enabler, nil)
+    --Not above what research allows: the fluid size is the bus's throughput. 0 is a
+    --value the text field sets on purpose: it stops the bus.
+    self.fluidSize = Util.tagNumber(tags["fluidSize"], self.fluidSize, 0, storage.FIOMultiplier)
+
+    self.circuitCondition1 = Util.tagChoice(tags["circuitCondition1"], self.circuitCondition1, Util.TagChoices.circuitCondition1)
+    self.circuitCondition2 = Util.tagCircuitCondition2(tags["circuitCondition2"], self.circuitCondition2)
+    self.override_fluidsize = Util.tagBoolean(tags["override_fluidsize"], self.override_fluidsize)
+
+    self.filter = Util.tagPrototypeName(tags["filter"], "fluid")
+    self:set_icons(1, self.filter ~= "" and self.filter or nil)
+
+    self.priority = Util.tagPriority(tags["priority"], self.priority)
+    self:generateModeIcon()
+end
+
+function FIO:set_icons(index, name)
+    Util.setCombinatorSignal(self.combinator, index, name ~= nil and {signal={type="fluid", name=name}, count=1} or nil)
+end
+
+function FIO:toggleHoverIcon(hovering)
+    if self.ioIcon == nil then return end
+    if hovering and Util.getRenderAltMode(self.ioIcon) then
+        Util.setRenderAltMode(self.ioIcon, false)
+    elseif not hovering and not Util.getRenderAltMode(self.ioIcon) then
+        Util.setRenderAltMode(self.ioIcon, true)
+    end
+end
+
+function FIO:generateModeIcon()
+    if self.ioIcon ~= nil then Util.destroyRender(self.ioIcon) end
+    local offset = {0, 0}
+    if self:getRealDirection() == 1 then
+        offset = {0,-0.5}
+    elseif self:getRealDirection() == 2 then
+        offset = {0.5, 0}
+    elseif self:getRealDirection() == 3 then
+        offset = {0,0.5}
+    elseif self:getRealDirection() == 4 then
+        offset = {-0.5,0}
+    end
+    self.ioIcon = Util.newRender(rendering.draw_sprite{
+        sprite=Constants.Icons.fluid, 
+        target=self.thisEntity, 
+        target_offset=offset,
+        surface=self.thisEntity.surface,
+        only_in_alt_mode=true,
+        orientation=self.io == "input" and ((self:getRealDirection()*0.25)+0.25)%1.00 or ((self:getRealDirection()*0.25)-0.25)
+    })
+end
+
+--[[function FIO:IO()
+    if Util.getCombinatorNetwork(self.enablerCombinator) ~= nil then
+        if self.enabler.filter == nil then self.processed = true return end
+        local amount = Util.getCombinatorSignal(self.enablerCombinator, {type=self.enabler.filter.type, name=self.enabler.filter.name})
+        if Util.OperatorFunctions[self.enabler.operator](amount, self.enabler.number) == false then self.processed = true return end
+    end
+    
+    if self.networkController == nil or self.networkController.valid == false or self.networkController.stable == false then self.processed = true return end
+    local network = self.networkController.network
+
+    self:check_focused_entity()
+    if self.focusedEntity.thisEntity == nil then self.processed = true return end
+
+    local fluid_box = self.focusedEntity.fluid_box
+    local transportCapacity = self.fluidSize * Constants.Settings.RNS_BaseFluidIO_TransferCapacity --*storage.FIOMultiplier
+    --#tank.fluidbox returns number of pipe connections
+    --tank.fluidbox.get_locked_fluid(index) returns filtered fluid at an index
+    --tank.fluidbox[index] returns the contents of the fluidbox at an index
+    --tank.fluidbox.get_pipe_connections(index)[1] returns the fluidbox prototype at a pipe index and fluidbox index, we can use flow_direction and target_position
+    --tank.fluidbox[index] = nil sets the fluidbox empty
+    --tank.fluidbox[index] = {name?, amount?, tempurature?} sets the fluidbox
+    for i=1, 1 do
+        local fluidDrives = network.FluidDriveTable --BaseNet.getOperableObjects(network.FluidDriveTable)
+        local externalTanks = network:filter_externalIO_by_valid_signal() --BaseNet.filter_by_type("fluid", BaseNet.getOperableObjects(network:filter_externalIO_by_valid_signal()))
+        for p = 1, Constants.Settings.RNS_Max_Priority*2 + 1 do
+            local priorityF = fluidDrives[p]
+            local priorityE = externalTanks[p]
+            for _, drive in pairs(priorityF) do
+                if drive.thisEntity ~= nil and drive.thisEntity.valid and drive.thisEntity.to_be_deconstructed() == false then
+                    if self.io == "input" then
+                        if string.match(fluid_box.flow, "output") == nil then goto exit end
+                        local remaining = drive:getRemainingStorageSize()
+                        if remaining <= 0 then goto continue end
+                        if (self.filter == fluid_box.filter and fluid_box.filter ~= "") or (self.filter ~= fluid_box.filter and fluid_box.filter == "") or (self.focusedEntity.thisEntity.fluidbox[fluid_box.index] ~= nil and self.filter == self.focusedEntity.thisEntity.fluidbox[fluid_box.index].name) then
+                            transportCapacity = transportCapacity - BaseNet.transfer_from_tank_to_drive(self.focusedEntity.thisEntity, drive, fluid_box.index, self.filter, math.min(transportCapacity, remaining))
+                            if transportCapacity <= 0 or self.focusedEntity.thisEntity.fluidbox[fluid_box.index] == nil then goto exit end
+                        end
+                    elseif self.io == "output" then
+                        if string.match(fluid_box.flow, "input") == nil then goto exit end
+                        if drive:has_fluid(self.filter) == 0 then goto continue end
+                        if (self.filter == fluid_box.filter and fluid_box.filter ~= "") or (self.filter ~= fluid_box.filter and fluid_box.filter == "") or (self.focusedEntity.thisEntity.fluidbox[fluid_box.index] ~= nil and self.filter == self.focusedEntity.thisEntity.fluidbox[fluid_box.index].name) then
+                            transportCapacity = transportCapacity - BaseNet.transfer_from_drive_to_tank(drive, self.focusedEntity.thisEntity, fluid_box.index, self.filter, math.min(transportCapacity, drive:has_fluid(self.filter)))
+                            if transportCapacity <= 0 or (self.focusedEntity.thisEntity.fluidbox[fluid_box.index] ~= nil and self.focusedEntity.thisEntity.fluidbox[fluid_box.index].amount == self.focusedEntity.thisEntity.fluidbox.get_capacity(fluid_box.index)) then goto exit end
+                        end
+                    end
+                end
+                ::continue::
+            end
+            for _, externalTank in pairs(priorityE) do
+                if externalTank.type == "fluid" and externalTank.thisEntity ~= nil and externalTank.thisEntity.valid and externalTank.thisEntity.to_be_deconstructed() == false and externalTank.focusedEntity.thisEntity ~= nil and externalTank.focusedEntity.thisEntity.valid and externalTank.focusedEntity.thisEntity.to_be_deconstructed() == false and externalTank.focusedEntity.fluid_box.index ~= nil then
+                    local fluid_boxE = externalTank.focusedEntity.fluid_box
+                    if self.io == "input" then
+                        if string.match(fluid_box.flow, "output") == nil then goto exit end
+                        if string.match(fluid_boxE.flow, "input") == nil then goto continue end
+                        if string.match(externalTank.io, "input") == nil then goto continue end
+                        if (self.filter == fluid_box.filter and fluid_box.filter ~= "") or (self.filter ~= fluid_box.filter and fluid_box.filter == "") or (self.focusedEntity.thisEntity.fluidbox[fluid_box.index] ~= nil and self.filter == self.focusedEntity.thisEntity.fluidbox[fluid_box.index].name)then
+                            if Util.getTableLength_non_nil(externalTank.filters.fluid.values) > 0 then
+                                if externalTank:matches_filters("fluid", self.filter) == true then
+                                    if externalTank.whitelist == false then goto continue end
+                                else
+                                    if externalTank.whitelist == true then goto continue end
+                                end
+                            elseif Util.getTableLength_non_nil(externalTank.filters.fluid.values) == 0 then
+                                if externalTank.whitelist == true then goto continue end
+                            end
+                            transportCapacity = transportCapacity - BaseNet.transfer_from_tank_to_tank(self.focusedEntity.thisEntity, externalTank.focusedEntity.thisEntity, fluid_box.index, fluid_boxE.index, self.filter, transportCapacity)
+                            if transportCapacity <= 0 or self.focusedEntity.thisEntity.fluidbox[fluid_box.index] == nil then goto exit end
+                        end
+                    elseif self.io == "output" then
+                        if string.match(fluid_box.flow, "input") == nil then goto exit end
+                        if string.match(fluid_boxE.flow, "output") == nil then goto continue end
+                        if string.match(externalTank.io, "output") == nil then goto continue end
+                        if (self.filter == fluid_box.filter and fluid_box.filter ~= "") or (self.filter ~= fluid_box.filter and fluid_box.filter == "") or (self.focusedEntity.thisEntity.fluidbox[fluid_box.index] ~= nil and self.filter == self.focusedEntity.thisEntity.fluidbox[fluid_box.index].name)then
+                            if Util.getTableLength_non_nil(externalTank.filters.fluid.values) > 0 then
+                                if externalTank:matches_filters("fluid", self.filter) == true then
+                                    if externalTank.whitelist == false then goto continue end
+                                else
+                                    if externalTank.whitelist == true then goto continue end
+                                end
+                            elseif Util.getTableLength_non_nil(externalTank.filters.fluid.values) == 0 then
+                                if externalTank.whitelist == true then goto continue end
+                            end
+                            transportCapacity = transportCapacity - BaseNet.transfer_from_tank_to_tank(externalTank.focusedEntity.thisEntity, self.focusedEntity.thisEntity, fluid_box.index, fluid_boxE.index, self.filter, transportCapacity)
+                            if transportCapacity <= 0 or (self.focusedEntity.thisEntity.fluidbox[fluid_box.index] ~= nil and self.focusedEntity.thisEntity.fluidbox[fluid_box.index].amount == self.focusedEntity.thisEntity.fluidbox.get_capacity(fluid_box.index)) then goto exit end
+                        end
+                    end
+                    ::continue::
+                end
+            end
+        end
+        ::exit::
+    end
+    self.processed = transportCapacity < self.fluidSize * Constants.Settings.RNS_BaseFluidIO_TransferCapacity --*storage.FIOMultiplier
+        or (self.focusedEntity.thisEntity ~= nil and self:checkFullness())
+end]]
+
+function FIO:interactable()
+    return self.thisEntity ~= nil and self.thisEntity.valid and self.thisEntity.to_be_deconstructed() == false
+end
+
+function FIO:target_interactable()
+    --self:reset_focused_entity()
+    return self:check_focused_entity() and true or (self:check_focused_entity() and true or false)
+    --return self.focusedEntity.thisEntity ~= nil and self.focusedEntity.thisEntity.valid and self.focusedEntity.thisEntity.to_be_deconstructed() == false
+end
+
+function FIO:IO()
+    if self.circuitCondition2.state and (Util.getCombinatorNetwork(self.enablerCombinator) ~= nil) then
+        local amount = self.circuitCondition2.filter and Util.getCombinatorSignal(self.enablerCombinator, {type=self.circuitCondition2.filter.type, name=self.circuitCondition2.filter.name}) or storage.FIOMultiplier
+        self.fluidSize = math.min(math.max(amount, 1), storage.FIOMultiplier)
+    end
+
+    local transportCapacity = self.fluidSize * Constants.Settings.RNS_BaseFluidIO_TransferCapacity
+
+    if transportCapacity <= 0 then self.processed = true return end
+    if self.circuitCondition1 == "filter" and (Util.getCombinatorNetwork(self.enablerCombinator) ~= nil) then
+        local merged_signals = Util.getCombinatorSignals(self.enablerCombinator)
+        local s1 = nil
+        if merged_signals ~= nil then
+            for i = 1, #merged_signals do
+                local sig = merged_signals[i].signal
+                if sig.type == "fluid" then
+                    s1 = sig.name
+                    break
+                end
+            end
+        end
+        self.filter = s1 or ""
+        self:set_icons(1, s1 or nil)
+    end
+
+    --Make sure that the circuit condition isn't disabling the io bus
+    if self.circuitCondition1 == "enable/disable" and Util.getCombinatorNetwork(self.enablerCombinator) ~= nil then
+        if self.enabler.filter == nil then self.processed = true return end
+        local amount = Util.getCombinatorSignal(self.enablerCombinator, {type=self.enabler.filter.type, name=self.enabler.filter.name})
+        if Util.OperatorFunctions[self.enabler.operator](amount, self.enabler.number) == false then self.processed = true return end
+    end
+    
+    --Make sure there is a working entity in front of the io bus
+    if self:interactable() == false then self.processed = true return end
+    if self:target_interactable() == false then self.processed = true return end
+
+    
+    --Output needs a filter to know which fluid to push; input reads whatever the
+    --tank holds, so an empty filter means "any fluid" there (B-58). Without this, a
+    --fluid bus at a filled tank did nothing and gave no message.
+    if self.filter == "" and self.io == "output" then self.processed = true return end
+    if self.networkController == nil or self.networkController.valid == false or self.networkController.stable == false then self.processed = true return end
+    local network = self.networkController.network
+
+    local target = self.focusedEntity
+    local fluid_box = target.fluid_box
+    local fluid = target.thisEntity.fluidbox[fluid_box.index]
+    if fluid == nil and self.io == "input" then self.processed = true return end
+
+    local storedAmount = self.io == "input" and fluid.amount or 0
+    --if storedAmount <= 0 and self.io == "input" then self.processed = true return end
+    if storedAmount == target.thisEntity.fluidbox.get_capacity(fluid_box.index) and self.io == "output" then self.processed = true return end
+
+    if self.io == "input" and string.match(fluid_box.flow, "output") ~= nil and fluid ~= nil and (self.filter == "" or self.filter == fluid.name) and network:is_full() == false then
+        BaseNet.transfer_from_tank_to_network(network, target, transportCapacity)
+    elseif self.io == "output" and string.match(fluid_box.flow, "input") ~= nil and self.filter ~= "" and (network.Contents.fluid[self.filter] or 0) > 0 and network:is_empty() == false then
+        BaseNet.transfer_from_network_to_tank(network, target, transportCapacity, self.filter)
+    end
+
+    if self.io == "input" and target.thisEntity.fluidbox[fluid_box.index] == nil then self.processed = true return end
+    if self.io == "input" and target.thisEntity.fluidbox[fluid_box.index].amount < storedAmount then self.processed = true return end
+    if self.io == "output" and target.thisEntity.fluidbox[fluid_box.index] ~= nil and target.thisEntity.fluidbox[fluid_box.index].amount > storedAmount then self.processed = true return end
+    if self.io == "output" and target.thisEntity.fluidbox[fluid_box.index] ~= nil and target.thisEntity.fluidbox.get_capacity(fluid_box.index) == target.thisEntity.fluidbox[fluid_box.index].amount then self.processed = true return end
+    --self.processed = false
+end
+
+function FIO:resetConnection()
+    self.connectedObjs = {
+        [1] = {}, --N
+        [2] = {}, --E
+        [3] = {}, --S
+        [4] = {}, --W
+    }
+    for _, arm in pairs(self.arms) do
+        if arm ~= nil then
+            Util.destroyRender(arm)
+        end
+    end
+end
+
+function FIO:reset_focused_entity()    
+    self.oldDirection = self:getDirection()
+    self.focusedEntity = {
+        thisEntity = nil,
+        oldPosition = nil,
+        fluid_box = {
+            index = nil,
+            pipe_index = nil,
+            filter = "",
+            target_position = {},
+            flow = ""
+        }
+    }
+
+    local selfP = self.thisEntity.position
+    local area = self:getCheckArea()[self:getDirection()]
+    local ents = self.thisEntity.surface.find_entities_filtered{area={area.startP, area.endP}}
+    local nearest = nil
+
+    for _, ent in pairs(ents) do
+        if ent ~= nil and ent.valid == true and ent.to_be_deconstructed() == false and string.match(string.upper(ent.name), "RNS_") == nil and ent.operable and storage.entityTable[ent.unit_number] == nil then
+            if (nearest == nil or Util.distance(selfP, ent.position) < Util.distance(selfP, nearest.position)) and #ent.fluidbox ~= 0 then
+                nearest = ent
+            end
+        end
+    end
+
+    if nearest == nil then return end
+    if #nearest.fluidbox ~= 0 then
+        for i=1, #nearest.fluidbox do
+            for j=1, #nearest.fluidbox.get_pipe_connections(i) do
+                local target = nearest.fluidbox.get_pipe_connections(i)[j]
+                if Util.positions_match(target.target_position, self.thisEntity.position) then
+                    self.focusedEntity.thisEntity = nearest
+                    self.focusedEntity.oldPosition = nearest.position
+                    self.focusedEntity.fluid_box.index = i
+                    self.focusedEntity.fluid_box.pipe_index = j
+                    self.focusedEntity.fluid_box.flow =  target.flow_direction
+                    self.focusedEntity.fluid_box.target_position = target.target_position
+                    self.focusedEntity.fluid_box.filter =  (nearest.fluidbox.get_locked_fluid(i) ~= nil and {nearest.fluidbox.get_locked_fluid(i)} or {""})[1]
+                    break
+                end
+            end
+        end
+    end
+end
+
+function FIO:check_focused_entity()
+    if self.focusedEntity.thisEntity == nil or self.focusedEntity.thisEntity.valid == false or self.focusedEntity.thisEntity.to_be_deconstructed() then self:reset_focused_entity() return end
+    if Util.positions_match(self.focusedEntity.thisEntity.position, self.focusedEntity.oldPosition) == false then self:reset_focused_entity() return end
+
+    if self.oldDirection ~= self:getDirection() then self:reset_focused_entity() return end
+    if self.focusedEntity.fluid_box.target_position == nil then self:reset_focused_entity() return end
+    if Util.positions_match(self.thisEntity.position, self.focusedEntity.fluid_box.target_position) == false then self:reset_focused_entity() return end
+    if self.focusedEntity.thisEntity.fluidbox.get_pipe_connections(self.focusedEntity.fluid_box.index) == nil then self:reset_focused_entity() return end
+    if self.focusedEntity.thisEntity.fluidbox.get_pipe_connections(self.focusedEntity.fluid_box.index)[self.focusedEntity.fluid_box.pipe_index] == nil then self:reset_focused_entity() return end
+    if self.focusedEntity.fluid_box.flow ~= self.focusedEntity.thisEntity.fluidbox.get_pipe_connections(self.focusedEntity.fluid_box.index)[self.focusedEntity.fluid_box.pipe_index].flow_direction then self:reset_focused_entity() return end
+    if self.focusedEntity.fluid_box.filter ~= (self.focusedEntity.thisEntity.fluidbox.get_locked_fluid(self.focusedEntity.fluid_box.index) or "") then self:reset_focused_entity() return end
+    return true
+end
+
+function FIO:getCheckArea()
+    local x = self.thisEntity.position.x
+    local y = self.thisEntity.position.y
+    return {
+        [1] = {direction = 1, startP = {x-0.5, y-1.5}, endP = {x+0.5, y-0.5}}, --North
+        [2] = {direction = 2, startP = {x+0.5, y-0.5}, endP = {x+1.5, y+0.5}}, --East
+        [4] = {direction = 4, startP = {x-0.5, y+0.5}, endP = {x+0.5, y+1.5}}, --South
+        [3] = {direction = 3, startP = {x-1.5, y-0.5}, endP = {x-0.5, y+0.5}}, --West
+    }
+end
+
+function FIO:createArms()
+    BaseNet.generateArms(self)
+    --[[local areas = self:getCheckArea()
+    self:resetConnection()
+    for _, area in pairs(areas) do
+        local enti = 0
+        local ents = self.thisEntity.surface.find_entities_filtered{area={area.startP, area.endP}}
+        for _, ent in pairs(ents) do
+            if ent ~= nil and ent.valid == true then
+                if ent ~= nil and storage.entityTable[ent.unit_number] ~= nil and string.match(ent.name, "RNS_") ~= nil then
+                    if area.direction ~= self:getDirection() then --Prevent cable connection on the IO port
+                        local obj = storage.entityTable[ent.unit_number]
+                        if (string.match(obj.thisEntity.name, "RNS_NetworkCableIO") ~= nil and obj:getConnectionDirection() == area.direction) or (string.match(obj.thisEntity.name, "RNS_NetworkCableRamp") ~= nil and obj:getConnectionDirection() == area.direction) or obj.thisEntity.name == Constants.WirelessGrid.name then
+                            --Do nothing
+                        else
+                            if obj.color == nil then
+                                self.arms[area.direction] = Util.newRender(rendering.draw_sprite{sprite=Constants.NetworkCables.Cables[self.color].sprites[area.direction].name, target=self.thisEntity, surface=self.thisEntity.surface, render_layer="lower-object-above-shadow"})
+                                self.connectedObjs[area.direction] = {obj}
+                                enti = enti + 1
+                            elseif obj.color ~= "" and obj.color == self.color then
+                                self.arms[area.direction] = Util.newRender(rendering.draw_sprite{sprite=Constants.NetworkCables.Cables[self.color].sprites[area.direction].name, target=self.thisEntity, surface=self.thisEntity.surface, render_layer="lower-object-above-shadow"})
+                                self.connectedObjs[area.direction] = {obj}
+                                enti = enti + 1
+                            end
+                        end
+                        break
+                    end
+                end
+            end
+        end
+    end]]
+end
+
+function FIO:getDirection()
+    local dir = self.thisEntity.direction
+    if dir == defines.direction.north then
+        return 1
+    elseif dir == defines.direction.east then
+        return 2
+    elseif dir == defines.direction.south then
+        return 4
+    elseif dir == defines.direction.west then
+        return 3
+    end
+end
+
+function FIO:getConnectionDirection()
+    local dir = self.thisEntity.direction
+    if dir == defines.direction.north then
+        return 4
+    elseif dir == defines.direction.east then
+        return 3
+    elseif dir == defines.direction.south then
+        return 1
+    elseif dir == defines.direction.west then
+        return 2
+    end
+end
+
+function FIO:getRealDirection()
+    local dir = self.thisEntity.direction
+    if dir == defines.direction.north then
+        return 1
+    elseif dir == defines.direction.east then
+        return 2
+    elseif dir == defines.direction.south then
+        return 3
+    elseif dir == defines.direction.west then
+        return 4
+    end
+end
+
+function FIO:getTooltips(guiTable, mainFrame, justCreated)
+    if justCreated == true then
+		guiTable.vars.Gui_Title.caption = {"gui-description.RNS_NetworkCableIO_Fluid_Title"}
+        local mainFlow = GuiApi.add_flow(guiTable, "MainFlow", mainFrame, "vertical")
+
+        local rateFlow = GuiApi.add_flow(guiTable, "", mainFlow, "vertical")
+        local rateFrame = GuiApi.add_frame(guiTable, "", rateFlow, "horizontal")
+		rateFrame.style = Constants.Settings.RNS_Gui.frame_1
+		rateFrame.style.vertically_stretchable = true
+		rateFrame.style.left_padding = 3
+		rateFrame.style.right_padding = 3
+		rateFrame.style.right_margin = 3
+        GuiApi.add_label(guiTable, "TransferRate", rateFrame, {"gui-description.RNS_FluidTransferRate", self.fluidSize*11*Constants.Settings.RNS_BaseFluidIO_TransferCapacity}, Constants.Settings.RNS_Gui.white, "", true)
+
+        if storage.FIOMultiplier > 1 then
+            local stackFrame = GuiApi.add_frame(guiTable, "", rateFlow, "horizontal")
+		    stackFrame.style = Constants.Settings.RNS_Gui.frame_1
+		    stackFrame.style.vertically_stretchable = true
+		    stackFrame.style.left_padding = 3
+		    stackFrame.style.right_padding = 3
+		    stackFrame.style.right_margin = 3
+            --GuiApi.add_label(guiTable, "", stackFrame, {"gui-description.RNS_FluidFluidSize"}, Constants.Settings.RNS_Gui.white, "")
+            
+            local stackFlow = GuiApi.add_flow(guiTable, "", stackFrame, "horizontal")
+            stackFlow.style.vertical_align = "center"
+            local stackOverride = GuiApi.add_checkbox(guiTable, "RNS_NetworkCableIO_Fluid_FluidSizeOverride", stackFlow, {"gui-description.RNS_FluidSizeOverride"}, "", self.override_fluidsize, true, {ID=self.thisEntity.unit_number})
+            
+            local slider = GuiApi.add_slider(guiTable, "RNS_NetworkCableIO_Fluid_FluidSizeSlider", stackFlow, 1, storage.FIOMultiplier, self.fluidSize, 1, true, "", {ID=self.thisEntity.unit_number})
+            slider.style = "notched_slider"
+            slider.style.minimal_width = 250
+            slider.style.maximal_width = 300
+            local stackText = GuiApi.add_text_field(guiTable, "RNS_NetworkCableIO_Fluid_FluidSizeText", stackFlow, tostring(self.fluidSize), "", true, true, false, false, false, {ID=self.thisEntity.unit_number})
+            if self.override_fluidsize == false then
+                slider.enabled = false
+                stackText.enabled = false
+            end
+        end
+
+        local topFrame = GuiApi.add_flow(guiTable, "", mainFlow, "horizontal")
+        local bottomFrame = GuiApi.add_flow(guiTable, "", mainFlow, "horizontal")
+        
+        local colorFrame = GuiApi.add_frame(guiTable, "ColorFrame", topFrame, "vertical", true)
+		colorFrame.style = Constants.Settings.RNS_Gui.frame_1
+		colorFrame.style.vertically_stretchable = true
+		colorFrame.style.left_padding = 3
+		colorFrame.style.right_padding = 3
+		colorFrame.style.right_margin = 3
+		colorFrame.style.minimal_width = 150
+
+        GuiApi.add_subtitle(guiTable, "", colorFrame, {"gui-description.RNS_Connection_Color"})
+        local colorDD = GuiApi.add_dropdown(guiTable, "RNS_NetworkCableIO_Fluid_Color", colorFrame, Constants.Settings.RNS_ColorG, Constants.Settings.RNS_Colors[self.color], false, {"gui-description.RNS_Connection_Color_tooltip"}, {ID=self.thisEntity.unit_number})
+        colorDD.style.minimal_width = 100
+
+        local filtersFrame = GuiApi.add_frame(guiTable, "FiltersFrame", topFrame, "vertical", true)
+		filtersFrame.style = Constants.Settings.RNS_Gui.frame_1
+		filtersFrame.style.vertically_stretchable = true
+		filtersFrame.style.left_padding = 3
+		filtersFrame.style.right_padding = 3
+		filtersFrame.style.right_margin = 3
+		filtersFrame.style.minimal_width = 100
+
+        GuiApi.add_subtitle(guiTable, "", filtersFrame, {"gui-description.RNS_Filter"})
+
+        local filterFlow = GuiApi.add_flow(guiTable, "", filtersFrame, "vertical")
+        filterFlow.style.horizontal_align = "center"
+
+        local filter = GuiApi.add_filter(guiTable, "RNS_NetworkCableIO_Fluid_Filter", filterFlow, "", true, "fluid", 40, {ID=self.thisEntity.unit_number})
+		guiTable.vars.filter = filter
+
+		if self.circuitCondition1 == "filter" then
+            filter.enabled = false
+            self.filter = ""
+            self:set_icons(1, nil)
+        end
+
+        local settingsFrame = GuiApi.add_frame(guiTable, "SettingsFrame", topFrame, "vertical", true)
+		settingsFrame.style = Constants.Settings.RNS_Gui.frame_1
+		settingsFrame.style.vertically_stretchable = true
+		settingsFrame.style.left_padding = 3
+		settingsFrame.style.right_padding = 3
+		settingsFrame.style.right_margin = 3
+		settingsFrame.style.minimal_width = 200
+
+		GuiApi.add_subtitle(guiTable, "", settingsFrame, {"gui-description.RNS_Setting"})
+    
+        local priorityFlow = GuiApi.add_flow(guiTable, "", settingsFrame, "horizontal", false)
+        GuiApi.add_label(guiTable, "", priorityFlow, {"gui-description.RNS_Priority"}, Constants.Settings.RNS_Gui.white)
+        local priorityDD = GuiApi.add_dropdown(guiTable, "RNS_NetworkCableIO_Fluid_Priority", priorityFlow, Constants.Settings.RNS_Priorities, ((#Constants.Settings.RNS_Priorities+1)/2)-self.priority, false, "", {ID=self.thisEntity.unit_number})
+        priorityDD.style.minimal_width = 100
+
+        -- Input/Output mode
+        local state = "left"
+		if self.io == "output" then state = "right" end
+		GuiApi.add_switch(guiTable, "RNS_NetworkCableIO_Fluid_IO", settingsFrame, {"gui-description.RNS_Input"}, {"gui-description.RNS_Output"}, "", "", state, false, {ID=self.thisEntity.unit_number})
+
+        GuiApi.add_line(guiTable, "", settingsFrame, "horizontal")
+
+        if Util.getCombinatorNetwork(self.enablerCombinator) ~= nil then
+            local circuitFlow = GuiApi.add_flow(guiTable, "", bottomFrame, "horizontal")
+            local circuitFrame = GuiApi.add_frame(guiTable, "", circuitFlow, "vertical")
+            circuitFrame.style = Constants.Settings.RNS_Gui.frame_1
+            circuitFrame.style.vertically_stretchable = true
+            circuitFrame.style.left_padding = 3
+            circuitFrame.style.right_padding = 3
+            circuitFrame.style.right_margin = 3
+
+            local circuitFlow1 = GuiApi.add_flow(guiTable, "", circuitFrame, "vertical")
+            GuiApi.add_label(guiTable, "", circuitFlow1, {"gui-description.RNS_Mode_Of_Operation"}, Constants.Settings.RNS_Gui.white, "", false)
+            GuiApi.add_radiobutton(guiTable, "RNS_NetworkCableIO_Fluid_None", circuitFlow1, {"gui-description.RNS_None"}, {"gui-description.RNS_None_tooltip"}, self.circuitCondition1 == "none" and true or false, false, {ID=self.thisEntity.unit_number})
+            GuiApi.add_radiobutton(guiTable, "RNS_NetworkCableIO_Fluid_EnableDisable", circuitFlow1, {"gui-description.RNS_EnableDisable"}, {"gui-description.RNS_EnableDisable_tooltip"}, self.circuitCondition1 == "enable/disable" and true or false, false, {ID=self.thisEntity.unit_number})
+            GuiApi.add_radiobutton(guiTable, "RNS_NetworkCableIO_Fluid_SetFilters", circuitFlow1, {"gui-description.RNS_SetFilter"}, {"gui-description.RNS_SetFilter_tooltip"}, self.circuitCondition1 == "filter" and true or false, false, {ID=self.thisEntity.unit_number})
+            GuiApi.add_checkbox(guiTable, "RNS_NetworkCableIO_Fluid_SetFluidSize", circuitFlow1, {"gui-description.RNS_SetFluidSize"}, {"gui-description.RNS_SetFluidSize_tooltip"}, self.circuitCondition2.state, false, {ID=self.thisEntity.unit_number})
+            
+            if self.circuitCondition1 == "enable/disable" then
+                local enableFrame = GuiApi.add_frame(guiTable, "", circuitFlow, "vertical")
+                enableFrame.style = Constants.Settings.RNS_Gui.frame_1
+                enableFrame.style.vertically_stretchable = true
+                enableFrame.style.left_padding = 3
+                enableFrame.style.right_padding = 3
+                enableFrame.style.right_margin = 3
+                
+                GuiApi.add_subtitle(guiTable, "", enableFrame, {"gui-description.RNS_EnableDisable_Condition"})
+                local cFlow = GuiApi.add_flow(guiTable, "", enableFrame, "horizontal")
+                cFlow.style.vertical_align = "center"
+                local filter = GuiApi.add_filter(guiTable, "RNS_NetworkCableIO_Fluid_Enabler", cFlow, "", true, "signal", 40, {ID=self.thisEntity.unit_number})
+                guiTable.vars.enabler = filter
+                if self.enabler.filter ~= nil then
+                    filter.elem_value = self.enabler.filter
+                end
+                local opDD = GuiApi.add_dropdown(guiTable, "RNS_NetworkCableIO_Fluid_Operator", cFlow, Constants.Settings.RNS_OperatorN, Constants.Settings.RNS_Operators[self.enabler.operator], false, "", {ID=self.thisEntity.unit_number})
+                opDD.style.minimal_width = 50
+                --local number = GuiApi.add_filter(guiTable, "RNS_Detector_Number", cFlow, "", true, "signal", 40, {ID=self.thisEntity.unit_number})
+                --number.elem_value = {type="virtual", name="constant-number"}
+                local number = GuiApi.add_text_field(guiTable, "RNS_NetworkCableIO_Fluid_Number", cFlow, tostring(self.enabler.number), "", false, true, false, false, nil, {ID=self.thisEntity.unit_number})
+                number.style.minimal_width = 100
+            end
+            if self.circuitCondition2.state then
+                if storage.FIOMultiplier > 1 then
+                    guiTable.vars["RNS_NetworkCableIO_Fluid_FluidSizeOverride"].enabled = false
+                    guiTable.vars["RNS_NetworkCableIO_Fluid_FluidSizeSlider"].enabled = false
+                    guiTable.vars["RNS_NetworkCableIO_Fluid_FluidSizeText"].enabled = false
+                end
+                local stackSizeFrame = GuiApi.add_frame(guiTable, "", circuitFlow, "vertical")
+                stackSizeFrame.style = Constants.Settings.RNS_Gui.frame_1
+                stackSizeFrame.style.vertically_stretchable = true
+                stackSizeFrame.style.left_padding = 3
+                stackSizeFrame.style.right_padding = 3
+                stackSizeFrame.style.right_margin = 3
+                
+                GuiApi.add_subtitle(guiTable, "", stackSizeFrame, {"gui-description.RNS_SetStackSize_Condition"})
+                local filter = GuiApi.add_filter(guiTable, "RNS_NetworkCableIO_Fluid_SetFluidSize_Filter", stackSizeFrame, "", true, "signal", 40, {ID=self.thisEntity.unit_number})
+                guiTable.vars.enabler1 = filter
+                if self.circuitCondition2.filter ~= nil then
+                    filter.elem_value = self.circuitCondition2.filter
+                end
+            end
+        end
+    end
+
+    guiTable.vars.TransferRate.caption = {"gui-description.RNS_FluidTransferRate", self.fluidSize*12*Constants.Settings.RNS_BaseFluidIO_TransferCapacity}
+
+    if self.filter ~= "" then
+        guiTable.vars.filter.elem_value = self.filter
+    end
+
+    if self.circuitCondition1 == "enable/disable" and self.enabler.filter ~= nil and (Util.getCombinatorNetwork(self.enablerCombinator) ~= nil) then
+        guiTable.vars.enabler.elem_value = self.enabler.filter
+    end
+
+    if self.circuitCondition2.state and self.circuitCondition2.filter ~= nil and (Util.getCombinatorNetwork(self.enablerCombinator) ~= nil) then
+        guiTable.vars.enabler1.elem_value = self.circuitCondition2.filter
+    end
+    
+end
+
+
+function FIO.interaction(event, RNSPlayer)
+    local guiTable = RNSPlayer.GUI[Constants.Settings.RNS_Gui.tooltip]
+    if string.match(event.element.name, "RNS_NetworkCableIO_Fluid_FluidSizeSlider") then
+        local id = event.element.tags.ID
+		local io = storage.entityTable[id]
+		if io == nil then return end
+        io.fluidSize = math.ceil(event.element.slider_value)
+        guiTable.vars["RNS_NetworkCableIO_Fluid_FluidSizeText"].text = tostring(io.fluidSize)
+        return
+    elseif string.match(event.element.name, "RNS_NetworkCableIO_Fluid_FluidSizeText") then
+        local id = event.element.tags.ID
+		local io = storage.entityTable[id]
+		if io == nil then return end
+        --io.fluidSize = math.max(1, math.min(tonumber(event.element.text) or 0, storage.FIOMultiplier))
+        io.fluidSize = math.min(tonumber(event.element.text) or 0, storage.FIOMultiplier)
+        guiTable.vars["RNS_NetworkCableIO_Fluid_FluidSizeSlider"].slider_value = io.fluidSize
+        guiTable.vars["RNS_NetworkCableIO_Fluid_FluidSizeText"].text = tostring(io.fluidSize)
+        return
+    elseif string.match(event.element.name, "RNS_NetworkCableIO_Fluid_None") then
+        local id = event.element.tags.ID
+		local io = storage.entityTable[id]
+		if io == nil then return end
+        io.circuitCondition1 = "none"
+        RNSPlayer:push_varTable(id, true)
+        --guiTable.vars["RNS_NetworkCableIO_Item_EnableDisable"].state = false
+        return
+    elseif string.match(event.element.name, "RNS_NetworkCableIO_Fluid_EnableDisable") then
+        local id = event.element.tags.ID
+		local io = storage.entityTable[id]
+		if io == nil then return end
+        io.circuitCondition1 = "enable/disable"
+        RNSPlayer:push_varTable(id, true)
+        --guiTable.vars["RNS_NetworkCableIO_Item_None"].state = false
+        return
+    elseif string.match(event.element.name, "RNS_NetworkCableIO_Fluid_SetFilters") then
+        local id = event.element.tags.ID
+		local io = storage.entityTable[id]
+		if io == nil then return end
+        io.circuitCondition1 = "filter"
+        RNSPlayer:push_varTable(id, true)
+        --guiTable.vars["RNS_NetworkCableIO_Item_None"].state = false
+        return
+    elseif string.match(event.element.name, "RNS_NetworkCableIO_Fluid_SetFluidSize_Filter") then
+        local id = event.element.tags.ID
+		local io = storage.entityTable[id]
+		if io == nil then return end
+        if event.element.elem_value ~= nil then
+            io.circuitCondition2.filter = event.element.elem_value
+        else
+            io.circuitCondition2.filter = nil
+        end
+		return
+    elseif string.match(event.element.name, "RNS_NetworkCableIO_Fluid_SetFluidSize") then
+        local id = event.element.tags.ID
+		local io = storage.entityTable[id]
+		if io == nil then return end
+        io.circuitCondition2.state = event.element.state
+        io.override_fluidsize = true
+        RNSPlayer:push_varTable(id, true)
+        --guiTable.vars["RNS_NetworkCableIO_Item_None"].state = false
+        return
+    elseif string.match(event.element.name, "RNS_NetworkCableIO_Fluid_FluidSizeOverride") then
+        local id = event.element.tags.ID
+		local io = storage.entityTable[id]
+		if io == nil then return end
+        io.override_fluidsize = event.element.state
+        RNSPlayer:push_varTable(id, true)
+        --guiTable.vars["RNS_NetworkCableIO_Item_None"].state = false
+        return
+    elseif string.match(event.element.name, "RNS_NetworkCableIO_Fluid_Number") then
+        local id = event.element.tags.ID
+		local io = storage.entityTable[id]
+		if io == nil then return end
+        local num = math.min(2^32, tonumber(event.element.text ~= "" and event.element.text or "0"))
+        io.enabler.number = num
+        event.element.text = tostring(num)
+        return
+    elseif string.match(event.element.name, "RNS_NetworkCableIO_Fluid_Operator") then
+        local id = event.element.tags.ID
+		local io = storage.entityTable[id]
+		if io == nil then return end
+        local operator = Constants.Settings.RNS_OperatorN[event.element.selected_index]
+        if operator ~= io.enabler.operator then
+            io.enabler.operator = operator
+        end
+		return
+    elseif string.match(event.element.name, "RNS_NetworkCableIO_Fluid_Enabler") then
+        local id = event.element.tags.ID
+		local io = storage.entityTable[id]
+		if io == nil then return end
+        if event.element.elem_value ~= nil then
+            io.enabler.filter = event.element.elem_value
+        else
+            io.enabler.filter = nil
+        end
+		return
+    elseif string.match(event.element.name, "RNS_NetworkCableIO_Fluid_Filter") then
+		local id = event.element.tags.ID
+		local io = storage.entityTable[id]
+		if io == nil then return end
+        if event.element.elem_value ~= nil then
+            io.filter = event.element.elem_value
+            io:set_icons(1, io.filter)
+            --io.combinator.get_or_create_control_behavior().set_signal(1, {signal={type="fluid", name=event.element.elem_value}, count=1})
+        else
+            io.filter = ""
+            io:set_icons(1, io.filter)
+            --io.combinator.get_or_create_control_behavior().set_signal(1, nil)
+        end
+        io.processed = false
+		return
+	elseif string.match(event.element.name, "RNS_NetworkCableIO_Fluid_Color") then
+		local id = event.element.tags.ID
+		local io = storage.entityTable[id]
+		if io == nil then return end
+        local color = Constants.Settings.RNS_ColorN[event.element.selected_index]
+        if color ~= io.color then
+            io.color = color
+            Util.newRender(rendering.draw_sprite{sprite=Constants.NetworkCables.Cables[io.color].sprites[5].name, target=io.thisEntity, surface=io.thisEntity.surface, render_layer="lower-object-above-shadow"})
+            io.processed = false
+            io:createArms()
+            BaseNet.postArms(io)
+            BaseNet.update_network_controller(io.networkController)
+        end
+		return
+	elseif string.match(event.element.name, "RNS_NetworkCableIO_Fluid_Priority") then
+        local id = event.element.tags.ID
+		local io = storage.entityTable[id]
+		if io == nil then return end
+        local priority = Constants.Settings.RNS_Priorities[event.element.selected_index]
+        if priority ~= io.priority then
+            io.priority = priority
+            --The refresh files the bus under its new priority. Moving it by hand never
+            --ran (valid is a method, not a field) and indexed a list of ids by id.
+            BaseNet.update_network_controller(io.networkController)
+            io.processed = false
+        end
+		return
+    elseif string.match(event.element.name, "RNS_NetworkCableIO_Fluid_IO") then
+        local id = event.element.tags.ID
+		local io = storage.entityTable[id]
+		if io == nil then return end
+        local to = event.element.switch_state == "left" and "input" or "output"
+        --See the item bus: the refresh files the bus under its new mode.
+        BaseNet.update_network_controller(io.networkController)
+        io.io = to
+        io.processed = false
+        io:generateModeIcon()
+		return
+    end
+end

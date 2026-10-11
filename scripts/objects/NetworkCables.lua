@@ -1,0 +1,157 @@
+NCbl = {
+    thisEntity = nil,
+    entID = nil,
+    arms = nil,
+    color = "",
+    connectedObjs = nil,
+    networkController = nil,
+    cardinals = nil,
+}
+
+function NCbl:new(object)
+    if object == nil then return end
+    local t = {}
+    local mt = {}
+    setmetatable(t, mt)
+    mt.__index = NCbl
+    t.thisEntity = object
+    t.entID = object.unit_number
+    for name, color in pairs(Constants.NetworkCables.Cables) do
+        if object.name == color.cable.name then
+            Util.newRender(rendering.draw_sprite{sprite=color.sprites[5].name, target=t.thisEntity, surface=t.thisEntity.surface, render_layer="lower-object-above-shadow"})
+            t.color = tostring(name)
+            break
+        end
+    end
+    t.arms = {
+        [1] = nil, --N
+        [2] = nil, --E
+        [3] = nil, --S
+        [4] = nil, --W
+    }
+    t.connectedObjs = {
+        [1] = {}, --N
+        [2] = {}, --E
+        [4] = {}, --S
+        [3] = {}, --W
+    }
+    t.cardinals = {
+        [1] = false, --N
+        [2] = false, --E
+        [3] = false, --S
+        [4] = false, --W
+    }
+    UpdateSys.add_to_entity_table(t)
+    t:createArms()
+    BaseNet.postArms(t)
+    BaseNet.update_network_controller(t.networkController)
+    --UpdateSys.addEntity(t)
+    return t
+end
+
+function NCbl:rebuild(object)
+    if object == nil then return end
+    local mt = {}
+    mt.__index = NCbl
+    setmetatable(object, mt)
+end
+
+function NCbl:remove()
+    --[[for _, arm in pairs(self.arms) do
+        if arm ~= nil then
+            Util.destroyRender(arm)
+        end
+    end]]
+    --global.placedCablesTable[self.thisEntity.surface.index][tostring(self.thisEntity.position)] = nil
+    UpdateSys.remove_from_entity_table(self)
+    BaseNet.postArms(self)
+    --UpdateSys.remove(self)
+    BaseNet.update_network_controller(self.networkController, self.entID)
+end
+
+function NCbl:valid()
+    return self.thisEntity ~= nil and self.thisEntity.valid == true
+end
+
+--[[function NCbl:update()
+    --if game.tick % 60 then
+        self.lastUpdate = game.tick
+        if valid(self) == false then
+            self:remove()
+            return
+        end
+        if valid(self.networkController) == false then
+            self.networkController = nil
+        end
+        if self.thisEntity.to_be_deconstructed() == true then return end
+        --if game.tick % 25 then self:createArms() end
+    --end
+end]]
+
+function NCbl:resetConnection()
+    self.connectedObjs = {
+        [1] = {}, --N
+        [2] = {}, --E
+        [3] = {}, --S
+        [4] = {}, --W
+    }
+    for _, arm in pairs(self.arms) do
+        if arm ~= nil then
+            Util.destroyRender(arm)
+        end
+    end
+end
+
+function NCbl:getCheckArea()
+    local x = self.thisEntity.position.x
+    local y = self.thisEntity.position.y
+    return {
+        [1] = {direction = 1, startP = {x-0.5, y-1.5}, endP = {x+0.5, y-0.5}}, --North
+        [2] = {direction = 2, startP = {x+0.5, y-0.5}, endP = {x+1.5, y+0.5}}, --East
+        [4] = {direction = 4, startP = {x-0.5, y+0.5}, endP = {x+0.5, y+1.5}}, --South
+        [3] = {direction = 3, startP = {x-1.5, y-0.5}, endP = {x-0.5, y+0.5}}, --West
+    }
+end
+
+function NCbl:createArms()
+    BaseNet.generateArms(self)
+    --[[local areas = self:getCheckArea()
+    self:resetConnection()
+    for _, area in pairs(areas) do
+        local ents = self.thisEntity.surface.find_entities_filtered{area={area.startP, area.endP}}
+        for _, ent in pairs(ents) do
+            if ent ~= nil and ent.valid == true then
+                if ent ~= nil and storage.entityTable[ent.unit_number] ~= nil and string.match(ent.name, "RNS_") ~= nil then
+                    local obj = storage.entityTable[ent.unit_number]
+                    if (string.match(obj.thisEntity.name, "RNS_NetworkCableIO") ~= nil and obj:getConnectionDirection() == area.direction) or (string.match(obj.thisEntity.name, "RNS_NetworkCableRamp") ~= nil and obj:getConnectionDirection() == area.direction) or obj.thisEntity.name == Constants.WirelessGrid.name then
+                        --Do nothing
+                    else
+                        if obj.color == nil then
+                            self.arms[area.direction] = Util.newRender(rendering.draw_sprite{sprite=Constants.NetworkCables.Cables[self.color].sprites[area.direction].name, target=self.thisEntity, surface=self.thisEntity.surface, render_layer="lower-object-above-shadow"})
+                            self.connectedObjs[area.direction] = {obj}
+                        elseif obj.color ~= "" and obj.color == self.color then
+                            self.arms[area.direction] = Util.newRender(rendering.draw_sprite{sprite=Constants.NetworkCables.Cables[self.color].sprites[area.direction].name, target=self.thisEntity, surface=self.thisEntity.surface, render_layer="lower-object-above-shadow"})
+                            self.connectedObjs[area.direction] = {obj}
+                        end
+                    end
+                end
+            end
+        end
+    end]]
+end
+
+function NCbl:getTooltips(guiTable, mainFrame, justCreated)
+    if justCreated == true then
+        guiTable.vars.Gui_Title.caption = {"gui-description.RNS_NetworkCable_Title"}
+
+        local infoFrame = GuiApi.add_frame(guiTable, "InformationFrame", mainFrame, "vertical", true)
+		infoFrame.style = Constants.Settings.RNS_Gui.frame_1
+		infoFrame.style.vertically_stretchable = true
+		infoFrame.style.left_padding = 3
+		infoFrame.style.right_padding = 3
+		infoFrame.style.right_margin = 3
+
+        GuiApi.add_subtitle(guiTable, "", infoFrame, {"gui-description.RNS_Information"})
+        GuiApi.add_label(guiTable, "", infoFrame, {"gui-description.RNS_NetworkCable"}, Constants.Settings.RNS_Gui.white)
+    end
+end

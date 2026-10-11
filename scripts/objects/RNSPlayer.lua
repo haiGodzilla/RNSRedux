@@ -1,0 +1,183 @@
+--RNSPlayer object
+RNSP = {
+    thisEntity = nil,
+    entID = nil,
+    name = nil,
+    networkID = nil,
+    GUI = nil,
+    varTable = nil,
+    storedAmount = 0
+}
+
+--Constructor
+function RNSP:new(player)
+    if player == nil then return end
+    local t = {}
+    local mt = {}
+    setmetatable(t, mt) --this is necessary for all objects so the objects can be reloaded when the save loads up
+    mt.__index = RNSP
+    t.thisEntity = player
+    --A string key: updateTable is keyed by entID, and a bare player index shares its key
+    --space with entity unit numbers. For the same reason the player stays out of
+    --entityTable, where an entity with unit number == player index used to find it.
+    t.entID = RNSP.updateKey(player.index)
+    t.name = player.name
+    t.GUI = {}
+    t.varTable = {}
+    UpdateSys.addEntity(t)
+    return t
+end
+
+function RNSP.updateKey(playerIndex)
+    return "player-" .. playerIndex
+end
+
+--Saves written before the string key keep the player under its index in entityTable
+--and updateTable. Runs from onInit, which also handles on_configuration_changed.
+function RNSP.migrateKeys()
+    for _, rnsp in pairs(storage.PlayerTable or {}) do
+        if type(rnsp.entID) == "number" then
+            if storage.entityTable[rnsp.entID] == rnsp then storage.entityTable[rnsp.entID] = nil end
+            if storage.updateTable[rnsp.entID] == rnsp then storage.updateTable[rnsp.entID] = nil end
+            if rnsp.thisEntity ~= nil and rnsp.thisEntity.valid == true then
+                rnsp.entID = RNSP.updateKey(rnsp.thisEntity.index)
+                UpdateSys.addEntity(rnsp)
+            end
+        end
+    end
+end
+
+--Reconstructor
+function RNSP:rebuild(object)
+    if object == nil then return end
+    local mt = {}
+    mt.__index = RNSP
+    setmetatable(object, mt)
+end
+
+function RNSP:update_gui_distance_validity()
+    --Update to use LuaEntity.can_reach_entity(entity) instead
+    for _, guiTable in pairs(self.GUI or {}) do
+        if guiTable.gui ~= nil and guiTable.gui.valid == true then
+            local obj = guiTable.vars.currentObject
+            if obj == nil then goto next end
+            if obj ~= nil and obj.thisEntity == nil then goto next end
+            if obj ~= nil and obj.thisEntity ~= nil and obj.thisEntity.valid == false then goto next end
+            
+            if not self.thisEntity.can_reach_entity(obj.thisEntity) then
+                GUI.remove_gui(guiTable, self.thisEntity)
+                return
+            end
+        end
+        ::next::
+    end
+end
+
+function RNSP:update()
+    self:update_gui_distance_validity()
+    if self.thisEntity.selected ~= nil then
+        local entity = self.thisEntity.selected
+        --if string.match(entity.name, "RNS_NetworkCableIO") or string.match(entity.name, "RNS_NetworkCableRamp") then
+            local obj = storage.entityTable[entity.unit_number]
+            if obj ~= nil and obj.toggleHoverIcon then
+                obj:toggleHoverIcon(true)
+            end
+        --end
+    end
+end
+
+--Deconstructor
+function RNSP:remove()
+    UpdateSys.remove(self)
+    if storage.PlayerTable[self.name] == self then storage.PlayerTable[self.name] = nil end
+end
+
+function RNSP:resetConnection()
+
+end
+
+--Is valid. A removed player leaves an invalid LuaPlayer behind, and every access to it
+--throws; UpdateSys skips objects that report invalid.
+function RNSP:valid()
+    return self.thisEntity ~= nil and self.thisEntity.valid == true
+end
+
+function RNSP:process_logistic_slots(network)
+    if self.thisEntity == nil or self.thisEntity.valid == false then return end
+    if not self.thisEntity.is_shortcut_toggled(Constants.Settings.RNS_Player_Port_Shortcut) then return end
+    if self.thisEntity.get_inventory(defines.inventory.character_armor) == nil then return end
+    local armorSlot = self.thisEntity.get_inventory(defines.inventory.character_armor)
+    if armorSlot[1].count <= 0 then return end
+    if armorSlot[1].grid == nil then return end
+    if armorSlot[1].grid.find(Constants.PlayerPort.name) == nil then return end
+    local port = armorSlot[1].grid.find(Constants.PlayerPort.name)
+    if port == nil then return end
+    if port.energy < Constants.Settings.RNS_PlayerPort_Consumption then return end
+    local player_inv = self.thisEntity.get_main_inventory()
+    --2.0 removed request_slot_count and get_personal_logistic_slot. The character's
+    --requests now live in its requester point, whose filters combine all active
+    --sections: count is the minimum, max_count the maximum (nil for none).
+    local character = self.thisEntity.character
+    local point = character ~= nil and character.get_requester_point() or nil
+    if point ~= nil and point.enabled == true and point.filters ~= nil then
+        for _, filter in pairs(point.filters) do
+            --Only plain items: quality items are refused at the drive anyway.
+            if filter.name ~= nil and (filter.type == nil or filter.type == "item") and (filter.quality == nil or filter.quality == "normal") then
+                local min = filter.count
+                local max = filter.max_count or math.huge
+                local name = filter.name
+                local amount = (player_inv.get_item_count(name) or 0) + ((self.thisEntity.cursor_stack and self.thisEntity.cursor_stack.valid_for_read and self.thisEntity.cursor_stack.name == name) and self.thisEntity.cursor_stack.count or 0)
+                
+                local add = (amount <= min) and min-amount or 0
+                add = math.min(add*Constants.Settings.RNS_PlayerPort_Consumption, port.energy)/Constants.Settings.RNS_PlayerPort_Consumption
+                
+                local remove = (amount > max) and amount-max or 0
+                remove = math.min(remove*Constants.Settings.RNS_PlayerPort_Consumption, port.energy)/Constants.Settings.RNS_PlayerPort_Consumption
+                
+                local itemstack = Itemstack.create_template(name)
+
+                if add > 0 then
+                    local worked = add - BaseNet.transfer_from_network_to_inv(network, {thisEntity = self.thisEntity,inventory = {input = {index = 1, max = 1, values = {defines.inventory.character_main}}}}, itemstack, add, true, false, true)
+                    port.energy = port.energy - worked*Constants.Settings.RNS_PlayerPort_Consumption
+                    if port.energy < Constants.Settings.RNS_PlayerPort_Consumption then return end
+                end
+                if remove > 0 then
+                    local worked = remove - BaseNet.transfer_from_inv_to_network(network, {thisEntity = self.thisEntity,inventory = {output = {index = 1, max = 1, values = {defines.inventory.character_main}}}}, itemstack, nil, "whitelist", remove, true, false)
+                    port.energy = port.energy - worked*Constants.Settings.RNS_PlayerPort_Consumption
+                    if port.energy < Constants.Settings.RNS_PlayerPort_Consumption then return end
+                end
+            end
+        end
+    end
+
+    local player_trash = self.thisEntity.get_inventory(defines.inventory.character_trash)
+    if player_trash ~= nil and not player_trash.is_empty() then
+        for _, entry in pairs(player_trash.get_contents()) do
+            local name = entry.name
+            local count = entry.count
+            local itemstack = Itemstack.create_template(name)
+            local remove = math.min(count*Constants.Settings.RNS_PlayerPort_Consumption, port.energy)/Constants.Settings.RNS_PlayerPort_Consumption
+            local worked = remove - BaseNet.transfer_from_inv_to_network(network, {thisEntity = self.thisEntity,inventory = {output = {index = 1, max = 1, values = {defines.inventory.character_trash}}}}, itemstack, nil, "whitelist", remove, true, false)
+            port.energy = port.energy - worked*Constants.Settings.RNS_PlayerPort_Consumption
+            if port.energy < Constants.Settings.RNS_PlayerPort_Consumption then return end
+        end
+    end
+end
+
+function RNSP:pull_varTable(name)
+    return self.varTable[name]
+end
+
+function RNSP:remove_varTable(name)
+    local exists = self.varTable[name]
+    if exists ~= nil then self.varTable[name] = nil end
+end
+
+function RNSP:push_varTable(name, value)
+    self.varTable[name] = value
+end
+
+--Tooltips
+function RNSP:getTooltips(guiTable, mainFrame, justCreated)
+    --game.print(game.tick)
+end

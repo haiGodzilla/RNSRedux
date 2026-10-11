@@ -1,0 +1,6 @@
+Dieser Mod ist ein Fork von "Refined Network Storage" von NindyBun
+(https://github.com/NindyBun/RefinedNetworkStorage), lizenziert unter MIT.
+
+Änderungen gegenüber dem Original: Portierung auf Factorio 2.0,
+Neubau der Item-Speicherschicht auf Basis von Script-Inventaren.
+Alle hier nicht genannten Teile stammen aus dem Original.
