@@ -142,7 +142,8 @@ end
 
 function NCbl:getTooltips(guiTable, mainFrame, justCreated)
     if justCreated == true then
-        guiTable.vars.Gui_Title.caption = {"gui-description.RNS_NetworkCable_Title"}
+        --The body stays the joke, but the title has to name the cable, colour included.
+        guiTable.vars.Gui_Title.caption = Util.get_item_name(self.thisEntity.name) or {"gui-description.RNS_NetworkCable_Title"}
 
         local infoFrame = GuiApi.add_frame(guiTable, "InformationFrame", mainFrame, "vertical", true)
 		infoFrame.style = Constants.Settings.RNS_Gui.frame_1

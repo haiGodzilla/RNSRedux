@@ -134,7 +134,7 @@ end]]
 
 function DT:update_signal()
     if self.mode == "enable/disable" then
-        if self.filters[self.type] == "" or self.output == "" or self.enabler.filter == "" then return end
+        if self.filters[self.type] == "" or self.enabler.filter == "" then return end
         local amount = self.networkController.network.Contents[self.type][self.filters[self.type]] or 0
 
         if self.networkController ~= nil and self.networkController.thisEntity ~= nil and self.networkController.thisEntity.valid == true and self.networkController.thisEntity.to_be_deconstructed() == false and Util.OperatorFunctions[self.enabler.operator](amount, self.enabler.number) == true then

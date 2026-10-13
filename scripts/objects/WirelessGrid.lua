@@ -40,10 +40,34 @@ function WG:update()
         self:remove()
         return
     end
+    self:resolvePendingConnection()
 	if self.connected and (storage.NetworkControllers[self.connected] == nil or storage.NetworkControllers[self.connected].thisEntity == nil or storage.NetworkControllers[self.connected].thisEntity.valid == false) then
 		--self.connected = nil
 		return
 	end
+end
+
+--Resolves the controller a pasted grid was placed with. The grid is already in the
+--update table, so unlike TR it needs no registration (B-41).
+function WG:resolvePendingConnection()
+    if self.pendingConnection == nil then return end
+    if self.thisEntity == nil or self.thisEntity.valid == false then
+        self.pendingConnection = nil
+        return
+    end
+    if self.connected ~= nil and storage.NetworkControllers[self.connected] ~= nil then
+        self.pendingConnection = nil
+        return
+    end
+    local offset = self.pendingConnection
+    local controller = self.thisEntity.surface.find_entity(Constants.NetworkController.main.name, {self.thisEntity.position.x + offset[1], self.thisEntity.position.y + offset[2]})
+    if controller ~= nil and controller.valid == true then
+        self.connected = controller.unit_number
+        self.pendingConnection = nil
+        return
+    end
+    self.pendingTicks = self.pendingTicks + 1
+    if self.pendingTicks > 120 then self.pendingConnection = nil end
 end
 
 function WG:copy_settings(obj)
@@ -51,21 +75,39 @@ function WG:copy_settings(obj)
 	self.sortOrder = obj.sortOrder
 end
 
-function WG:serialize_settings()
+--See TR:serialize_settings for the blueprintUnits contract (B-41): a controller inside
+--the same blueprint is recorded as an offset, one outside keeps its unit number.
+function WG:serialize_settings(blueprintUnits)
     local tags = {}
-    tags["connection"] = self.connected
 	tags["sortOrder"] = self.sortOrder
+    local controller = self.connected ~= nil and storage.NetworkControllers[self.connected] or nil
+    local controllerEntity = controller ~= nil and controller.thisEntity or nil
+    if controllerEntity ~= nil and controllerEntity.valid == true then
+        if blueprintUnits ~= nil and blueprintUnits[controller.entID] ~= nil then
+            tags["connection_offset"] = {
+                controllerEntity.position.x - self.thisEntity.position.x,
+                controllerEntity.position.y - self.thisEntity.position.y,
+            }
+        else
+            tags["connection"] = self.connected
+        end
+    end
     return tags
 end
 
 function WG:deserialize_settings(tags)
-    self.connected= tags["connection"]
-	self.sortOrder = tags["sortOrder"]
+    self.connected = Util.tagNumber(tags["connection"], self.connected, 1)
+	self.sortOrder = Util.tagChoice(tags["sortOrder"], self.sortOrder, {HL = true, LH = true})
+    local offset = tags["connection_offset"]
+    if type(offset) == "table" and type(offset[1]) == "number" and type(offset[2]) == "number" then
+        self.pendingConnection = {offset[1], offset[2]}
+        self.pendingTicks = 0
+    end
 end
 
 function WG:DataConvert_ItemToEntity(tag_contents)
-    self.connected = tag_contents.connected
-	self.sortOrder = tag_contents.sortOrder
+    self.connected = Util.tagNumber(tag_contents.connected, self.connected, 1)
+	self.sortOrder = Util.tagChoice(tag_contents.sortOrder, self.sortOrder, {HL = true, LH = true})
 end
 
 function WG:DataConvert_EntityToItem(item)
@@ -122,7 +164,8 @@ function WG:getTooltips(guiTable, mainFrame, justCreated)
 		guiTable.vars.WG = {
 			cache = {
 				items = {},
-				fluids = {}
+				fluids = {},
+				player = {}
 			}
 		}
 		-- Create the Network Inventory Frame --
@@ -145,6 +188,29 @@ function WG:getTooltips(guiTable, mainFrame, justCreated)
 		inventoryScrollPaneItems.style.bottom_margin = 3
 
 		GuiApi.add_table(guiTable, "WirelessGridTableItems", inventoryScrollPaneItems, 8, true)
+
+		-- Create the Player Inventory Frame, the same shape the NII uses, so its items
+		--can be clicked into the network.
+		local playerInventoryFrame = GuiApi.add_frame(guiTable, "PlayerInventoryFrame", mainFrame, "vertical", true)
+		playerInventoryFrame.style = Constants.Settings.RNS_Gui.frame_1
+		playerInventoryFrame.style.vertically_stretchable = true
+		playerInventoryFrame.style.left_padding = 3
+		playerInventoryFrame.style.right_padding = 3
+		playerInventoryFrame.style.left_margin = 3
+		playerInventoryFrame.style.right_margin = 3
+
+		GuiApi.add_subtitle(guiTable, "", playerInventoryFrame, {"gui-description.RNS_PlayerInventory"})
+		local player_inventory_flow = GuiApi.add_flow(guiTable, "", playerInventoryFrame, "vertical")
+		player_inventory_flow.style.vertical_align = "center"
+		GuiApi.add_button(guiTable, "RNS_WG_Insert", player_inventory_flow, Constants.Icons.insert_arrow.name, nil, nil, {"gui-description.RNS_Insert_Item"}, 37, false, true, nil, "inventory_slot", {ID=self.entID})
+
+		local playerInventoryScrollPane = GuiApi.add_scroll_pane(guiTable, "PlayerInventoryScrollPane", playerInventoryFrame, 500, true)
+		playerInventoryScrollPane.style = Constants.Settings.RNS_Gui.scroll_pane
+		playerInventoryScrollPane.style.minimal_width = 308
+		playerInventoryScrollPane.style.vertically_stretchable = true
+		playerInventoryScrollPane.style.bottom_margin = 3
+
+		GuiApi.add_table(guiTable, "PlayerInventoryTable", playerInventoryScrollPane, 8, true)
 
 		-- Create the Player Inventory Frame --
 		--[[local playerInventoryFrame = GuiApi.add_frame(guiTable, "PlayerInventoryFrame", mainFrame, "vertical", true)
@@ -212,12 +278,6 @@ function WG:getTooltips(guiTable, mainFrame, justCreated)
 		GuiApi.add_label(guiTable, "", helpTable, {"gui-description.RNS_HelpText5"}, Constants.Settings.RNS_Gui.white)
 		--GuiApi.add_label(guiTable, "", helpTable, {"gui-description.RNS_HelpText6"}, Constants.Settings.RNS_Gui.white)
 
-		
-		GuiApi.add_subtitle(guiTable, "", informationFrame, {"gui-description.RNS_PlayerInventory"})
-		local player_inventory_flow = GuiApi.add_flow(guiTable, "", informationFrame, "vertical")
-		player_inventory_flow.style.vertical_align = "center"
-		GuiApi.add_button(guiTable, "RNS_WG_Insert", player_inventory_flow, Constants.Icons.insert_arrow.name, nil, nil, {"gui-description.RNS_Insert_Item"}, 37, false, true, nil, "inventory_slot", {ID=self.entID})
-		
 		GuiApi.add_line(guiTable, "", informationFrame, "horizontal")
 
 		local infoFlow = GuiApi.add_flow(guiTable, "", informationFrame, "vertical")
@@ -281,7 +341,8 @@ function WG:getTooltips(guiTable, mainFrame, justCreated)
 	--inventoryScrollPane.clear()
 	--playerInventoryScrollPane.clear()
 
-	--self:createPlayerInventory(guiTable, RNSPlayer, guiTable.vars.PlayerInventoryTable, textField.text)
+	--The player inventory is shown regardless of whether the grid is connected.
+	self:createPlayerInventory(guiTable, RNSPlayer, guiTable.vars.PlayerInventoryTable, textField.text)
 
     --if self.networkController == nil or not self.networkController.stable or (self.networkController.thisEntity ~= nil and self.networkController.thisEntity.valid == false) then return end
 	--if self.network_controller_surface == nil or self.thisEntity.surface.index ~= self.network_controller_surface then return end
@@ -297,11 +358,11 @@ function WG:getTooltips(guiTable, mainFrame, justCreated)
 	self:createNetworkInventory(guiTable, RNSPlayer, textField.text)
 end
 
---[[function WG:createPlayerInventory(guiTable, RNSPlayer, tableList, text)
+function WG:createPlayerInventory(guiTable, RNSPlayer, tableList, text)
 	local inv = {}
 	for i = 1, #RNSPlayer.thisEntity.get_main_inventory() do
 		local item = RNSPlayer.thisEntity.get_main_inventory()[i]
-		if item.count <= 0 then goto continue end
+		if item == nil or item.valid_for_read == false or item.count <= 0 then goto continue end
 		RNSPlayer.thisEntity.request_translation(Util.get_item_name(item.name))
 		if Util.get_item_name(item.name)[1] ~= nil then
 			local locName = Util.get_item_name(item.name)[1]
@@ -341,30 +402,30 @@ end
 			table.insert(buttonText, {"gui-description.RNS_linked"})
 			table.insert(buttonText, item.connected_entity.entity_label or Util.get_item_name(item.connected_entity.name))
 		end
-		if guiTable.vars.WG.player[itemIndex] == nil then
-			table.insert(guiTable.vars.WG.player, GuiApi.add_button(guiTable, "RNS_WG_PInv_".. itemIndex, tableList, "item/" .. (item.name), "item/" .. (item.name), "item/" .. (item.name), buttonText, 37, false, true, item.count, ((item.modified or (item.ammo and item.ammo < prototypes.item[item.name].magazine_size) or (item.durability and item.durability < Util.getMaxDurability(item.name))) and {Constants.Settings.RNS_Gui.button_2} or {Constants.Settings.RNS_Gui.button_1})[1], {ID=self.thisEntity.unit_number, name=(item.name), stack=item}))
+		if guiTable.vars.WG.cache.player[itemIndex] == nil then
+			table.insert(guiTable.vars.WG.cache.player, GuiApi.add_button(guiTable, "RNS_WG_PInv_".. itemIndex, tableList, "item/" .. (item.name), "item/" .. (item.name), "item/" .. (item.name), buttonText, 37, false, true, item.count, ((item.modified or (item.ammo and item.ammo < prototypes.item[item.name].magazine_size) or (item.durability and item.durability < Util.getMaxDurability(item.name))) and {Constants.Settings.RNS_Gui.button_2} or {Constants.Settings.RNS_Gui.button_1})[1], {ID=self.thisEntity.unit_number, name=(item.name), stack=item}))
 		else
-			local button = guiTable.vars.WG.player[itemIndex]
+			local button = guiTable.vars.WG.cache.player[itemIndex]
 			if Itemstack:reload(button.tags.stack):compare_itemstacks(item, true, true) == false then
 				button.destroy()
-				guiTable.vars.WG.player[itemIndex] = GuiApi.add_button(guiTable, "RNS_WG_PInv_".. itemIndex, tableList, "item/" .. (item.name), "item/" .. (item.name), "item/" .. (item.name), buttonText, 37, false, true, item.count, ((item.modified or (item.ammo and item.ammo < prototypes.item[item.name].magazine_size) or (item.durability and item.durability < Util.getMaxDurability(item.name))) and {Constants.Settings.RNS_Gui.button_2} or {Constants.Settings.RNS_Gui.button_1})[1], {ID=self.thisEntity.unit_number, name=(item.name), stack=item})
+				guiTable.vars.WG.cache.player[itemIndex] = GuiApi.add_button(guiTable, "RNS_WG_PInv_".. itemIndex, tableList, "item/" .. (item.name), "item/" .. (item.name), "item/" .. (item.name), buttonText, 37, false, true, item.count, ((item.modified or (item.ammo and item.ammo < prototypes.item[item.name].magazine_size) or (item.durability and item.durability < Util.getMaxDurability(item.name))) and {Constants.Settings.RNS_Gui.button_2} or {Constants.Settings.RNS_Gui.button_1})[1], {ID=self.thisEntity.unit_number, name=(item.name), stack=item})
 			end
-			guiTable.vars.WG.player[itemIndex].tooltip = buttonText
-			guiTable.vars.WG.player[itemIndex].number = item.count
-			guiTable.vars.WG.player[itemIndex].tags.stack = item
+			guiTable.vars.WG.cache.player[itemIndex].tooltip = buttonText
+			guiTable.vars.WG.cache.player[itemIndex].number = item.count
+			guiTable.vars.WG.cache.player[itemIndex].tags.stack = item
 		end
 		itemIndex = itemIndex + 1
 		::continue::
 	end
-	if #guiTable.vars.WG.player > #inv then
-		for j = #guiTable.vars.WG.player, #inv, -1 do
-			if guiTable.vars.WG.player[j] then
-				guiTable.vars.WG.player[j].destroy()
+	if #guiTable.vars.WG.cache.player > #inv then
+		for j = #guiTable.vars.WG.cache.player, #inv, -1 do
+			if guiTable.vars.WG.cache.player[j] then
+				guiTable.vars.WG.cache.player[j].destroy()
 			end
-			table.remove(guiTable.vars.WG.player, j)
+			table.remove(guiTable.vars.WG.cache.player, j)
 		end
 	end
-end]]
+end
 
 function WG:createNetworkInventory(guiTable, RNSPlayer, text)
 	local inv = {}
@@ -710,6 +771,9 @@ function WG.interaction(event, RNSPlayer)
 	if string.match(event.element.name, "RNS_WG_Insert") then
 		WG.transfer_from_pinv(RNSPlayer, obj, event.element.tags, count)
 		return
+	elseif string.match(event.element.name, "RNS_WG_PInv") then
+		WG.transfer_player_to_network(RNSPlayer, obj, event.element.tags, count)
+		return
 	elseif string.match(event.element.name, "RNS_WG_IDInv") then
 		WG.transfer_from_idinv(RNSPlayer, obj, event.element.tags, count)
 		return
@@ -718,4 +782,28 @@ function WG.interaction(event, RNSPlayer)
 		return
 	end
 
+end
+
+--Mirror of NII.transfer_player_to_network: one item, a stack, half, ten or all from
+--the character inventory into the network, driven by the click count.
+function WG.transfer_player_to_network(RNSPlayer, WG, tags, count)
+	if RNSPlayer.thisEntity == nil or WG == nil then return end
+	local network = WG.connected and storage.entityTable[WG.connected] ~= nil and storage.entityTable[WG.connected].network or nil
+	if network == nil then return end
+	if network:is_full() then return end
+	if tags == nil then return end
+	local itemstack = Itemstack:reload(tags.stack)
+	if itemstack == nil or itemstack.name == nil or itemstack.count <= 0 then return end
+	local proto = prototypes.item[itemstack.name]
+	if proto == nil then return end
+	if count == -1 then count = proto.stack_size end
+	if count == -2 then count = math.max(1, math.ceil(proto.stack_size/2)) end
+	if count == -3 then count = proto.stack_size * 10 end
+	if count == -4 then count = 4294967295 end
+	local amount = math.min(itemstack.count, count)
+	if amount <= 0 then return end
+	BaseNet.transfer_from_inv_to_network(
+		network,
+		{thisEntity = RNSPlayer.thisEntity, inventory = {output = {index = 1, max = 1, values = {defines.inventory.character_main}}}},
+		itemstack, nil, "whitelist", amount, true, false)
 end

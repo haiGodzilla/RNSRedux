@@ -24,8 +24,5 @@ for _, tech in pairs(Constants.Technologies) do
     end
     T.upgrade = tech.upgrade
     T.order = "a-z"
-    --M5 content (Constants.DeferredToM5): enabled = false keeps it out of research and,
-    --with visible_when_disabled left at its default, out of the tech tree.
-    if Constants.isDeferredToM5(T.name) then T.enabled = false end
     data:extend{T}
 end

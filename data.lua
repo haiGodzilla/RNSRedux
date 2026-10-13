@@ -34,6 +34,11 @@ data:extend{
 		toggleable=true,
 		action = "lua",
 		icon = Constants.MOD_ID.."/graphics/playerportIcon.png", icon_size = 40, small_icon = Constants.MOD_ID.."/graphics/playerportIcon.png", small_icon_size = 40,
+		--Without this the button sat in the shortcut bar from the first minute and
+		--toggled a port the player does not own yet. unavailable_until_unlocked also
+		--hides it in profiles that unlocked the shortcut in another save.
+		technology_to_unlock = Constants.Technologies.PersonalLogistics.name,
+		unavailable_until_unlocked = true,
 	  }
 }
 

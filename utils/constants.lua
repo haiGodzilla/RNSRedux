@@ -2418,22 +2418,21 @@ Constants.Technologies = {
         }
     },
 }
---Wireless, the player port, the transmitter pair and the detector are M5, not part of
---the first release (docs/projektstand.md, section 3), and parts of them still use 1.1
---behaviour. Read by both stages: prototypes/Technologies.lua disables these
---technologies for new games, and onInit (also run on on_configuration_changed)
---disables them for forces of an existing save, where a technology's enabled flag is
---per-force runtime state that the prototype no longer reaches. M5 only has to empty
---this list.
-Constants.DeferredToM5 = {
+--Wireless, the player port, the transmitter pair and the detector were held back from
+--the 2.0.0 release and gated in prototypes/Technologies.lua. The M5 update ships them.
+--A technology's enabled flag is per-force runtime state in the save, so removing the
+--prototype gate alone would leave a save written under it locked; onInit (which also
+--runs on on_configuration_changed) re-enables these technologies there. New games
+--never see the gate.
+Constants.M5Technologies = {
     ["RNS-circuit-handling"] = true,
     ["RNS-wireless-interaction"] = true,
     ["RNS-personal-logistics"] = true,
     ["RNS-long-distance-connections"] = true,
 }
 
-function Constants.isDeferredToM5(technologyName)
-    return Constants.DeferredToM5[technologyName] == true
+function Constants.isM5Technology(technologyName)
+    return Constants.M5Technologies[technologyName] == true
         or string.find(technologyName, "^RNS%-wireless%-range%-bonus%-") ~= nil
 end
 return Constants

@@ -1,4 +1,21 @@
 ---------------------------------------------------------------------------------------------------
+Version: 2.1.0
+  Date: 13 October 2026
+  Major Features:
+    - Wireless Transmitter and Portable Wireless Grid: reach the network inventory within range.
+    - Personal Player Port: fills the character's logistics requests from the network while in range.
+    - Network Transmitter and Network Receiver: bridge two networks by radio over any distance.
+    - Detector: puts a network quantity onto a circuit wire, or disconnects cables while a condition holds.
+    - Wireless range bonus technologies.
+  Changes:
+    - The five parts above are researchable now; 2.0.0 kept them disabled.
+    - The Portable Wireless Grid opens as a standalone window and shows the player inventory, so items can be moved by hand.
+    - Technology, item and tooltip texts updated.
+  Bugfixes:
+    - The transmitter, receiver and controller windows failed to open (2.0 rename sprite and a removed textfield property).
+    - A blueprint of a transmitter/receiver pair connected to the original pair; it relinks to its own partner now.
+    - Cable tooltips name their colour again.
+---------------------------------------------------------------------------------------------------
 Version: 2.0.0
   Date: 11 October 2026
   Major Features:

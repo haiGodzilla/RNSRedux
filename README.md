@@ -25,15 +25,15 @@ of the original.
 - **IO Buses** — item bus, fluid bus, and an external bus that makes a chest or
   machine part of the network directly.
 - **Network Grid** — opens the network so items can be moved in and out by hand.
+- **Wireless access** — a Wireless Transmitter reaches characters and Portable Wireless
+  Grids within range; research extends the range.
+- **Detector** — reads a network quantity onto a circuit wire, or disconnects cables
+  when the condition is met.
 - **Priority** — every component takes a priority from -5 to 5.
 
 Storage runs on engine script inventories, so quality, ammo, durability, health and
 item tags survive a round trip through the network. Quality items are refused at the
 drive input instead of being silently merged or downgraded.
-
-**Not researchable yet:** Wireless Transmitter, Portable Wireless Grid, Personal
-Player Port, Network Transmitter, Network Receiver, Detector, and the wireless range
-bonus technologies. The prototypes are in the mod; the technologies are disabled.
 
 **No save migration.** There is no path from the 1.1 original. Add this mod to a new
 save, not to one that already ran Refined Network Storage.

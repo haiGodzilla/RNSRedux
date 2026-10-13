@@ -558,6 +558,9 @@ function NC:getTooltips(guiTable, mainFrame, justCreated)
 
         local nameFlow = GuiApi.add_flow(guiTable, "nameFlow", infoFlow, "horizontal", true)
         nameFlow.style.vertical_align = "center"
+        --The flow has to fill the frame, otherwise the rename button sits right next to a
+        --short name instead of at the right edge.
+        nameFlow.style.horizontally_stretchable = true
 
         self:make_name_label(guiTable, nameFlow)
         
@@ -746,8 +749,10 @@ function NC:make_name_label(guiTable, nameFlow)
     nameFlow.clear()
     local nameLabel = GuiApi.add_label(guiTable, "RNS_NC_Name_Label", nameFlow, self.nametag, Constants.Settings.RNS_Gui.white)
     nameLabel.style.horizontally_squashable = true
+    --The rename button sits at the right edge even for a short name.
+    nameLabel.style.horizontally_stretchable = true
 
-    local nameButton = GuiApi.add_button(guiTable, "RNS_NC_Name_Button", nameFlow, "utility/rename_icon_normal", nil, nil, "", 30, false, true, nil, "mini_button_aligned_to_text_vertically_when_centered", {ID=self.entID})
+    local nameButton = GuiApi.add_button(guiTable, "RNS_NC_Name_Button", nameFlow, "utility/rename_icon", nil, nil, "", 30, false, true, nil, "mini_button_aligned_to_text_vertically_when_centered", {ID=self.entID})
     nameButton.mouse_button_filter = {"left"}
 end
 
@@ -755,7 +760,6 @@ function NC:make_name_change(guiTable, nameFlow)
     nameFlow.clear()
     local text = self.nametag[1] == "gui-description.RNS_TransReceiver_ID" and --[[("ID: "..self.nametag[2].."Surface: "..self.nametag[3].."Pos: "..self.nametag[4])]]"" or self.nametag[2]
     local nameText = GuiApi.add_text_field(guiTable, "RNS_NC_Name_Text", nameFlow, text, "", true, false, false, false, false, {ID = self.entID})
-    nameText.clear_and_focus_on_right_click = true
     nameText.style.horizontally_stretchable = true
     nameText.style.maximal_width = 0
     nameText.select_all()

@@ -68,20 +68,14 @@ function onInit()
 
     --storage.playerTable (lower case) was never read; PlayerTable is the live one.
     storage.playerTable = nil
-    --A technology's enabled flag is per-force state in the save; the prototype's
-    --enabled = false only reaches new games. Researched ones stay as they are (B-36).
+    --A technology's enabled flag is per-force state in the save. The 2.0.0 gate set it
+    --to false for the then-deferred technologies without touching the prototype, so a
+    --save written under the gate still carries that lock; turn it back on (B-36). The
+    --game still enforces prerequisites before a technology can be queued.
     for _, force in pairs(game.forces) do
-        --A deferred technology may be queued or under research; it leaves the queue
-        --before it is disabled. The queue can only be written as a whole.
-        local queue = force.research_queue or {}
-        local kept = {}
-        for _, technology in pairs(queue) do
-            if not Constants.isDeferredToM5(technology.name) then kept[#kept + 1] = technology end
-        end
-        if #kept ~= #queue then force.research_queue = kept end
         for name, technology in pairs(force.technologies) do
-            if technology.researched == false and Constants.isDeferredToM5(name) then
-                technology.enabled = false
+            if technology.researched == false and technology.enabled == false and Constants.isM5Technology(name) then
+                technology.enabled = true
             end
         end
     end

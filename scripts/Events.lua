@@ -150,17 +150,31 @@ function Event.onBlueprintSetup(event)
 	end
 	if blueprint == nil or blueprint.valid_for_read == false then return end
 
+	--Which source entity landed on which blueprint index. serialize_settings needs it
+	--to tell a reference inside this blueprint (it gets fresh unit numbers on a paste
+	--and must be remapped) from one to an entity outside it (keep the id).
+	local blueprintUnits = {}
+	for index, ent in pairs(mapping) do
+		if ent ~= nil and ent.unit_number ~= nil then blueprintUnits[ent.unit_number] = index end
+	end
+
+	--The tags per blueprint index. onBlueprintConfigured gets no mapping and used to
+	--read the flat per-tag map this loop overwrote for every entity, so it never found
+	--an index and did nothing (B-41).
+	local byIndex = {}
 	for index, ent in pairs(mapping) do
 		if ent == nil or ent.unit_number == nil then goto continue end
-		local tags = ((storage.entityTable[ent.unit_number] ~= nil and storage.entityTable[ent.unit_number].serialize_settings ~= nil) and {storage.entityTable[ent.unit_number]:serialize_settings()} or {nil})[1]
+		local obj = storage.entityTable[ent.unit_number]
+		local tags = (obj ~= nil and obj.serialize_settings ~= nil) and obj:serialize_settings(blueprintUnits) or nil
         if tags ~= nil then
-            getRNSPlayer(event.player_index):push_varTable("BlueprintTags", tags)
+			byIndex[index] = tags
 			for tag, value in pairs(tags) do
 				blueprint.set_blueprint_entity_tag(index, tag, value)
 			end
 		end
 		::continue::
 	end
+	getRNSPlayer(event.player_index):push_varTable("BlueprintTags", byIndex)
 end
 
 function Event.onBlueprintConfigured(event)
@@ -175,13 +189,10 @@ function Event.onBlueprintConfigured(event)
 	end
 	if blueprint == nil or blueprint.valid_for_read == false then return end
 
-	for index, ent in pairs(getRNSPlayer(event.player_index):pull_varTable("BlueprintTags") or {}) do
-		if ent == nil or type(ent) ~= "number" then goto continue end
-		local tags = ((storage.entityTable[ent] ~= nil and storage.entityTable[ent].serialize_settings ~= nil) and {storage.entityTable[ent]:serialize_settings()} or {nil})[1]
-        if tags ~= nil then
-			for tag, value in pairs(tags) do
-				blueprint.set_blueprint_entity_tag(index, tag, value)
-			end
+	for index, tags in pairs(getRNSPlayer(event.player_index):pull_varTable("BlueprintTags") or {}) do
+		if type(index) ~= "number" or type(tags) ~= "table" then goto continue end
+		for tag, value in pairs(tags) do
+			blueprint.set_blueprint_entity_tag(index, tag, value)
 		end
 		::continue::
 	end

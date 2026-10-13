@@ -49,16 +49,6 @@ function GUI.create_tooltip_gui(player, obj)
     return guiTable
 end
 
-function GUI.create_relative_tooltip_gui(player, obj, type, position)
-    if valid(obj) == false then return end
-    local RNSPlayer = getRNSPlayer(player.name)
-    local guiTable = GuiApi.create_relative_window(Constants.Settings.RNS_Gui.tooltip, type, position, RNSPlayer, true, true, false, "vertical", "horizontal")
-    --GuiApi.add_close_button(guiTable)
-    guiTable.vars.currentObject = obj
-    GUI.update_tooltip_gui(guiTable, true)
-    return guiTable
-end
-
 function GUI.open_tooltip_gui(RNSPlayer, player, entity)
     if entity == nil or entity.valid == false or entity.to_be_deconstructed() == true then return end
 
@@ -75,44 +65,15 @@ function GUI.open_tooltip_gui(RNSPlayer, player, entity)
     RNSPlayer.GUI[Constants.Settings.RNS_Gui.tooltip] = guiTable
 end
 
-function GUI.open_relative_tooltip_gui(RNSPlayer, player, entity, type, position)
-    if entity == nil or entity.valid == false or entity.to_be_deconstructed() == true then return end
-
-    local cursorStack = player.cursor_stack
-	if cursorStack and cursorStack.valid_for_read then
-		if cursorStack.name == "green-wire" or cursorStack.name == "red-wire" or cursorStack.type == "repair-tool" then return end
-	end
-
-    local obj = storage.entityTable[entity.unit_number]
-    if valid(obj) == false or obj.getTooltips == nil then return end
-
-    local guiTable = GUI.create_relative_tooltip_gui(player, obj, type, position)
-    player.opened = player
-    RNSPlayer.GUI[Constants.Settings.RNS_Gui.tooltip] = guiTable
-end
-
 function GUI.on_gui_opened(event)
     local player = getPlayer(event.player_index)
     local RNSPlayer = getRNSPlayer(event.player_index)
 
     if event.entity ~= nil and event.entity.valid == true then
-        --The NII window already shows the player inventory, so the relative anchor
-        --(which opens the character screen as well) is not wanted. Open it as a
-        --standalone window instead (B-61).
-        if player.selected and player.selected.name == Constants.NetworkInventoryInterface.name then
-            if Util.safeCall(GUI.open_tooltip_gui, RNSPlayer, player, player.selected) == false then
-                player.print({"gui-description.RNS_openGui_falied"})
-                Event.clear_gui(event)
-            end
-            return
-        end
-        if player.selected and player.selected.name == Constants.WirelessGrid.name then
-            if Util.safeCall(GUI.open_relative_tooltip_gui, RNSPlayer, player, player.selected, defines.relative_gui_type.controller_gui, defines.relative_gui_position.left) == false then
-                player.print({"gui-description.RNS_openGui_falied"})
-                Event.clear_gui(event)
-            end
-            return
-        end
+        --Every mod entity gets the standalone window, the Network Grid included. The
+        --relative anchor the grid used did not make its window show up, and for the grid
+        --it also pulled in the character screen (B-61); the NII already moves the same
+        --way, so both use open_tooltip_gui now.
         if Util.safeCall(GUI.open_tooltip_gui, RNSPlayer, player, player.selected) == false then
             player.print({"gui-description.RNS_openGui_falied"})
             Event.clear_gui(event)
@@ -168,6 +129,12 @@ function GUI.on_gui_clicked(event)
         return
     elseif string.match(event.element.name, "RNS_NC") then
         NC.interaction(event, RNSPlayer)
+        GUI.update(true)
+        return
+    elseif string.match(event.element.name, "RNS_Detector") then
+        --The detector's mode is two radiobuttons; those raise on_gui_click, and without
+        --this branch the mode could not be switched at all.
+        DT.interaction(event, RNSPlayer)
         GUI.update(true)
         return
     elseif string.match(event.element.name, "RNS_TransReceiver") then

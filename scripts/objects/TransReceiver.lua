@@ -137,20 +137,78 @@ function TR:copy_settings(obj)
     self.connected = obj.connected
 end
 
-function TR:serialize_settings()
+--blueprintUnits maps source unit_number -> blueprint index. A reference to an entity in
+--the same blueprint cannot survive as a unit_number: a paste creates new ones, and the
+--raw id would point back at the original pair (B-41). Those references become the
+--partner's offset, resolved by update() after placement. A reference to an entity
+--outside the blueprint keeps its id.
+function TR:serialize_settings(blueprintUnits)
     local tags = {}
-    tags["connection"] = self.connected
+    local partner = self.connected ~= nil and storage.entityTable[self.connected] or nil
+    local partnerEntity = partner ~= nil and partner.thisEntity or nil
+    if partnerEntity ~= nil and partnerEntity.valid == true then
+        if blueprintUnits ~= nil and blueprintUnits[partner.entID] ~= nil then
+            tags["connection_offset"] = {
+                partnerEntity.position.x - self.thisEntity.position.x,
+                partnerEntity.position.y - self.thisEntity.position.y,
+            }
+        else
+            tags["connection"] = self.connected
+        end
+    end
     return tags
 end
 
 function TR:deserialize_settings(tags)
-    self.connected = tags["connection"]
+    self.connected = Util.tagNumber(tags["connection"], self.connected, 1)
+    local offset = tags["connection_offset"]
+    if type(offset) == "table" and type(offset[1]) == "number" and type(offset[2]) == "number" then
+        self.pendingConnection = {offset[1], offset[2]}
+        self.pendingTicks = 0
+        UpdateSys.addEntity(self)
+    end
+end
+
+--Resolves a pasted pair that was in one blueprint. Registered by deserialize_settings
+--and removed again on the first tick that resolves it or gives up, so it costs a tick
+--slot only between a paste and the pairing.
+function TR:update()
+    if self.pendingConnection == nil then return end
+    if self.thisEntity == nil or self.thisEntity.valid == false then
+        self.pendingConnection = nil
+        UpdateSys.remove(self)
+        return
+    end
+    local offset = self.pendingConnection
+    local partnerName = self.type == "transmitter" and Constants.NetworkTransReceiver.receiver.name or Constants.NetworkTransReceiver.transmitter.name
+    local partner = self.thisEntity.surface.find_entity(partnerName, {self.thisEntity.position.x + offset[1], self.thisEntity.position.y + offset[2]})
+    if partner ~= nil and partner.valid == true then
+        local obj = storage.entityTable[partner.unit_number]
+        if obj ~= nil and obj.connected ~= self.entID then
+            self.connected = obj.entID
+            obj.connected = self.entID
+            obj.pendingConnection = nil
+            UpdateSys.remove(obj)
+            self:createArms()
+            obj:createArms()
+            BaseNet.postArms(self)
+            BaseNet.postArms(obj)
+            BaseNet.update_network_controller(self.networkController)
+            BaseNet.update_network_controller(obj.networkController)
+        end
+        self.pendingConnection = nil
+        UpdateSys.remove(self)
+        return
+    end
+    self.pendingTicks = self.pendingTicks + 1
+    if self.pendingTicks > 120 then
+        self.pendingConnection = nil
+        UpdateSys.remove(self)
+    end
 end
 
 function TR:DataConvert_ItemToEntity(tag)
-    if tag.connection then
-        self.connected = tag.connection
-    end
+    self.connected = Util.tagNumber(tag.connection, self.connected, 1)
     if tag.nametag then
         self.nametag = tag.nametag
     end
@@ -197,6 +255,9 @@ function TR:getTooltips(guiTable, mainFrame, justCreated)
         --GuiApi.add_label(guiTable, "", infoFlow, {"gui-description.RNS_TransReceiver_ID", self.thisEntity.unit_number, self.thisEntity.surface.name, tostring(serpent.line(self.thisEntity.position))}, Constants.Settings.RNS_Gui.white)
         local nameFlow = GuiApi.add_flow(guiTable, "nameFlow", infoFlow, "horizontal", true)
         nameFlow.style.vertical_align = "center"
+        --The flow has to fill the frame, otherwise the rename button sits right next to a
+        --short name instead of at the right edge.
+        nameFlow.style.horizontally_stretchable = true
 
         self:make_name_label(guiTable, nameFlow)
         
@@ -249,8 +310,10 @@ function TR:make_name_label(guiTable, nameFlow)
     nameFlow.clear()
     local nameLabel = GuiApi.add_label(guiTable, "RNS_TransReceiver_Name_Label", nameFlow, self.nametag, Constants.Settings.RNS_Gui.white)
     nameLabel.style.horizontally_squashable = true
+    --The rename button sits at the right edge even for a short name.
+    nameLabel.style.horizontally_stretchable = true
 
-    local nameButton = GuiApi.add_button(guiTable, "RNS_TransReceiver_Name_Button", nameFlow, "utility/rename_icon_normal", nil, nil, "", 30, false, true, nil, "mini_button_aligned_to_text_vertically_when_centered", {ID=self.entID})
+    local nameButton = GuiApi.add_button(guiTable, "RNS_TransReceiver_Name_Button", nameFlow, "utility/rename_icon", nil, nil, "", 30, false, true, nil, "mini_button_aligned_to_text_vertically_when_centered", {ID=self.entID})
     nameButton.mouse_button_filter = {"left"}
 end
 
@@ -258,7 +321,6 @@ function TR:make_name_change(guiTable, nameFlow)
     nameFlow.clear()
     local text = self.nametag[1] == "gui-description.RNS_TransReceiver_ID" and --[[("ID: "..self.nametag[2].."Surface: "..self.nametag[3].."Pos: "..self.nametag[4])]]"" or self.nametag[2]
     local nameText = GuiApi.add_text_field(guiTable, "RNS_TransReceiver_Name_Text", nameFlow, text, "", true, false, false, false, false, {ID = self.entID})
-    nameText.clear_and_focus_on_right_click = true
     nameText.style.horizontally_stretchable = true
     nameText.style.maximal_width = 0
     nameText.select_all()
@@ -286,18 +348,24 @@ function TR.interaction(event, RNSPlayer)
 		if obj == nil then return end
         local selected_index = event.element.selected_index
         local selected = event.element.items[selected_index]
-        if selected == "" then
-            storage.entityTable[obj.connected].connected = nil
-            storage.entityTable[obj.connected]:force_controller_update()
-            obj.connected = nil
-            obj:force_controller_update()
-        else
-            local number = selected[1] == "gui-description.RNS_TransReceiver_ID" and selected[2] or selected[3]
-            obj.connected = tonumber(number)
-            storage.entityTable[obj.connected].connected = obj.thisEntity.unit_number
-            storage.entityTable[obj.connected]:force_controller_update()
-            obj:force_controller_update()
+        --Unlink whoever was there first; the old code indexed a nil id when nothing was
+        --connected yet and threw out of the GUI handler.
+        local previous = obj.connected ~= nil and storage.entityTable[obj.connected] or nil
+        if previous ~= nil then
+            previous.connected = nil
+            previous:force_controller_update()
         end
+        obj.connected = nil
+        if selected ~= nil and selected ~= "" then
+            local number = selected[1] == "gui-description.RNS_TransReceiver_ID" and selected[2] or selected[3]
+            local partner = number ~= nil and storage.entityTable[tonumber(number)] or nil
+            if partner ~= nil then
+                obj.connected = partner.entID
+                partner.connected = obj.entID
+                partner:force_controller_update()
+            end
+        end
+        obj:force_controller_update()
 		return
 	elseif string.match(event.element.name, "RNS_TransReceiver_Name_Button") then
 		local obj = storage.entityTable[event.element.tags.ID]
